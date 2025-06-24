@@ -1,0 +1,350 @@
+<script setup lang="ts">
+  import type { App } from '../account';
+  import * as feather from 'feather-icons';
+  import { reactive, ref, onMounted, watch, toRaw } from 'vue';
+  import type { Ref } from 'vue';
+  import { type PinCalendar, PinCatalog, type PinDay, type Pin } from '../pins';
+  import { Temporal } from '@js-temporal/polyfill';
+  import * as emojiSearch from 'node-emoji';
+  import * as emojiGroups from 'unicode-emoji-json/data-by-group.json';
+  import * as emojiComponents from 'unicode-emoji-json/data-emoji-components.json';
+  import emojiRegex from 'emoji-regex';
+  import PinIcon from './PinIcon.vue';
+  import type { HTMLInputTypeAttribute } from 'react';
+import type { Rop } from 'automerge-diy-vue-hooks';
+
+  type ModalSimple = {
+    kind: 'simple',
+    title: string,
+    message: string,
+    buttonConfirm: string,
+    actionConfirm(): void,
+  }
+
+  type ModalImport = {
+    kind: 'import',
+    import: Import,
+  }
+
+  type ModalData = ModalSimple | ModalImport;
+
+  type Download = {
+    fileName: string,
+    content: Blob,
+  };
+
+  type Upload = {
+    onSuccess: (fileContent: string) => void,
+  }
+
+  type ImportPins = {
+    kind: 'pins',
+    pins: PinCatalog,
+    conflicts: {
+      pinCategories: Set<string>,
+      pins: Set<string>,
+    },
+    overwrite: boolean,
+  };
+
+  type ImportCalendar = {
+    kind: 'calendar',
+    calendar: PinCalendar,
+  };
+
+  type Import = ImportPins | ImportCalendar;
+
+  const app = defineModel<Rop<App>>();
+  const pinCatalog = app.value!.pinCatalog;
+  const pinCalendar = app.value!.pinCalendar;
+  const modalData: Ref<ModalData | undefined> = ref(undefined);
+
+  function triggerDownload(download: Download) {
+    const url = window.URL.createObjectURL(download.content);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = download.fileName;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }
+
+  function triggerUpload(upload: Upload) {
+    const element = document.createElement('input');
+    element.type = 'file';
+    element.accept = 'application/json';
+    element.onchange = () => {
+      if (element.files === null || element.files === undefined || element.files.length < 1) {
+        console.warn("Upload: No files specified. Aborting upload.");
+        return;
+      }
+
+      if (element.files.length > 1) {
+        console.warn("Upload: More than 1 file specified. Aborting upload.");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const contents = e.target?.result;
+
+        if (typeof (contents) !== 'string') {
+          console.warn("Upload: Not a text file. Aborting upload.");
+          return;
+        }
+
+        upload.onSuccess(contents);
+      };
+      reader.readAsText(element.files[0]);
+    };
+    element.click();
+  }
+
+  function onClickPinsExport() {
+    triggerDownload({
+      fileName: 'pin-catalog.json',
+      content: new Blob([pinCatalog.serialize()], { type: 'application/json' }),
+    });
+  }
+
+  function onClickPinsImport() {
+    triggerUpload({
+      onSuccess(fileContent: string) {
+        const loadedPinCatalog = PinCatalog.deserialize(fileContent);
+
+        console.log(loadedPinCatalog);
+
+        if (loadedPinCatalog === null)
+          return;
+
+        modalData.value = {
+          kind: 'import',
+          import: {
+            kind: 'pins',
+            pins: loadedPinCatalog,
+            conflicts: {
+              pins: new Set(Object.keys(loadedPinCatalog.pins)).intersection(new Set(Object.keys(pinCatalog.pins))),
+              pinCategories: new Set(Object.keys(loadedPinCatalog.pinCategories)).intersection(new Set(Object.keys(pinCatalog.pinCategories))),
+            },
+            overwrite: false,
+          },
+        };
+
+        const modal: any = document.getElementById('settings_io_modal');
+        modal.showModal();
+      },
+    });
+  }
+
+  function onClickPinsClear() {
+    const modal: any = document.getElementById('settings_io_modal');
+    modalData.value = {
+      kind: 'simple',
+      title: 'Clear Pin Catalog',
+      message: 'Are you sure you want to delete all pin definitions from the pin catalog? This action cannot be undone.',
+      buttonConfirm: 'Delete All Pins',
+      actionConfirm: () => {
+        pinCatalog.clear();
+        pinCatalog.saveToLocalStorage();
+      },
+    };
+    modal.showModal();
+  }
+
+  function onClickCalendarExport() {
+    triggerDownload({
+      fileName: 'calendar.json',
+      content: new Blob([pinCalendar.serialize()], { type: 'application/json' }),
+    });
+  }
+
+  function onClickCalendarImport() {
+    triggerUpload({
+      onSuccess(fileContent: string) {
+        const loadedPinCalendar = PinCalendar.deserialize(fileContent);
+
+        console.log(loadedPinCalendar);
+
+        if (loadedPinCalendar === null)
+          return;
+
+        modalData.value = {
+          kind: 'import',
+          import: {
+            kind: 'calendar',
+            calendar: loadedPinCalendar,
+          },
+        };
+
+        const modal: any = document.getElementById('settings_io_modal');
+        modal.showModal();
+      },
+    });
+  }
+
+  function onClickCalendarClear() {
+    const modal: any = document.getElementById('settings_io_modal');
+    modalData.value = {
+      kind: 'simple',
+      title: 'Clear Calendar',
+      message: 'Are you sure you want to clear all pins from the calendar? This action cannot be undone.',
+      buttonConfirm: 'Clear Calendar',
+      actionConfirm: () => {
+        pinCalendar.clear();
+        pinCalendar.saveToLocalStorage();
+      },
+    };
+    modal.showModal();
+  }
+
+  function onClickImportPinsConfirm(importPins: ImportPins) {
+    if (importPins.overwrite) {
+      // Remove conflicting elements
+      for (const pinCategoryId of importPins.conflicts.pinCategories)
+        pinCatalog.removePinCategory(pinCategoryId);
+
+      for (const pinId of importPins.conflicts.pins)
+        pinCatalog.removePin(pinId);
+
+      // Add all elements
+      for (const pinCategory of Object.values(importPins.pins.pinCategories))
+        pinCatalog.addPinCategory(pinCategory.parentId, pinCategory.pinCategory);
+
+      for (const pin of Object.values(importPins.pins.pins))
+        pinCatalog.addPin(pin.categoryId, pin.pin);
+    } else {
+      // Only add non-conflicting elements.
+      for (const pinCategory of Object.values(importPins.pins.pinCategories))
+        if (!importPins.conflicts.pinCategories.has(pinCategory.pinCategory.id))
+          pinCatalog.addPinCategory(pinCategory.parentId, pinCategory.pinCategory);
+
+      for (const pin of Object.values(importPins.pins.pins))
+        if (!importPins.conflicts.pins.has(pin.pin.id))
+          pinCatalog.addPin(pin.categoryId, pin.pin);
+    }
+
+    pinCatalog.saveToLocalStorage();
+  }
+
+  function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
+    for (const [key, loadedDay] of Object.entries(importCalendar.calendar.days)) {
+      const day = pinCalendar.getDayByKey(key);
+
+      for (const pin of loadedDay.pins)
+        day.pins.add(pin);
+    }
+
+    pinCalendar.saveToLocalStorage();
+  }
+</script>
+
+<template>
+  <dialog id="settings_io_modal" class="modal">
+    <div class="modal-box" v-if="modalData !== undefined && modalData.kind === 'simple'">
+      <h3 class="text-lg font-bold">{{ modalData.title }}</h3>
+      <p class="py-4">{{ modalData.message }}</p>
+      <form method="dialog" class="modal-action flex flex-row gap-2">
+        <button class="btn btn-neutral flex-1">Cancel</button>
+        <button class="btn btn-error flex-1" @click="modalData.actionConfirm">{{ modalData.buttonConfirm }}</button>
+      </form>
+    </div>
+    <div class="modal-box" v-if="modalData !== undefined && modalData.kind == 'import'">
+      <template v-if="modalData.import.kind === 'pins'">
+        <h3 class="text-lg font-bold pb-4">Pin Catalog Import</h3>
+        <div class="flex flex-col gap-4">
+          <div>
+            <p>{{ Object.keys(modalData.import.pins.pinCategories).length }} categories to import.</p>
+            <p>{{ Object.keys(modalData.import.pins.pins).length }} pins to import.</p>
+          </div>
+          <div class="flex flex-col gap-4 border-2 border-warning rounded-xl p-4"
+            v-if="modalData.import.conflicts.pinCategories.size > 0 || modalData.import.conflicts.pins.size > 0">
+            <div>
+              <p v-if="modalData.import.conflicts.pinCategories.size > 0"><span class="font-semibold">Found {{
+                  modalData.import.conflicts.pinCategories.size }} conflicting categories</span>: {{
+                Array.from(modalData.import.conflicts.pinCategories).join(", ") }}.</p>
+              <p v-if="modalData.import.conflicts.pins.size > 0"><span class="font-semibold">Found {{
+                  modalData.import.conflicts.pins.size }} conflicting pins</span>: {{
+                Array.from(modalData.import.conflicts.pins).join(", ") }}.</p>
+            </div>
+            <div>
+              What do you wish to perform with conflicting elements?
+              <label class="label cursor-pointer items-start justify-start gap-2">
+                <input type="radio" name="radio-1" class="radio radio-sm" v-model="modalData.import.overwrite"
+                  :value="false" />
+                <span class="label-text">Keep existing elements with conflicting ID's</span>
+              </label>
+              <label class="label cursor-pointer items-start justify-start gap-2">
+                <input type="radio" name="radio-1" class="radio radio-sm" v-model="modalData.import.overwrite"
+                  :value="true" />
+                <span class="label-text">Overwrite existing elements with conflicting ID's with imported elements</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <form method="dialog" class="modal-action flex flex-row gap-2">
+          <button class="btn btn-neutral flex-1">Cancel</button>
+          <template
+            v-if="modalData.import.conflicts.pinCategories.size > 0 || modalData.import.conflicts.pins.size > 0">
+            <button v-if="!modalData.import.overwrite" class="btn btn-primary flex-1"
+              @click="onClickImportPinsConfirm(modalData.import)">Import, Keeping Existing
+              Elements</button>
+            <button v-else class="btn btn-error flex-1 " @click="onClickImportPinsConfirm(modalData.import)">Import,
+              Overwriting Existing
+              Elements</button>
+          </template>
+          <button v-else class="btn btn-primary flex-1" @click="onClickImportPinsConfirm(modalData.import)">Import</button>
+        </form>
+      </template>
+      <template v-if="modalData.import.kind === 'calendar'">
+        <h3 class="text-lg font-bold pb-4">Calendar Import</h3>
+        <div class="flex flex-col gap-4">
+          <div>
+            <p>{{ Object.keys(modalData.import.calendar.days).length }} days to import.</p>
+          </div>
+        </div>
+        <form method="dialog" class="modal-action flex flex-row gap-2">
+          <button class="btn btn-neutral flex-1">Cancel</button>
+          <button class="btn btn-primary flex-1" @click="onClickImportCalendarConfirm(modalData.import)">Import</button>
+        </form>
+      </template>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
+  <div class="flex max-md:flex-col flex-row gap-4">
+    <div class="flex flex-col gap-2 flex-1">
+      <div class="text-md">Pin Catalog</div>
+      <div class="flex flex-row gap-2">
+        <button @click="onClickPinsExport" class="btn max-sm:btn-square btn-neutral flex-1">
+          <div v-html="feather.icons['upload'].toSvg()" />
+          <div>Export</div>
+        </button>
+        <button @click="onClickPinsImport" class="btn max-sm:btn-square btn-neutral flex-1">
+          <div v-html="feather.icons['download'].toSvg()" />
+          <div>Import</div>
+        </button>
+        <button @click="onClickPinsClear" class="btn max-sm:btn-square btn-error flex-1">
+          <div v-html="feather.icons['trash-2'].toSvg()" />
+          <div>Clear</div>
+        </button>
+      </div>
+    </div>
+    <div class="flex flex-col gap-2 flex-1">
+      <div class="text-md">Calendar</div>
+      <div class="flex flex-row gap-2">
+        <button @click="onClickCalendarExport" class="btn max-sm:btn-square btn-neutral flex-1">
+          <div v-html="feather.icons['upload'].toSvg()" />
+          <div>Export</div>
+        </button>
+        <button @click="onClickCalendarImport" class="btn max-sm:btn-square btn-neutral flex-1">
+          <div v-html="feather.icons['download'].toSvg()" />
+          <div>Import</div>
+        </button>
+        <button @click="onClickCalendarClear" class="btn max-sm:btn-square btn-error flex-1">
+          <div v-html="feather.icons['trash-2'].toSvg()" />
+          <div>Clear</div>
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
