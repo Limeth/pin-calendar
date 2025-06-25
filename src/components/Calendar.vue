@@ -87,7 +87,7 @@ import type { App } from '../account';
     const numberOfWeeksDisplayed = Math.ceil((firstDayOfMonth.dayOfWeek - 1 + daysInMonth) / daysInWeek);
     const numberOfDaysDisplayed = numberOfWeeksDisplayed * 7;
     const newList: DayListDay[] = [];
-    for (var i = 0; i < numberOfDaysDisplayed; i++) {
+    for (let i = 0; i < numberOfDaysDisplayed; i++) {
         const currentDate = firstDayOfFirstWeekOfMonth.add({ days: i });
         newList.push({
           date: currentDate,

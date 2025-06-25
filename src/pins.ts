@@ -314,7 +314,7 @@ export function PinDaySetPinPresence(self: PinDay, pin: Pin, presence: boolean) 
     }
     else
     {
-        let index = self.pins.findIndex((pinId) => pinId === pin.id);
+        const index = self.pins.findIndex((pinId) => pinId === pin.id);
 
         if (index !== -1)
             self.pins.splice(index, 1)

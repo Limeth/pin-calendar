@@ -50,7 +50,7 @@ async function AccountSave(account: Account) {
 }
 
 export async function AccountLoadOrNew(): Promise<Account> {
-    var account = await AccountLoad();
+    let account = await AccountLoad();
 
     if (account !== undefined)
         return account;

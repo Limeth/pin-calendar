@@ -10,8 +10,7 @@
   import * as emojiComponents from 'unicode-emoji-json/data-emoji-components.json';
   import emojiRegex from 'emoji-regex';
   import PinIcon from './PinIcon.vue';
-  import type { HTMLInputTypeAttribute } from 'react';
-import type { Rop } from 'automerge-diy-vue-hooks';
+  import type { Rop } from 'automerge-diy-vue-hooks';
 
   type ModalSimple = {
     kind: 'simple',

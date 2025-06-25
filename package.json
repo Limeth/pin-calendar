@@ -12,6 +12,8 @@
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
     "lint:eslint": "eslint . --fix",
     "lint": "run-s lint:*",
+    "format-check": "prettier --check src/",
+    "check": "run-s type-check lint format-check",
     "format": "prettier --write src/"
   },
   "dependencies": {
@@ -23,7 +25,7 @@
     "@js-temporal/polyfill": "^0.5.1",
     "@tailwindcss/vite": "^4.1.10",
     "@types/ramda": "^0.30.2",
-    "automerge-diy-vue-hooks": "^0.3.1",
+    "automerge-diy-vue-hooks": "^0.4.1",
     "daisyui": "^5.0.43",
     "emoji-regex": "^10.4.0",
     "feather-icons": "^4.29.2",
@@ -40,6 +42,7 @@
   },
   "devDependencies": {
     "@tsconfig/node22": "^22.0.1",
+    "@types/feather-icons": "^4.29.4",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-vue": "^5.2.3",
     "@vue/eslint-config-prettier": "^10.2.0",
