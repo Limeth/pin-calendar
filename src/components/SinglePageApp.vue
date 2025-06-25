@@ -1,41 +1,40 @@
 <script setup lang="ts">
-  import { ref, type Ref } from 'vue';
-  import * as A from "@automerge/automerge-repo";
-  import { BroadcastChannelNetworkAdapter } from "@automerge/automerge-repo-network-broadcastchannel";
-  import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
-  import { type PinCalendar, PinCatalog } from '../pins';
-  import Calendar from './Calendar.vue';
-  import Milestones from './Milestones.vue';
-  import Settings from './Settings.vue';
-  import feather from 'feather-icons';
-  import { accountStore, type App } from '../account';
-  import { changeSubtree, makeReactive, type Rop } from 'automerge-diy-vue-hooks';
-  import "../styles/global.css";
+import { ref, type Ref } from 'vue';
+import * as A from "@automerge/automerge-repo";
+import { BroadcastChannelNetworkAdapter } from "@automerge/automerge-repo-network-broadcastchannel";
+import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
+import { type PinCalendar, PinCatalog } from '../pins';
+import Calendar from './Calendar.vue';
+import Milestones from './Milestones.vue';
+import Settings from './Settings.vue';
+import feather from 'feather-icons';
+import { accountStore, type App } from '../account';
+import { changeSubtree, makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 
-  // const app: Ref<App> = ref({
-  //   pinCatalog: PinCatalog.loadFromLocalStorageOrDefault(),
-  //   pinCalendar: PinCalendar.loadFromLocalStorageOrDefault(),
-  // });
+// const app: Ref<App> = ref({
+//   pinCatalog: PinCatalog.loadFromLocalStorageOrDefault(),
+//   pinCalendar: PinCalendar.loadFromLocalStorageOrDefault(),
+// });
 
-  const app: Rop<App> = await accountStore.value.GetApp();
+const app: Rop<App> = await accountStore.value.GetApp();
 
-  console.log('pinCalendar', app.pinCalendar);
-  console.log('pinCatalog', app.pinCatalog);
+console.log('pinCalendar', app.value!.docData.value!.pinCalendar);
+console.log('pinCatalog', app.value!.docData.value!.pinCatalog);
 
-  // const account = await accountStore.value.GetAccount();
+// const account = await accountStore.value.GetAccount();
 
-  enum Page {
-    CALENDAR,
-    MILESTONES,
-    SETTINGS,
-  };
+enum Page {
+  CALENDAR,
+  MILESTONES,
+  SETTINGS,
+};
 
-  const pages = [Page.CALENDAR, Page.MILESTONES, Page.SETTINGS];
-  const currentPage = ref(pages[0]);
+const pages = [Page.CALENDAR, Page.MILESTONES, Page.SETTINGS];
+const currentPage = ref(pages[0]);
 
-  function setPage(newPage: Page) {
-    currentPage.value = newPage;
-  }
+function setPage(newPage: Page) {
+  currentPage.value = newPage;
+}
 </script>
 
 <template>
@@ -54,5 +53,4 @@
   </div>
 </template>
 
-<style scoped>
-</style>
+<style scoped></style>

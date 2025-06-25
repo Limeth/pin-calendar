@@ -12,7 +12,7 @@
   import PinIcon from './PinIcon.vue';
   import SettingsPinCategory, { type SettingsPinCategoryEvent } from './SettingsPinCategory.vue';
   import * as R from 'ramda';
-import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
+  import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 
   type EditingPin = {
     kind: 'pin',
@@ -421,7 +421,7 @@ import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
               <div class="label">
                 <span class="label-text">Pin Emoji Scale</span>
               </div>
-              <input type="range" min="0.5" max="1.5" value="1" class="range" step="0.1"
+              <input type="range" min="0.5" max="1.5" class="range" step="0.1"
                 v-model="editing.pinClone.icon.scale" />
             </label>
             <label class="form-control w-full max-w-xs">
