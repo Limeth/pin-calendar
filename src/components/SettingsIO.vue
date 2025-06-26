@@ -1,239 +1,244 @@
 <script setup lang="ts">
-  import type { App } from '../account';
-  import * as feather from 'feather-icons';
-  import { reactive, ref, onMounted, watch, toRaw } from 'vue';
-  import type { Ref } from 'vue';
-  import { type PinCalendar, PinCatalog, type PinDay, type Pin } from '../pins';
-  import { Temporal } from '@js-temporal/polyfill';
-  import * as emojiSearch from 'node-emoji';
-  import * as emojiGroups from 'unicode-emoji-json/data-by-group.json';
-  import * as emojiComponents from 'unicode-emoji-json/data-emoji-components.json';
-  import emojiRegex from 'emoji-regex';
-  import PinIcon from './PinIcon.vue';
-  import type { Rop } from 'automerge-diy-vue-hooks';
+import type { App } from '../account';
+import * as feather from 'feather-icons';
+import { ref, toRef } from 'vue';
+import type { Ref } from 'vue';
+import { type PinCalendar, type PinCatalog, PinCalendarClear, PinCalendarCombine, PinCalendarDeserialize, PinCalendarSerialize, PinCatalogSerialize, PinCatalogDeserialize, PinCatalogClear, PinCatalogRemovePinCategory, PinCatalogRemovePin, PinCatalogAddPinCategory, PinCatalogAddPin } from '../pins';
+import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
+// import { Temporal } from '@js-temporal/polyfill';
+// import * as emojiSearch from 'node-emoji';
+// import * as emojiGroups from 'unicode-emoji-json/data-by-group.json';
+// import * as emojiComponents from 'unicode-emoji-json/data-emoji-components.json';
+// import emojiRegex from 'emoji-regex';
+// import PinIcon from './PinIcon.vue';
 
-  type ModalSimple = {
-    kind: 'simple',
-    title: string,
-    message: string,
-    buttonConfirm: string,
-    actionConfirm(): void,
-  }
+type ModalSimple = {
+  kind: 'simple',
+  title: string,
+  message: string,
+  buttonConfirm: string,
+  actionConfirm(): void,
+}
 
-  type ModalImport = {
-    kind: 'import',
-    import: Import,
-  }
+type ModalImport = {
+  kind: 'import',
+  import: Import,
+}
 
-  type ModalData = ModalSimple | ModalImport;
+type ModalData = ModalSimple | ModalImport;
 
-  type Download = {
-    fileName: string,
-    content: Blob,
-  };
+type Download = {
+  fileName: string,
+  content: Blob,
+};
 
-  type Upload = {
-    onSuccess: (fileContent: string) => void,
-  }
+type Upload = {
+  onSuccess: (fileContent: string) => void,
+}
 
-  type ImportPins = {
-    kind: 'pins',
-    pins: PinCatalog,
-    conflicts: {
-      pinCategories: Set<string>,
-      pins: Set<string>,
-    },
-    overwrite: boolean,
-  };
+type ImportPins = {
+  kind: 'pins',
+  pins: PinCatalog,
+  conflicts: {
+    pinCategories: Set<string>,
+    pins: Set<string>,
+  },
+  overwrite: boolean,
+};
 
-  type ImportCalendar = {
-    kind: 'calendar',
-    calendar: PinCalendar,
-  };
+type ImportCalendar = {
+  kind: 'calendar',
+  calendar: PinCalendar,
+};
 
-  type Import = ImportPins | ImportCalendar;
+type Import = ImportPins | ImportCalendar;
 
-  const app = defineModel<Rop<App>>();
-  const pinCatalog = app.value!.pinCatalog;
-  const pinCalendar = app.value!.pinCalendar;
-  const modalData: Ref<ModalData | undefined> = ref(undefined);
+const app = defineModel<App>();
+const docData = toRef(app.value!, 'docData');
 
-  function triggerDownload(download: Download) {
-    const url = window.URL.createObjectURL(download.content);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = download.fileName;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  }
+function getPinCalendar() {
+  return toRef(docData.value!, 'pinCalendar');
+}
 
-  function triggerUpload(upload: Upload) {
-    const element = document.createElement('input');
-    element.type = 'file';
-    element.accept = 'application/json';
-    element.onchange = () => {
-      if (element.files === null || element.files === undefined || element.files.length < 1) {
-        console.warn("Upload: No files specified. Aborting upload.");
+function getPinCatalog() {
+  return toRef(docData.value!, 'pinCatalog');
+}
+
+const modalData: Ref<ModalData | undefined> = ref(undefined);
+
+function getSettingsIoModal(): HTMLDialogElement {
+  return document.getElementById('settings_io_modal') as HTMLDialogElement;
+}
+
+function triggerDownload(download: Download) {
+  const url = window.URL.createObjectURL(download.content);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = download.fileName;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
+function triggerUpload(upload: Upload) {
+  const element = document.createElement('input');
+  element.type = 'file';
+  element.accept = 'application/json';
+  element.onchange = () => {
+    if (element.files === null || element.files === undefined || element.files.length < 1) {
+      console.warn("Upload: No files specified. Aborting upload.");
+      return;
+    }
+
+    if (element.files.length > 1) {
+      console.warn("Upload: More than 1 file specified. Aborting upload.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const contents = e.target?.result;
+
+      if (typeof (contents) !== 'string') {
+        console.warn("Upload: Not a text file. Aborting upload.");
         return;
       }
 
-      if (element.files.length > 1) {
-        console.warn("Upload: More than 1 file specified. Aborting upload.");
+      upload.onSuccess(contents);
+    };
+    reader.readAsText(element.files[0]);
+  };
+  element.click();
+}
+
+function onClickPinsExport() {
+  triggerDownload({
+    fileName: 'pin-catalog.json',
+    content: new Blob([PinCatalogSerialize(getPinCatalog().value)], { type: 'application/json' }),
+  });
+}
+
+function onClickPinsImport() {
+  triggerUpload({
+    onSuccess(fileContent: string) {
+      const loadedPinCatalog = PinCatalogDeserialize(fileContent);
+
+      console.log(loadedPinCatalog);
+
+      if (loadedPinCatalog === null)
         return;
-      }
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const contents = e.target?.result;
-
-        if (typeof (contents) !== 'string') {
-          console.warn("Upload: Not a text file. Aborting upload.");
-          return;
-        }
-
-        upload.onSuccess(contents);
+      modalData.value = {
+        kind: 'import',
+        import: {
+          kind: 'pins',
+          pins: loadedPinCatalog,
+          conflicts: {
+            pins: new Set(Object.keys(loadedPinCatalog.pins)).intersection(new Set(Object.keys(getPinCatalog().value.pins))),
+            pinCategories: new Set(Object.keys(loadedPinCatalog.pinCategories)).intersection(new Set(Object.keys(getPinCatalog().value.pinCategories))),
+          },
+          overwrite: false,
+        },
       };
-      reader.readAsText(element.files[0]);
-    };
-    element.click();
-  }
 
-  function onClickPinsExport() {
-    triggerDownload({
-      fileName: 'pin-catalog.json',
-      content: new Blob([pinCatalog.serialize()], { type: 'application/json' }),
-    });
-  }
+      getSettingsIoModal().showModal();
+    },
+  });
+}
 
-  function onClickPinsImport() {
-    triggerUpload({
-      onSuccess(fileContent: string) {
-        const loadedPinCatalog = PinCatalog.deserialize(fileContent);
+function onClickPinsClear() {
+  modalData.value = {
+    kind: 'simple',
+    title: 'Clear Pin Catalog',
+    message: 'Are you sure you want to delete all pin definitions from the pin catalog? This action cannot be undone.',
+    buttonConfirm: 'Delete All Pins',
+    actionConfirm: () => {
+      getPinCatalog().value[changeSubtree]((pinCatalog) => {
+        PinCatalogClear(pinCatalog);
+      })
+    },
+  };
+  getSettingsIoModal().showModal();
+}
 
-        console.log(loadedPinCatalog);
+function onClickCalendarExport() {
+  triggerDownload({
+    fileName: 'calendar.json',
+    content: new Blob([PinCalendarSerialize(getPinCalendar().value)], { type: 'application/json' }),
+  });
+}
 
-        if (loadedPinCatalog === null)
-          return;
+function onClickCalendarImport() {
+  triggerUpload({
+    onSuccess(fileContent: string) {
+      const loadedPinCalendar = PinCalendarDeserialize(fileContent);
 
-        modalData.value = {
-          kind: 'import',
-          import: {
-            kind: 'pins',
-            pins: loadedPinCatalog,
-            conflicts: {
-              pins: new Set(Object.keys(loadedPinCatalog.pins)).intersection(new Set(Object.keys(pinCatalog.pins))),
-              pinCategories: new Set(Object.keys(loadedPinCatalog.pinCategories)).intersection(new Set(Object.keys(pinCatalog.pinCategories))),
-            },
-            overwrite: false,
-          },
-        };
+      console.log(loadedPinCalendar);
 
-        const modal: any = document.getElementById('settings_io_modal');
-        modal.showModal();
-      },
-    });
-  }
+      if (loadedPinCalendar === null)
+        return;
 
-  function onClickPinsClear() {
-    const modal: any = document.getElementById('settings_io_modal');
-    modalData.value = {
-      kind: 'simple',
-      title: 'Clear Pin Catalog',
-      message: 'Are you sure you want to delete all pin definitions from the pin catalog? This action cannot be undone.',
-      buttonConfirm: 'Delete All Pins',
-      actionConfirm: () => {
-        pinCatalog.clear();
-        pinCatalog.saveToLocalStorage();
-      },
-    };
-    modal.showModal();
-  }
+      modalData.value = {
+        kind: 'import',
+        import: {
+          kind: 'calendar',
+          calendar: loadedPinCalendar,
+        },
+      };
 
-  function onClickCalendarExport() {
-    triggerDownload({
-      fileName: 'calendar.json',
-      content: new Blob([pinCalendar.serialize()], { type: 'application/json' }),
-    });
-  }
+      getSettingsIoModal().showModal();
+    },
+  });
+}
 
-  function onClickCalendarImport() {
-    triggerUpload({
-      onSuccess(fileContent: string) {
-        const loadedPinCalendar = PinCalendar.deserialize(fileContent);
+function onClickCalendarClear() {
+  modalData.value = {
+    kind: 'simple',
+    title: 'Clear Calendar',
+    message: 'Are you sure you want to clear all pins from the calendar? This action cannot be undone.',
+    buttonConfirm: 'Clear Calendar',
+    actionConfirm: () => {
+      getPinCalendar().value![changeSubtree]((pinCalendar) => {
+        PinCalendarClear(pinCalendar);
+      })
+    },
+  };
+  getSettingsIoModal().showModal();
+}
 
-        console.log(loadedPinCalendar);
-
-        if (loadedPinCalendar === null)
-          return;
-
-        modalData.value = {
-          kind: 'import',
-          import: {
-            kind: 'calendar',
-            calendar: loadedPinCalendar,
-          },
-        };
-
-        const modal: any = document.getElementById('settings_io_modal');
-        modal.showModal();
-      },
-    });
-  }
-
-  function onClickCalendarClear() {
-    const modal: any = document.getElementById('settings_io_modal');
-    modalData.value = {
-      kind: 'simple',
-      title: 'Clear Calendar',
-      message: 'Are you sure you want to clear all pins from the calendar? This action cannot be undone.',
-      buttonConfirm: 'Clear Calendar',
-      actionConfirm: () => {
-        pinCalendar.clear();
-        pinCalendar.saveToLocalStorage();
-      },
-    };
-    modal.showModal();
-  }
-
-  function onClickImportPinsConfirm(importPins: ImportPins) {
+function onClickImportPinsConfirm(importPins: ImportPins) {
+  getPinCatalog().value![changeSubtree]((pinCatalog) => {
     if (importPins.overwrite) {
       // Remove conflicting elements
       for (const pinCategoryId of importPins.conflicts.pinCategories)
-        pinCatalog.removePinCategory(pinCategoryId);
+        PinCatalogRemovePinCategory(pinCatalog, pinCategoryId);
 
       for (const pinId of importPins.conflicts.pins)
-        pinCatalog.removePin(pinId);
+        PinCatalogRemovePin(pinCatalog, pinId);
 
       // Add all elements
       for (const pinCategory of Object.values(importPins.pins.pinCategories))
-        pinCatalog.addPinCategory(pinCategory.parentId, pinCategory.pinCategory);
+        PinCatalogAddPinCategory(pinCatalog, pinCategory.parentId, pinCategory.pinCategory);
 
       for (const pin of Object.values(importPins.pins.pins))
-        pinCatalog.addPin(pin.categoryId, pin.pin);
+        PinCatalogAddPin(pinCatalog, pin.categoryId, pin.pin);
     } else {
       // Only add non-conflicting elements.
       for (const pinCategory of Object.values(importPins.pins.pinCategories))
         if (!importPins.conflicts.pinCategories.has(pinCategory.pinCategory.id))
-          pinCatalog.addPinCategory(pinCategory.parentId, pinCategory.pinCategory);
+          PinCatalogAddPinCategory(pinCatalog, pinCategory.parentId, pinCategory.pinCategory);
 
       for (const pin of Object.values(importPins.pins.pins))
         if (!importPins.conflicts.pins.has(pin.pin.id))
-          pinCatalog.addPin(pin.categoryId, pin.pin);
+          PinCatalogAddPin(pinCatalog, pin.categoryId, pin.pin);
     }
+  });
+}
 
-    pinCatalog.saveToLocalStorage();
-  }
-
-  function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
-    for (const [key, loadedDay] of Object.entries(importCalendar.calendar.days)) {
-      const day = pinCalendar.getDayByKey(key);
-
-      for (const pin of loadedDay.pins)
-        day.pins.add(pin);
-    }
-
-    pinCalendar.saveToLocalStorage();
-  }
+function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
+  getPinCalendar().value![changeSubtree]((pinCalendar) => {
+    PinCalendarCombine(pinCalendar, importCalendar.calendar);
+  })
+}
 </script>
 
 <template>
@@ -258,11 +263,11 @@
             v-if="modalData.import.conflicts.pinCategories.size > 0 || modalData.import.conflicts.pins.size > 0">
             <div>
               <p v-if="modalData.import.conflicts.pinCategories.size > 0"><span class="font-semibold">Found {{
-                  modalData.import.conflicts.pinCategories.size }} conflicting categories</span>: {{
-                Array.from(modalData.import.conflicts.pinCategories).join(", ") }}.</p>
+                modalData.import.conflicts.pinCategories.size }} conflicting categories</span>: {{
+                    Array.from(modalData.import.conflicts.pinCategories).join(", ") }}.</p>
               <p v-if="modalData.import.conflicts.pins.size > 0"><span class="font-semibold">Found {{
-                  modalData.import.conflicts.pins.size }} conflicting pins</span>: {{
-                Array.from(modalData.import.conflicts.pins).join(", ") }}.</p>
+                modalData.import.conflicts.pins.size }} conflicting pins</span>: {{
+                    Array.from(modalData.import.conflicts.pins).join(", ") }}.</p>
             </div>
             <div>
               What do you wish to perform with conflicting elements?
@@ -290,7 +295,8 @@
               Overwriting Existing
               Elements</button>
           </template>
-          <button v-else class="btn btn-primary flex-1" @click="onClickImportPinsConfirm(modalData.import)">Import</button>
+          <button v-else class="btn btn-primary flex-1"
+            @click="onClickImportPinsConfirm(modalData.import)">Import</button>
         </form>
       </template>
       <template v-if="modalData.import.kind === 'calendar'">

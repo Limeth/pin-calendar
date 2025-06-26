@@ -10,18 +10,21 @@ import skipFormatting from '@vue/eslint-config-prettier/skip-formatting'
 // More info at https://github.com/vuejs/eslint-config-typescript/#advanced-setup
 
 export default defineConfigWithVueTs(
-  {
-    name: 'app/files-to-lint',
-    files: ['**/*.{ts,mts,tsx,vue}'],
-    rules: {
-      "@typescript-eslint/no-explicit-any": ["off"],
-    },
-  },
-
   globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**']),
 
   pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,
-  ...pluginOxlint.configs['flat/recommended'],
   skipFormatting,
+
+  {
+    name: 'app/files-to-lint',
+    files: ['**/*.{ts,mts,tsx,vue}'],
+    rules: {
+      // "@typescript-eslint/no-explicit-any": ["off"],
+      "vue/multi-word-component-names": ["off"],
+      "@typescript-eslint/no-unused-vars": ["warn"],
+    },
+  },
+
+  ...pluginOxlint.buildFromOxlintConfigFile('./.oxlintrc.json'),
 )

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, type Ref } from 'vue';
+import { ref, type Ref, type ShallowRef } from 'vue';
 import * as A from "@automerge/automerge-repo";
 import { BroadcastChannelNetworkAdapter } from "@automerge/automerge-repo-network-broadcastchannel";
 import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
-import { type PinCalendar, PinCatalog } from '../pins';
+import { type PinCalendar, type PinCatalog } from '../pins';
 import Calendar from './Calendar.vue';
 import Milestones from './Milestones.vue';
 import Settings from './Settings.vue';
@@ -16,7 +16,7 @@ import { changeSubtree, makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 //   pinCalendar: PinCalendar.loadFromLocalStorageOrDefault(),
 // });
 
-const app: Rop<App> = await accountStore.value.GetApp();
+const app: ShallowRef<App> = await accountStore.value.GetApp();
 
 console.log('pinCalendar', app.value!.docData.value!.pinCalendar);
 console.log('pinCatalog', app.value!.docData.value!.pinCatalog);

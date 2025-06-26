@@ -1,11 +1,9 @@
 <script setup lang="ts">
-  import { reactive, ref, onMounted, watch } from 'vue';
-  import type { Ref } from 'vue';
-  import { type PinCalendar, PinCatalog, type PinDay, type Pin } from '../pins';
+import { type Pin } from '../pins';
 
-  const { pin } = defineProps<{
-    pin: Pin,
-  }>();
+const { pin } = defineProps<{
+  pin: Pin,
+}>();
 </script>
 
 <template>
