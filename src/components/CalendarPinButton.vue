@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { type PinDay, type Pin, type PinCategory, PinDayHasPin } from '../pins';
+import { type PinDay, type Pin, type PinCategory, PinDayHasPin, type PinCatalog, type PinTypeOf } from '../pins';
 import PinCard from './PinCard.vue';
 import type { Rop } from 'automerge-diy-vue-hooks';
 
-const { depth, pinCategory, pin, pinDay } = defineProps<{
+const { depth, pin, pinDay } = defineProps<{
   depth: number,
-  pinCategory: Rop<PinCategory>,
-  pin: Rop<Pin>,
+  pin: PinTypeOf<Rop<PinCatalog>>,
   pinDay: Rop<PinDay>,
 }>();
 
@@ -38,12 +37,12 @@ const emit = defineEmits<{
 }
 
 .pin-btn-active {
-  border-color: v-bind('pin.backgroundColor');
+  border-color: v-bind('pin.value.backgroundColor');
   background-color: white;
 }
 
 .pin-btn-active:hover {
-  background-color: color-mix(in oklab, white, v-bind('pin.backgroundColor') 20%) !important;
+  background-color: color-mix(in oklab, white, v-bind('pin.value.backgroundColor') 20%) !important;
 }
 
 .pin-btn-even-depth:nth-child(odd):not(.pin-btn-active) {
@@ -63,18 +62,18 @@ const emit = defineEmits<{
 }
 
 .pin-btn-even-depth:nth-child(odd):hover:not(.pin-btn-active) {
-  background-color: color-mix(in oklab, oklch(var(--b2)), v-bind('pin.backgroundColor') 20%) !important;
+  background-color: color-mix(in oklab, oklch(var(--b2)), v-bind('pin.value.backgroundColor') 20%) !important;
 }
 
 .pin-btn-even-depth:nth-child(even):hover:not(.pin-btn-active) {
-  background-color: color-mix(in oklab, oklch(var(--b1)), v-bind('pin.backgroundColor') 20%) !important;
+  background-color: color-mix(in oklab, oklch(var(--b1)), v-bind('pin.value.backgroundColor') 20%) !important;
 }
 
 .pin-btn-odd-depth:nth-child(odd):hover:not(.pin-btn-active) {
-  background-color: color-mix(in oklab, oklch(var(--b3)), v-bind('pin.backgroundColor') 20%) !important;
+  background-color: color-mix(in oklab, oklch(var(--b3)), v-bind('pin.value.backgroundColor') 20%) !important;
 }
 
 .pin-btn-odd-depth:nth-child(even):hover:not(.pin-btn-active) {
-  background-color: color-mix(in oklab, oklch(var(--b2)), v-bind('pin.backgroundColor') 20%) !important;
+  background-color: color-mix(in oklab, oklch(var(--b2)), v-bind('pin.value.backgroundColor') 20%) !important;
 }
 </style>

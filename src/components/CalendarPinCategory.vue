@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import * as feather from 'feather-icons';
 import { ref } from 'vue';
-import { type PinDay, type Pin, type PinCategory } from '../pins';
+import { type PinDay, type Pin, type PinCategory, type Registered, type PinCategoryId, type PinCategoryDescriptor, PinCatalogGetPinsInCategory, type PinCatalog, PinCatalogGetSubcategoriesInCategory, type PinCategoryTypeOf } from '../pins';
 import * as R from 'ramda';
 import CalendarPinButton from './CalendarPinButton.vue';
 import type { Rop } from 'automerge-diy-vue-hooks';
 
 const { depth, pinCategory, pinDay } = defineProps<{
   depth: number,
-  pinCategory: Rop<PinCategory>,
+  pinCatalog: Rop<PinCatalog>,
+  pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>,
   pinDay: Rop<PinDay>,
 }>();
 
@@ -32,7 +33,7 @@ const isCollapsed = ref(true);
         <div class="hover:bg-base-300 w-full absolute top-0 left-0 bottom-0 cursor-pointer z-0"
           @click="isCollapsed = !isCollapsed"></div>
         <div class="flex-grow flex flex-row items-center z-10 pointer-events-none">
-          <div>{{ pinCategory.displayName }}</div>
+          <div>{{ pinCategory.value.displayName }}</div>
           <div class="px-2" v-html="feather.icons[isCollapsed ? 'chevron-up' : 'chevron-down'].toSvg()" />
         </div>
       </ul>
@@ -40,18 +41,18 @@ const isCollapsed = ref(true);
         <div class="flex-grow">{{ pinCategory.displayName }}</div>
       </li> -->
       <template v-if="!isCollapsed">
-        <li class="text-sm" v-if="pinCategory.description">
-          {{ pinCategory.description }}
+        <li class="text-sm" v-if="pinCategory.value.description">
+          {{ pinCategory.value.description }}
         </li>
         <li class="-mx-4 w-[inherit]">
           <ul class="flex flex-col">
-            <CalendarPinButton v-for="pin of R.filter((pin) => !pin.archived, pinCategory.pins)" :key="pin.id"
-              @event="emit('event', $event)" :depth :pin-category :pin :pin-day />
+            <CalendarPinButton v-for="pin of R.filter((pin) => !pin.value.archived, PinCatalogGetPinsInCategory(pinCatalog, pinCategory.id))" :key="pin.id.key"
+              @event="emit('event', $event)" :depth :pin :pin-day />
           </ul>
         </li>
-        <li v-for="subcategory in R.filter((subcategory) => !subcategory.archived, pinCategory.subcategories)"
-          :key="subcategory.id" class="flex flex-row items-center w-full gap-1">
-          <CalendarPinCategory @event="emit('event', $event)" :depth="depth + 1" :pin-category="subcategory" :pin-day />
+        <li v-for="subcategory in R.filter((subcategory) => !subcategory.value.archived, PinCatalogGetSubcategoriesInCategory(pinCatalog, pinCategory.id))"
+          :key="subcategory.id.key" class="flex flex-row items-center w-full gap-1">
+          <CalendarPinCategory @event="emit('event', $event)" :depth="depth + 1" :pin-catalog :pin-category="subcategory" :pin-day />
         </li>
       </template>
     </ul>

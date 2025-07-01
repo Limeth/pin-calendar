@@ -2,7 +2,7 @@
 import * as feather from 'feather-icons';
 import { ref, watch, type ShallowRef, toRef, shallowRef } from 'vue';
 import type { Ref } from 'vue';
-import { type PinDay, type Pin, PinCalendarGetPinsOnDay, PinDayTogglePin, PinCalendarPrepareDay, PinCalendarGetDayRef, PinCalendarDayToKey } from '../pins';
+import { type PinDay, type Pin, PinCalendarGetPinsOnDay, PinDayTogglePin, PinCalendarPrepareDay, PinCalendarGetDayRef, PinCalendarDayToKey, PinCatalogGetRootCategories } from '../pins';
 import { Temporal } from '@js-temporal/polyfill';
 import PinIcon from './PinIcon.vue';
 import CalendarPinCategory from './CalendarPinCategory.vue';
@@ -191,10 +191,10 @@ app.value!.docHandle.on('change', () => {
           <div class="collapse-title text-xl font-medium">Add/Remove Pins</div>
           <div class="collapse-content">
             <ul class="gap-1">
-              <li v-for="rootCategory of getPinCatalog().value.rootCategories" :key="rootCategory.id"
+              <li v-for="rootCategory of PinCatalogGetRootCategories(getPinCatalog().value)" :key="rootCategory.id.key"
                 class="flex flex-row items-center w-full gap-1">
-                <CalendarPinCategory v-if="!rootCategory.archived" @event="onCalendarPinCategoryEvent" :depth=0
-                  :pin-category="rootCategory" :pin-day="pinDay.value" />
+                <CalendarPinCategory v-if="!rootCategory.value.archived" @event="onCalendarPinCategoryEvent" :depth=0
+                  :pin-catalog="getPinCatalog().value" :pin-category="rootCategory" :pin-day="pinDay.value" />
               </li>
             </ul>
           </div>

@@ -3,7 +3,7 @@ import type { App } from '../account';
 import * as feather from 'feather-icons';
 import { ref, watch, toRaw, toRef } from 'vue';
 import type { Ref } from 'vue';
-import { PinCatalogRemovePin, PinCatalogRemovePinCategory, type Pin, type PinCatalog, type PinCategory } from '../pins';
+import { type Pin, type PinCatalog, type PinCategory } from '../pins';
 import emojiRegex from 'emoji-regex';
 import SettingsPinCategory, { type SettingsPinCategoryEvent } from './SettingsPinCategory.vue';
 import * as R from 'ramda';

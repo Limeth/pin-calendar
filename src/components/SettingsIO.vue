@@ -3,7 +3,7 @@ import type { App } from '../account';
 import * as feather from 'feather-icons';
 import { ref, toRef } from 'vue';
 import type { Ref } from 'vue';
-import { type PinCalendar, type PinCatalog, PinCalendarClear, PinCalendarCombine, PinCalendarDeserialize, PinCalendarSerialize, PinCatalogSerialize, PinCatalogDeserialize, PinCatalogClear, PinCatalogRemovePinCategory, PinCatalogRemovePin, PinCatalogAddPinCategory, PinCatalogAddPin } from '../pins';
+import { type PinCalendar, type PinCatalog, PinCalendarClear, PinCalendarCombine, PinCalendarDeserialize, PinCalendarSerialize, PinCatalogSerialize, PinCatalogDeserialize, PinCatalogClear } from '../pins';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 // import { Temporal } from '@js-temporal/polyfill';
 // import * as emojiSearch from 'node-emoji';
