@@ -3,7 +3,7 @@ import type { App } from '../account';
 import * as feather from 'feather-icons';
 import { ref, watch, toRaw, toRef } from 'vue';
 import type { Ref } from 'vue';
-import { type Pin, type PinCatalog, type PinCategory } from '../pins';
+import { PinCatalogCreateAndAddPinToCategory, PinCatalogCreateAndAddSubcategoryToCategory, PinCatalogGetPinById, PinCatalogGetRootCategories, type Pin, type PinCatalog, type PinCategory, type PinCategoryDescriptor, type PinCategoryTypeOf, type PinDescriptor, type PinId, type PinTypeOf } from '../pins';
 import emojiRegex from 'emoji-regex';
 import SettingsPinCategory, { type SettingsPinCategoryEvent } from './SettingsPinCategory.vue';
 import * as R from 'ramda';
@@ -11,11 +11,9 @@ import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 
 type EditingPin = {
   kind: 'pin',
-  pinClone: Pin,
-  parent: Rop<PinCategory>,
-  originalId?: string,
+  element: PinTypeOf<Rop<PinCatalog>>,
+  // parent: PinCategoryTypeOf<Rop<PinCatalog>>,
   error?: {
-    idError?: string,
     displayNameError?: string,
     iconEmojiError?: string,
   },
@@ -23,11 +21,9 @@ type EditingPin = {
 
 type EditingPinCategory = {
   kind: 'category',
-  pinCategoryClone: PinCategory,
-  parent?: Rop<PinCategory>,
-  originalId?: string,
+  element: PinCategoryTypeOf<Rop<PinCatalog>>,
+  // parent?: PinCategoryTypeOf<Rop<PinCatalog>>,
   error?: {
-    idError?: string,
     displayNameError?: string,
   },
 };
@@ -46,54 +42,47 @@ const editing: Ref<Editing | undefined> = ref(undefined);
 const isDrawerOpen = ref(false);
 const isArchiveOpen = ref(false);
 
-function onClickEditPinCategory(pinCategory: Rop<PinCategory>) {
-  if (editing.value?.originalId === pinCategory.id) {
+function onClickEditPinCategory(pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>) {
+  if (editing.value?.element.id.isEqualDynamic(pinCategory.id)) {
     editing.value = undefined;
   } else {
-    const parentId = getPinCatalog().value.pinCategories[pinCategory.id].parentId;
-    const parent = parentId !== undefined ? getPinCatalog().value.pinCategories[parentId].pinCategory : undefined;
+    // const parentId = getPinCatalog().value.pinCategories[pinCategory.id].parentId;
+    // const parent = parentId !== undefined ? getPinCatalog().value.pinCategories[parentId].pinCategory : undefined;
     editing.value = {
       kind: 'category',
-      parent,
-      originalId: pinCategory.id,
-      pinCategoryClone: structuredClone(toRaw(pinCategory)),
+      element: pinCategory,
     };
   }
 }
 
-function onClickEditPin(pin: Pin) {
-  if (editing.value?.originalId === pin.id) {
+function onClickEditPin(pin: PinTypeOf<Rop<PinCatalog>>) {
+  if (editing.value?.element.id.isEqualDynamic(pin.id)) {
     editing.value = undefined;
   } else {
     editing.value = {
       kind: 'pin',
-      parent: getPinCatalog().value.pinCategories[getPinCatalog().value.pins[pin.id].categoryId].pinCategory,
-      originalId: pin.id,
-      pinClone: structuredClone(toRaw(pin)),
+      // parent: getPinCatalog().value.pinCategories[getPinCatalog().value.pins[pin.id].categoryId].pinCategory,
+      element: pin,
     };
   }
 }
 
-function onClickAddPinCategory(parent: Rop<PinCategory> | undefined) {
-  editing.value = {
-    kind: 'category',
-    parent,
-    pinCategoryClone: {
-      id: "",
+function onClickAddPinCategory(parent: PinCategoryTypeOf<Rop<PinCatalog>> | undefined) {
+  getPinCatalog().value[changeSubtree]((pinCatalog) => {
+    const pinCategory = PinCatalogCreateAndAddSubcategoryToCategory(pinCatalog, parent?.id ?? null, {
       displayName: "",
       description: "",
       subcategories: [],
       pins: [],
-    },
-  };
+    });
+  });
+
+  // TODO: Open the editing pane
 }
 
-function onClickAddPin(parent: Rop<PinCategory>) {
-  editing.value = {
-    kind: 'pin',
-    parent,
-    pinClone: {
-      id: "",
+function onClickAddPin(parent: PinCategoryTypeOf<Rop<PinCatalog>>) {
+  getPinCatalog().value[changeSubtree]((pinCatalog) => {
+    const pin = PinCatalogCreateAndAddPinToCategory(pinCatalog, parent.id, {
       displayName: "",
       description: "",
       icon: {
@@ -101,19 +90,20 @@ function onClickAddPin(parent: Rop<PinCategory>) {
         scale: 1,
       },
       backgroundColor: "black",
-    },
-  }
+    });
+  })
+
+  // TODO: Open the editing pane
 }
 
-function onClickArchive(item: Rop<Pin | PinCategory>, archive: boolean) {
-  item[changeSubtree]((item: Pin | PinCategory) => {
+function onClickArchive(item: Rop<PinDescriptor | PinCategoryDescriptor>, archive: boolean) {
+  item[changeSubtree]((item: PinDescriptor | PinCategoryDescriptor) => {
     item.archived = archive;
   })
 }
 
 function onClickEditCancel() {
   editing.value = undefined;
-  console.log(editing);
 }
 
 function onClickEditConfirmCategory() {
@@ -125,15 +115,7 @@ function onClickEditConfirmCategory() {
   {
     editing.value.error = {};
 
-    if (editing.value.pinCategoryClone.id !== editing.value.originalId && editing.value.pinCategoryClone.id in getPinCatalog().value.pins) {
-      editing.value.error.idError = 'This ID is already in use by an existing pin. Please use a unique ID.';
-    }
-
-    if (editing.value.pinCategoryClone.id.length === 0) {
-      editing.value.error.idError = 'The ID must not be empty.';
-    }
-
-    if (editing.value.pinCategoryClone.displayName.length === 0) {
+    if (editing.value.element.value.displayName.length === 0) {
       editing.value.error.displayNameError = 'The display name must not be empty.';
     }
 
@@ -144,38 +126,38 @@ function onClickEditConfirmCategory() {
     }
   }
 
-  if (editing.value.parent !== undefined) {
-    if (editing.value.originalId !== undefined) {
-      const index = editing.value.parent.subcategories.findIndex((subcategory) => subcategory.id === editing.value?.originalId);
+  // if (editing.value.parent !== undefined) {
+  //   if (editing.value.originalId !== undefined) {
+  //     const index = editing.value.parent.subcategories.findIndex((subcategory) => subcategory.id === editing.value?.originalId);
 
-      if (index != -1) {
-        editing.value.parent.subcategories[index] = editing.value.pinCategoryClone;
-      } else {
-        console.error("Pin category not found in parent.");
-      }
-    } else {
-      editing.value.parent.subcategories.push(editing.value.pinCategoryClone);
-    }
-  } else {
-    if (editing.value.originalId !== undefined) {
-      const index = pinCatalog.rootCategories.findIndex((pinCategory) => pinCategory.id === editing.value?.originalId);
+  //     if (index != -1) {
+  //       editing.value.parent.subcategories[index] = editing.value.pinCategoryClone;
+  //     } else {
+  //       console.error("Pin category not found in parent.");
+  //     }
+  //   } else {
+  //     editing.value.parent.subcategories.push(editing.value.pinCategoryClone);
+  //   }
+  // } else {
+  //   if (editing.value.originalId !== undefined) {
+  //     const index = pinCatalog.rootCategories.findIndex((pinCategory) => pinCategory.id === editing.value?.originalId);
 
-      if (index != -1) {
-        pinCatalog.rootCategories[index] = editing.value.pinCategoryClone;
-      } else {
-        console.error("Pin category not found in root.");
-      }
-    } else {
-      pinCatalog.rootCategories.push(editing.value.pinCategoryClone);
-    }
-  }
+  //     if (index != -1) {
+  //       pinCatalog.rootCategories[index] = editing.value.pinCategoryClone;
+  //     } else {
+  //       console.error("Pin category not found in root.");
+  //     }
+  //   } else {
+  //     pinCatalog.rootCategories.push(editing.value.pinCategoryClone);
+  //   }
+  // }
 
-  pinCatalog.pinCategories[editing.value.pinCategoryClone.id] = {
-    parentId: editing.value.parent?.id,
-    pinCategory: editing.value.pinCategoryClone,
-  };
+  // pinCatalog.pinCategories[editing.value.pinCategoryClone.id] = {
+  //   parentId: editing.value.parent?.id,
+  //   pinCategory: editing.value.pinCategoryClone,
+  // };
 
-  pinCatalog.saveToLocalStorage();
+  // pinCatalog.saveToLocalStorage();
   editing.value = undefined;
 }
 
@@ -188,26 +170,18 @@ function onClickEditConfirmPin() {
   {
     editing.value.error = {};
 
-    if (editing.value.pinClone.id !== editing.value.originalId && editing.value.pinClone.id in pinCatalog.pins) {
-      editing.value.error.idError = 'This ID is already in use by an existing pin. Please use a unique ID.';
-    }
-
-    if (editing.value.pinClone.id.length === 0) {
-      editing.value.error.idError = 'The ID must not be empty.';
-    }
-
-    if (editing.value.pinClone.displayName.length === 0) {
+    if (editing.value.element.value.displayName.length === 0) {
       editing.value.error.displayNameError = 'The display name must not be empty.';
     }
 
     {
-      const emojis = [...editing.value.pinClone.icon.emoji.matchAll(emojiRegexPattern)];
+      const emojis = [...editing.value.element.value.icon.emoji.matchAll(emojiRegexPattern)];
 
       if (emojis.length > 1) {
         editing.value.error.iconEmojiError = 'Only a single emoji is allowed.';
       }
 
-      const stringWithoutEmojis = editing.value.pinClone.icon.emoji.replaceAll(emojiRegexPattern, '');
+      const stringWithoutEmojis = editing.value.element.value.icon.emoji.replaceAll(emojiRegexPattern, '');
 
       if (stringWithoutEmojis.length > 0) {
         editing.value.error.iconEmojiError = 'The icon must not contain non-emoji symbols.';
@@ -221,36 +195,38 @@ function onClickEditConfirmPin() {
     }
   }
 
-  if (editing.value.originalId !== undefined) {
-    const index = editing.value.parent.pins.findIndex((pin) => pin.id === editing.value?.originalId);
+  // if (editing.value.originalId !== undefined) {
+  //   const index = editing.value.parent.pins.findIndex((pin) => pin.id === editing.value?.originalId);
 
-    if (index != -1) {
-      editing.value.parent.pins[index] = editing.value.pinClone;
-    } else {
-      console.error("Pin not found in parent.");
-    }
-  } else {
-    editing.value.parent.pins.push(editing.value.pinClone);
-  }
+  //   if (index != -1) {
+  //     editing.value.parent.pins[index] = editing.value.element.value;
+  //   } else {
+  //     console.error("Pin not found in parent.");
+  //   }
+  // } else {
+  //   editing.value.parent.pins.push(editing.value.pinClone);
+  // }
 
-  pinCatalog.pins[editing.value.pinClone.id] = {
-    categoryId: editing.value.parent.id,
-    pin: editing.value.pinClone,
-  };
+  // pinCatalog.pins[editing.value.pinClone.id] = {
+  //   categoryId: editing.value.parent.id,
+  //   pin: editing.value.pinClone,
+  // };
 
-  pinCatalog.saveToLocalStorage();
+  // pinCatalog.saveToLocalStorage();
   editing.value = undefined;
 }
 
-function onClickDeletePinCategory(pinCategory: Rop<PinCategory>) {
+function onClickDeletePinCategory(pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>) {
   getPinCatalog().value[changeSubtree]((pinCatalog) => {
-    PinCatalogRemovePinCategory(pinCatalog, pinCategory.id);
+    console.log("TODO");
+    // PinCatalogRemovePinCategory(pinCatalog, pinCategory.id);
   })
 }
 
 function onClickDeletePin(pin: Pin) {
   getPinCatalog().value[changeSubtree]((pinCatalog) => {
-    PinCatalogRemovePin(pinCatalog, pin.id);
+    console.log("TODO");
+    // PinCatalogRemovePin(pinCatalog, pin.id);
   })
 }
 
@@ -269,7 +245,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
       break;
     }
     case 'pinArchive': {
-      onClickArchive(event.pin, event.archive);
+      onClickArchive(event.pin.value, event.archive);
       break;
     }
     case 'pinDelete': {
@@ -285,7 +261,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
       break;
     }
     case 'categoryArchive': {
-      onClickArchive(event.pinCategory, event.archive);
+      onClickArchive(event.pinCategory.value, event.archive);
       break;
     }
     case 'categoryDelete': {
@@ -303,11 +279,11 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
       <div class="flex justify-center">
         <ul class="flex flex-col gap-2 items-center lg:w-[64rem] lg:my-8 max-lg:w-full lg:shadow-xl px-4 py-2">
           <li
-            v-for="rootCategory of R.filter((rootCategory) => !rootCategory.archived, getPinCatalog().value.rootCategories)"
-            :key="rootCategory.id" class="flex flex-row items-center w-full gap-1">
-            <SettingsPinCategory @event="onSettingsPinCategoryEvent" :depth=0 :pin-category="rootCategory" />
+            v-for="rootCategory of R.filter((rootCategory) => !rootCategory.value.archived, PinCatalogGetRootCategories(getPinCatalog().value))"
+            :key="rootCategory.id.key" class="flex flex-row items-center w-full gap-1">
+            <SettingsPinCategory @event="onSettingsPinCategoryEvent" :depth=0 :pin-catalog="getPinCatalog().value" :pin-category="rootCategory" />
           </li>
-          <li v-if="R.any((pinCategory) => !!pinCategory.archived, getPinCatalog().value.rootCategories)"
+          <li v-if="R.any((pinCategory) => !!pinCategory.value.archived, PinCatalogGetRootCategories(getPinCatalog().value))"
             class="collapse collapse-arrow">
             <input type="checkbox" v-model="isArchiveOpen" />
             <div class="collapse-title flex flex-row items-center pl-0">
@@ -316,9 +292,9 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
             </div>
             <ul class="collapse-content px-0 flex flex-col gap-1">
               <li
-                v-for="rootCategory of R.filter((rootCategory) => !!rootCategory.archived, getPinCatalog().value.rootCategories)"
-                :key="rootCategory.id" class="flex flex-row items-center w-full gap-1">
-                <SettingsPinCategory @event="onSettingsPinCategoryEvent" :depth=0 :pin-category="rootCategory" />
+                v-for="rootCategory of R.filter((rootCategory) => !!rootCategory.value.archived, PinCatalogGetRootCategories(getPinCatalog().value))"
+                :key="rootCategory.id.key" class="flex flex-row items-center w-full gap-1">
+                <SettingsPinCategory @event="onSettingsPinCategoryEvent" :depth=0 :pin-catalog="getPinCatalog().value" :pin-category="rootCategory" />
               </li>
             </ul>
           </li>
@@ -342,18 +318,14 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <div class="label">
                 <span class="label-text">Unique ID</span>
               </div>
-              <input v-model="editing.pinCategoryClone.id" type="text" placeholder="example-category-id"
-                class="input input-bordered w-full max-w-xs"
-                :class="editing.error?.idError !== undefined ? 'input-error' : ''" />
-              <div v-if="editing.error?.idError !== undefined" class="label">
-                <span class="label-text-alt text-error">{{ editing.error?.idError }}</span>
-              </div>
+              <input v-model="editing.element.id.key" type="text" placeholder="example-category-id"
+                class="input input-bordered w-full max-w-xs" disabled />
             </label>
             <label class="form-control w-full max-w-xs">
               <div class="label">
                 <span class="label-text">Display Name</span>
               </div>
-              <input v-model="editing.pinCategoryClone.displayName" type="text" placeholder="Example Pin"
+              <input v-model="editing.element.value.displayName" type="text" placeholder="Example Pin"
                 class="input input-bordered w-full max-w-xs"
                 :class="editing.error?.displayNameError !== undefined ? 'input-error' : ''" />
               <div v-if="editing.error?.displayNameError !== undefined" class="label">
@@ -364,16 +336,13 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <div class="label">
                 <span class="label-text">Description</span>
               </div>
-              <textarea v-model="editing.pinCategoryClone.description"
+              <textarea v-model="editing.element.value.description"
                 placeholder="This is an example description of this example pin."
                 class="textarea textarea-bordered w-full max-w-xs min-h-32" style="line-height: 1;" />
             </label>
             <div class="flex gap-3 pt-4">
               <button @click="onClickEditCancel" class="btn btn-secondary flex-1">Cancel</button>
-              <button @click="onClickEditConfirmCategory" class="btn btn-primary flex-1">{{ editing.originalId !==
-                undefined ?
-                'Apply'
-                : 'Add Category' }}</button>
+              <button @click="onClickEditConfirmCategory" class="btn btn-primary flex-1">Apply</button>
             </div>
           </template>
           <template v-if="editing.kind === 'pin'">
@@ -381,18 +350,14 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <div class="label">
                 <span class="label-text">Unique ID</span>
               </div>
-              <input v-model="editing.pinClone.id" type="text" placeholder="example-pin-id"
-                class="input input-bordered w-full max-w-xs"
-                :class="editing.error?.idError !== undefined ? 'input-error' : ''" />
-              <div v-if="editing.error?.idError !== undefined" class="label">
-                <span class="label-text-alt text-error">{{ editing.error?.idError }}</span>
-              </div>
+              <input v-model="editing.element.id.key" type="text" placeholder="example-pin-id"
+                class="input input-bordered w-full max-w-xs" disabled />
             </label>
             <label class="form-control w-full max-w-xs">
               <div class="label">
                 <span class="label-text">Display Name</span>
               </div>
-              <input v-model="editing.pinClone.displayName" type="text" placeholder="Example Pin"
+              <input v-model="editing.element.value.displayName" type="text" placeholder="Example Pin"
                 class="input input-bordered w-full max-w-xs"
                 :class="editing.error?.displayNameError !== undefined ? 'input-error' : ''" />
               <div v-if="editing.error?.displayNameError !== undefined" class="label">
@@ -403,7 +368,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <div class="label">
                 <span class="label-text">Description</span>
               </div>
-              <textarea v-model="editing.pinClone.description"
+              <textarea v-model="editing.element.value.description"
                 placeholder="This is an example description of this example pin."
                 class="textarea textarea-bordered w-full max-w-xs min-h-32" style="line-height: 1;" />
             </label>
@@ -411,7 +376,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <div class="label">
                 <span class="label-text">Pin Emoji</span>
               </div>
-              <input v-model="editing.pinClone.icon.emoji" type="text" placeholder="Example Pin"
+              <input v-model="editing.element.value.icon.emoji" type="text" placeholder="Example Pin"
                 class="input input-bordered w-full max-w-xs"
                 :class="editing.error?.iconEmojiError !== undefined ? 'input-error' : ''" />
               <div v-if="editing.error?.iconEmojiError !== undefined" class="label">
@@ -422,21 +387,18 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <div class="label">
                 <span class="label-text">Pin Emoji Scale</span>
               </div>
-              <input type="range" min="0.5" max="1.5" class="range" step="0.1" v-model="editing.pinClone.icon.scale" />
+              <input type="range" min="0.5" max="1.5" class="range" step="0.1" v-model="editing.element.value.icon.scale" />
             </label>
             <label class="form-control w-full max-w-xs">
               <div class="label">
                 <span class="label-text">Pin Background Color</span>
               </div>
-              <input v-model="editing.pinClone.backgroundColor" type="color" placeholder="CSS color"
+              <input v-model="editing.element.value.backgroundColor" type="color" placeholder="CSS color"
                 class="input input-bordered w-full max-w-xs" />
             </label>
             <div class="flex gap-3 pt-4">
               <button @click="onClickEditCancel" class="btn btn-secondary flex-1">Cancel</button>
-              <button @click="onClickEditConfirmPin" class="btn btn-primary flex-1">{{ editing.originalId !== undefined
-                ?
-                'Apply'
-                : 'Add Pin' }}</button>
+              <button @click="onClickEditConfirmPin" class="btn btn-primary flex-1">Apply</button>
             </div>
           </template>
         </template>

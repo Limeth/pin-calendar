@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import * as feather from 'feather-icons';
 import { ref } from 'vue';
-import { type Pin, type PinCategory } from '../pins';
+import { PinCatalogGetPinsInCategory, PinCatalogGetSubcategoriesInCategory, type Pin, type PinCalendar, type PinCatalog, type PinCategory, type PinCategoryTypeOf, type PinTypeOf } from '../pins';
 import PinCard from './PinCard.vue';
 import * as R from 'ramda';
 import type { Rop } from 'automerge-diy-vue-hooks';
@@ -9,35 +9,36 @@ import type { Rop } from 'automerge-diy-vue-hooks';
 const { depth, pinCategory, predecessorArchived } = defineProps<{
   depth: number,
   predecessorArchived?: boolean,
-  pinCategory: Rop<PinCategory>,
+  pinCatalog: Rop<PinCatalog>,
+  pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>,
 }>();
 
 export type SettingsPinCategoryEvent = {
   kind: 'pinAdd',
-  parent: Rop<PinCategory>,
+  parent: PinCategoryTypeOf<Rop<PinCatalog>>,
 } | {
   kind: 'pinEdit',
-  pin: Pin,
+  pin: PinTypeOf<Rop<PinCatalog>>,
 } | {
   kind: 'pinArchive',
-  pin: Pin,
+  pin: PinTypeOf<Rop<PinCatalog>>,
   archive: boolean,
 } | {
   kind: 'pinDelete',
-  pin: Pin,
+  pin: PinTypeOf<Rop<PinCatalog>>,
 } | {
   kind: 'categoryAdd',
-  parent?: Rop<PinCategory>,
+  parent?: PinCategoryTypeOf<Rop<PinCatalog>>,
 } | {
   kind: 'categoryEdit',
-  pinCategory: Rop<PinCategory>,
+  pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>,
 } | {
   kind: 'categoryArchive',
-  pinCategory: Rop<PinCategory>,
+  pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>,
   archive: boolean,
 } | {
   kind: 'categoryDelete',
-  pinCategory: Rop<PinCategory>,
+  pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>,
 };
 
 const emit = defineEmits<{
@@ -56,11 +57,11 @@ const isCollapsed = ref(true);
         <div class="hover:bg-base-300 w-full absolute top-0 left-0 bottom-0 cursor-pointer z-0"
           @click="isCollapsed = !isCollapsed"></div>
         <div class="flex-grow flex flex-row items-center z-10 pointer-events-none">
-          <div>{{ pinCategory.displayName }}</div>
+          <div>{{ pinCategory.value.displayName }}</div>
           <div class="px-2" v-html="feather.icons[isCollapsed ? 'chevron-up' : 'chevron-down'].toSvg()" />
         </div>
         <div v-if="!isCollapsed && !predecessorArchived" class="flex flex-row gap-1 text-lg px-4 py-2 -mx-4 -my-2 z-10">
-          <template v-if="!pinCategory.archived">
+          <template v-if="!pinCategory.value.archived">
             <button @click="emit('event', { kind: 'categoryAdd', parent: pinCategory })"
               class="btn btn-sm btn-primary max-sm:btn-square">
               <div v-html="feather.icons['plus-square'].toSvg()" />
@@ -97,16 +98,16 @@ const isCollapsed = ref(true);
         </div>
       </li>
       <template v-if="!isCollapsed">
-        <li class="text-sm" v-if="pinCategory.description">
-          {{ pinCategory.description }}
+        <li class="text-sm" v-if="pinCategory.value.description">
+          {{ pinCategory.value.description }}
         </li>
         <li class="-mx-4 w-[inherit]">
           <ul class="flex flex-col">
-            <li v-for="pin of R.filter((pin) => !pin.archived, pinCategory.pins)" :key="pin.id"
+            <li v-for="pin of R.filter((pin) => !pin.value.archived, PinCatalogGetPinsInCategory(pinCatalog, pinCategory.id))" :key="pin.id.key"
               class="flex flex-row items-center gap-1 px-4 py-1"
               :class="((depth % 2) == 0) ? 'odd:bg-base-200' : 'odd:bg-base-300'">
               <PinCard :pin="pin" class="flex-1" />
-              <template v-if="!predecessorArchived && !pinCategory.archived">
+              <template v-if="!predecessorArchived && !pinCategory.value.archived">
                 <button @click="emit('event', { kind: 'pinEdit', pin })"
                   class="btn btn-sm btn-neutral max-sm:btn-square">
                   <div v-html="feather.icons['edit'].toSvg()" />
@@ -121,13 +122,13 @@ const isCollapsed = ref(true);
             </li>
           </ul>
         </li>
-        <li v-for="subcategory of R.filter((subcategory) => !subcategory.archived, pinCategory.subcategories)"
-          :key="subcategory.id" class="flex flex-row items-center w-full gap-1">
-          <SettingsPinCategory :predecessor-archived="predecessorArchived || pinCategory.archived"
-            @event="emit('event', $event)" :depth="depth + 1" :pin-category="subcategory" />
+        <li v-for="subcategory of R.filter((subcategory) => !subcategory.value.archived, PinCatalogGetSubcategoriesInCategory(pinCatalog, pinCategory.id))"
+          :key="subcategory.id.key" class="flex flex-row items-center w-full gap-1">
+          <SettingsPinCategory :predecessor-archived="predecessorArchived || pinCategory.value.archived"
+            @event="emit('event', $event)" :depth="depth + 1" :pin-catalog :pin-category="subcategory" />
         </li>
 
-        <li v-if="R.any((item) => !!item.archived, R.flatten([pinCategory.subcategories, pinCategory.pins]))"
+        <li v-if="R.any((item) => !!item.value.archived, R.flatten([PinCatalogGetSubcategoriesInCategory(pinCatalog, pinCategory.id), PinCatalogGetPinsInCategory(pinCatalog, pinCategory.id)]))"
           class="collapse collapse-arrow -mx-4 w-[inherit]">
           <input type="checkbox" v-model="isArchiveOpen" />
           <div class="collapse-title flex flex-row items-center pl-0">
@@ -135,11 +136,11 @@ const isCollapsed = ref(true);
             <div>{{ isArchiveOpen ? 'Hide' : 'Show' }} Archived</div>
           </div>
           <ul class="collapse-content flex flex-col !py-0">
-            <li v-for="pin of R.filter((pin) => !!pin.archived, pinCategory.pins)" :key="pin.id"
+            <li v-for="pin of R.filter((pin) => !!pin.value.archived, PinCatalogGetPinsInCategory(pinCatalog, pinCategory.id))" :key="pin.id.key"
               class="flex flex-row items-center gap-1 px-4 py-1 -mx-4"
               :class="((depth % 2) == 0) ? 'odd:bg-base-200' : 'odd:bg-base-300'">
               <PinCard :pin="pin" class="flex-1" />
-              <template v-if="!predecessorArchived && !pinCategory.archived">
+              <template v-if="!predecessorArchived && !pinCategory.value.archived">
                 <button @click="emit('event', { kind: 'pinArchive', pin, archive: false })"
                   class="btn btn-sm max-sm:btn-square btn-neutral">
                   <div v-html="feather.icons['upload'].toSvg()" />
@@ -152,10 +153,10 @@ const isCollapsed = ref(true);
                 </button>
               </template>
             </li>
-            <li v-for="subcategory of R.filter((subcategory) => !!subcategory.archived, pinCategory.subcategories)"
-              :key="subcategory.id" class="flex flex-row items-center w-full gap-1 pt-2">
+            <li v-for="subcategory of R.filter((subcategory) => !!subcategory.value.archived, PinCatalogGetSubcategoriesInCategory(pinCatalog, pinCategory.id))"
+              :key="subcategory.id.key" class="flex flex-row items-center w-full gap-1 pt-2">
               <SettingsPinCategory @event="emit('event', $event)" :depth="depth + 1"
-                :predecessor-archived="predecessorArchived || pinCategory.archived" :pin-category="subcategory" />
+                :predecessor-archived="predecessorArchived || pinCategory.value.archived" :pin-catalog :pin-category="subcategory" />
             </li>
           </ul>
         </li>

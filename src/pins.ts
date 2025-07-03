@@ -40,9 +40,22 @@ export type Archiveable = {
   archived?: boolean,
 }
 
-export type RegistryId<S> = {
-  idSymbol: S,
-  key: Uuid,
+export class RegistryId<S extends symbol> {
+  readonly idSymbol: S;
+  readonly key: Uuid;
+
+  constructor(idSymbol: S, key: Uuid) {
+    this.idSymbol = idSymbol;
+    this.key = key;
+  }
+
+  isEqualStatic(rhs: RegistryId<S>): boolean {
+    return this.key === rhs.key;
+  }
+
+  isEqualDynamic<S2 extends symbol>(rhs: RegistryId<S2>): boolean {
+    return this.key === rhs.key && this.idSymbol as symbol === rhs.idSymbol as symbol;
+  }
 }
 
 export type IdKey<I extends { key: unknown }> = I['key'];
@@ -71,10 +84,7 @@ export type PinDescriptor = Archiveable & {
 export type Pin = Registered<PinId, PinDescriptor>;
 
 function keyToId<S extends symbol>(key: IdKey<RegistryId<S>>, idSymbol: S): RegistryId<S> {
-  return {
-    idSymbol,
-    key,
-  };
+  return new RegistryId(idSymbol, key);
 }
 
 function generateId<S extends symbol>(idSymbol: S): RegistryId<S> {
@@ -152,6 +162,21 @@ function idSetAdd<S extends symbol>(idSet: IdKey<RegistryId<S>>[], id: RegistryI
   }
 }
 
+function idSetRemove<S extends symbol>(idSet: IdKey<RegistryId<S>>[], id: RegistryId<S>): boolean {
+  let removed = false;
+
+  while (true)
+  {
+    const existingIndex = idSet.findIndex((currentId) => currentId === id.key);
+
+    if (existingIndex === -1)
+      return removed;
+
+    idSet.splice(existingIndex, 1);
+    removed = true;
+  }
+}
+
 function PinCategoryAddPinById(self: PinCategory, pinId: PinId): boolean {
   return idSetAdd(self.value.pins, pinId);
 }
@@ -166,6 +191,14 @@ export function PinCategoryAddPin(self: PinCategory, pin: Pin): boolean {
 
 export function PinCategoryAddSubcategory(self: PinCategory, pinCategory: PinCategory): boolean {
   return PinCategoryAddSubcategoryById(self, pinCategory.id);
+}
+
+export function PinCategoryRemovePin(self: PinCategoryDescriptor, pinId: PinId): boolean {
+  return idSetRemove(self.pins, pinId);
+}
+
+export function PinCategoryRemoveSubcategory(self: PinCategoryDescriptor, pinCategoryId: PinCategoryId): boolean {
+  return idSetRemove(self.subcategories, pinCategoryId);
 }
 
 export function PinCatalogCreatePin(self: PinCatalog, pinDescriptor: PinDescriptor): Pin {
@@ -194,23 +227,20 @@ export function PinCatalogCreateAndAddPinToCategory(self: PinCatalog, categoryId
   return PinCatalogAddPinToCategory(self, categoryId, pin);
 }
 
-// export function PinCatalogRemovePin(self: PinCatalog, id: PinId): Pin | null {
-//   if (id in self.pins) {
-//     const previousValue = self.pins[id];
+export function PinCatalogRemovePin(self: PinCatalog, id: PinId): Pin | null {
+  const previousValue = PinCatalogGetPinById(self, id);
 
-//     // Delete from parent
-//     const parentPins = self.pinCategories[previousValue.categoryId].pinCategory.pins;
-//     const existingIndex = parentPins.findIndex((currentPin) => currentPin.id === id);
-//     parentPins.splice(existingIndex, 1);
+  if (previousValue !== null) {
+    // Delete from parents
+    for (const parent of Object.values(self.pinCategories))
+      PinCategoryRemovePin(parent, id);
 
-//     // Delete from map
-//     delete self.pins[id];
+    // Delete from map
+    delete self.pins[id.key];
+  }
 
-//     return previousValue.pin;
-//   }
-
-//   return null;
-// }
+  return previousValue;
+}
 
 export function PinCatalogCreatePinCategory(self: PinCatalog, pinCategoryDescriptor: PinCategoryDescriptor): PinCategory {
   const pinCategoryId = generatePinCategoryId();
@@ -241,33 +271,34 @@ export function PinCatalogCreateAndAddSubcategoryToCategory(self: PinCatalog, ca
     return subcategory;
 }
 
+export function PinCatalogRemoveSubcategoryFromCategory(self: PinCatalog, categoryId: PinCategoryId, subcategoryId: PinCategoryId): boolean {
+  const pinCategory = PinCatalogGetPinCategoryById(self, categoryId);
+
+  if (pinCategory === null)
+    return false;
+
+  return PinCategoryRemoveSubcategory(pinCategory.value, subcategoryId);
+}
+
 // export function PinCatalogReplacePinCategory(self: PinCatalog, parentCategoryId: PinCategoryId | undefined, pinCategory: PinCategory): PinCategory | undefined {
 //   const previousValue = PinCatalogRemovePinCategory(self, pinCategory.id);
 // }
 
-// export function PinCatalogRemovePinCategory(self: PinCatalog, id: PinCategoryId): PinCategory | undefined {
-//   if (id in self.pinCategories) {
-//     const previousValue = self.pinCategories[id];
+export function PinCatalogRemovePinCategory(self: PinCatalog, id: PinCategoryId): PinCategory | undefined {
+  const previousValue = PinCatalogGetPinCategoryById(self, id);
 
-//     // Recursively delete subcategories
-//     while (previousValue.pinCategory.subcategories.length > 0)
-//       PinCatalogRemovePinCategory(self, previousValue.pinCategory.subcategories[0].id);
+  if (previousValue !== null) {
+    // Delete from parents
+    for (const parent of Object.values(self.pinCategories)) {
+      PinCategoryRemoveSubcategory(parent, id);
+    }
 
-//     // Delete pins
-//     while (previousValue.pinCategory.pins.length > 0)
-//       PinCatalogRemovePin(self, previousValue.pinCategory.pins[0].id);
+    /// Delete from map
+    delete self.pinCategories[id.key];
+  }
 
-//     // Delete from parent
-//     const parentPinCategories = previousValue.parentId !== undefined ? self.pinCategories[previousValue.parentId].pinCategory.subcategories : self.rootCategories;
-//     const existingIndex = parentPinCategories.findIndex((currentPinCategory) => currentPinCategory.id === id);
-//     parentPinCategories.splice(existingIndex, 1);
-
-//     /// Delete from map
-//     delete self.pinCategories[id];
-
-//     return previousValue.pinCategory;
-//   }
-// }
+  return previousValue ?? undefined;
+}
 
 export function PinCatalogGetRootCategories<T extends MaybeRop<PinCatalog>>(self: T): PinCategoryTypeOf<T>[] {
   const nonRootCategories = new Set();
@@ -429,8 +460,8 @@ export function PinCatalogFromJsonValue(json: unknown): PinCatalog | null {
 
   const catalog = PinCatalogNew();
 
-  if ('rootCategories' in json && Array.isArray(json.rootCategories))
-    for (const rootCategory of json.rootCategories) {
+  if ('pins' in json && typeof json.pins === 'object' && json.pins !== null)
+    for (const [pinIdKey, pin] of Object.entries(json.pins)) {
       PinCatalogAddPinCategory(catalog, undefined, rootCategory);
     }
 
