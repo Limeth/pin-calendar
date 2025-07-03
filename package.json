@@ -12,9 +12,9 @@
     "lint:oxlint": "oxlint --ignore-path .gitignore",
     "lint:eslint": "eslint",
     "lint": "run-s lint:*",
-    "format-check": "prettier --check src/",
+    "format-check": "prettier --check *.ts src/",
     "check": "run-s type-check lint format-check",
-    "format": "prettier --write src/"
+    "format": "prettier --write *.ts src/"
   },
   "dependencies": {
     "@automerge/automerge": "^2.2.9",

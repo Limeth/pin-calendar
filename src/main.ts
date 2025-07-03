@@ -1,6 +1,6 @@
-import './assets/main.css'
+import './assets/main.css';
 
-import { createApp } from 'vue'
-import MainPage from './components/MainPage.vue'
+import { createApp } from 'vue';
+import MainPage from './components/MainPage.vue';
 
-createApp(MainPage).mount('#app')
+createApp(MainPage).mount('#app');

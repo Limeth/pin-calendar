@@ -1,24 +1,24 @@
-import { Temporal } from "@js-temporal/polyfill";
-import * as A from '@automerge/automerge'
-import { changeSubtree, type Ro, type Rop } from "automerge-diy-vue-hooks";
-import { toRef, type Ref } from "vue";
+import { Temporal } from '@js-temporal/polyfill';
+import * as A from '@automerge/automerge';
+import { changeSubtree, type Ro, type Rop } from 'automerge-diy-vue-hooks';
+import { toRef, type Ref } from 'vue';
 import * as uuid from 'uuid';
 import { FormatRegistry, Type, type Static } from '@sinclair/typebox';
-import { Value } from '@sinclair/typebox/value'
+import { Value } from '@sinclair/typebox/value';
 // import * as Y from 'yjs';
 
 FormatRegistry.Set('uuid', (value) => uuid.validate(value));
 FormatRegistry.Set('date', (value) => {
   try {
-    Temporal.PlainDate.from(value)
+    Temporal.PlainDate.from(value);
     return true;
   } catch {
     return false;
   }
-})
+});
 
-const LOCAL_STORAGE_KEY_PIN_CATALOG = "pin_catalog";
-const LOCAL_STORAGE_KEY_PIN_CALENDAR = "pin_calendar";
+const LOCAL_STORAGE_KEY_PIN_CATALOG = 'pin_catalog';
+const LOCAL_STORAGE_KEY_PIN_CALENDAR = 'pin_calendar';
 
 type MaybeRop<T> = T | Rop<T>;
 type MaybeRo<T> = T | Ro<T>;
@@ -47,17 +47,17 @@ type IconSvg = Static<typeof IconSvgSchema>;
 const IconEmojiSchema = Type.Object({
   emoji: Type.String(),
   scale: Type.Number(),
-})
+});
 
 type IconEmoji = Static<typeof IconEmojiSchema>;
 
-const IconSchema = Type.Union([IconEmojiSchema, /*IconSvgSchema*/]);
+const IconSchema = Type.Union([IconEmojiSchema /*IconSvgSchema*/]);
 
 type Icon = Static<typeof IconSchema>;
 
 const ArchivableSchema = Type.Object({
   archived: Type.Optional(Type.Boolean()),
-})
+});
 
 export type Archiveable = Static<typeof ArchivableSchema>;
 
@@ -75,7 +75,7 @@ export class RegistryId<S extends symbol> {
   }
 
   isEqualDynamic<S2 extends symbol>(rhs: RegistryId<S2>): boolean {
-    return this.key === rhs.key && this.idSymbol as symbol === rhs.idSymbol as symbol;
+    return this.key === rhs.key && (this.idSymbol as symbol) === (rhs.idSymbol as symbol);
   }
 }
 
@@ -89,8 +89,8 @@ function IdKeySchema<I extends { key: unknown }>() {
 export type IdKey<I extends { key: unknown }> = I['key'];
 
 export type Registered<I, T> = {
-  id: I,
-  value: T,
+  id: I;
+  value: T;
 };
 
 const PinCategoryDescriptorSchema = Type.Intersect([
@@ -100,8 +100,8 @@ const PinCategoryDescriptorSchema = Type.Intersect([
     pins: Type.Array(IdKeySchema<PinId>()),
     displayName: Type.String(),
     description: Type.String(),
-  })
-])
+  }),
+]);
 
 export type PinCategoryDescriptor = Static<typeof PinCategoryDescriptorSchema>;
 
@@ -114,8 +114,8 @@ const PinDescriptorSchema = Type.Intersect([
     description: Type.String(),
     icon: IconSchema,
     backgroundColor: Type.String(),
-  })
-])
+  }),
+]);
 
 export type PinDescriptor = Static<typeof PinDescriptorSchema>;
 
@@ -137,17 +137,23 @@ export function generatePinCategoryId(): PinCategoryId {
   return generateId(PIN_CATEGORY_ID_SYMBOL);
 }
 
-export type PinDescriptorTypeOf<T extends { pins: { [id: IdKey<PinId>]: unknown } }> = T['pins'][IdKey<PinId>];
-export type PinTypeOf<T extends { pins: { [id: IdKey<PinId>]: unknown } }> = Registered<PinId, PinDescriptorTypeOf<T>>;
-export type PinCategoryTypeOf<T extends { pinCategories: { [id: IdKey<PinCategoryId>]: unknown } }> = Registered<PinCategoryId, T['pinCategories'][IdKey<PinCategoryId>]>;
+export type PinDescriptorTypeOf<T extends { pins: { [id: IdKey<PinId>]: unknown } }> =
+  T['pins'][IdKey<PinId>];
+export type PinTypeOf<T extends { pins: { [id: IdKey<PinId>]: unknown } }> = Registered<
+  PinId,
+  PinDescriptorTypeOf<T>
+>;
+export type PinCategoryTypeOf<
+  T extends { pinCategories: { [id: IdKey<PinCategoryId>]: unknown } },
+> = Registered<PinCategoryId, T['pinCategories'][IdKey<PinCategoryId>]>;
 
 const PinCatalogSchema = Type.Intersect([
   LocalStorageSerializableSchema,
   Type.Object({
     pins: Type.Record(IdKeySchema<PinId>(), PinDescriptorSchema),
     pinCategories: Type.Record(IdKeySchema<PinCategoryId>(), PinCategoryDescriptorSchema),
-  })
-])
+  }),
+]);
 
 export type PinCatalog = Static<typeof PinCatalogSchema>;
 
@@ -156,7 +162,7 @@ export function PinCatalogNew(): PinCatalog {
     version: 1,
     pins: {},
     pinCategories: {},
-  }
+  };
 }
 
 export function PinCatalogClear(self: PinCatalog) {
@@ -164,7 +170,10 @@ export function PinCatalogClear(self: PinCatalog) {
   self.pinCategories = {};
 }
 
-export function PinCatalogGetPinById<T extends MaybeRop<PinCatalog>>(self: T, pinId: PinId): PinTypeOf<T> | null {
+export function PinCatalogGetPinById<T extends MaybeRop<PinCatalog>>(
+  self: T,
+  pinId: PinId,
+): PinTypeOf<T> | null {
   const pinDescriptor = self.pins[pinId.key];
 
   if (pinDescriptor === undefined) {
@@ -174,10 +183,13 @@ export function PinCatalogGetPinById<T extends MaybeRop<PinCatalog>>(self: T, pi
   return {
     id: pinId,
     value: pinDescriptor,
-  } as PinTypeOf<T>
+  } as PinTypeOf<T>;
 }
 
-export function PinCatalogGetPinCategoryById<T extends MaybeRop<PinCatalog>>(self: T, pinCategoryId: PinCategoryId): PinCategoryTypeOf<T> | null {
+export function PinCatalogGetPinCategoryById<T extends MaybeRop<PinCatalog>>(
+  self: T,
+  pinCategoryId: PinCategoryId,
+): PinCategoryTypeOf<T> | null {
   const pinCategoryDescriptor = self.pinCategories[pinCategoryId.key];
 
   if (pinCategoryDescriptor === undefined) {
@@ -187,7 +199,7 @@ export function PinCatalogGetPinCategoryById<T extends MaybeRop<PinCatalog>>(sel
   return {
     id: pinCategoryId,
     value: pinCategoryDescriptor,
-  } as PinCategoryTypeOf<T>
+  } as PinCategoryTypeOf<T>;
 }
 
 function idSetAdd<S extends symbol>(idSet: IdKey<RegistryId<S>>[], id: RegistryId<S>): boolean {
@@ -205,12 +217,10 @@ function idSetAdd<S extends symbol>(idSet: IdKey<RegistryId<S>>[], id: RegistryI
 function idSetRemove<S extends symbol>(idSet: IdKey<RegistryId<S>>[], id: RegistryId<S>): boolean {
   let removed = false;
 
-  while (true)
-  {
+  while (true) {
     const existingIndex = idSet.findIndex((currentId) => currentId === id.key);
 
-    if (existingIndex === -1)
-      return removed;
+    if (existingIndex === -1) return removed;
 
     idSet.splice(existingIndex, 1);
     removed = true;
@@ -237,15 +247,16 @@ export function PinCategoryRemovePin(self: PinCategoryDescriptor, pinId: PinId):
   return idSetRemove(self.pins, pinId);
 }
 
-export function PinCategoryRemoveSubcategory(self: PinCategoryDescriptor, pinCategoryId: PinCategoryId): boolean {
+export function PinCategoryRemoveSubcategory(
+  self: PinCategoryDescriptor,
+  pinCategoryId: PinCategoryId,
+): boolean {
   return idSetRemove(self.subcategories, pinCategoryId);
 }
 
 export function PinCatalogAddPin(self: PinCatalog, pin: Pin): boolean {
-  if (pin.id.key in self.pinCategories)
-    return false;
-  else
-  {
+  if (pin.id.key in self.pinCategories) return false;
+  else {
     self.pins[pin.id.key] = pin.value;
     return true;
   }
@@ -262,11 +273,15 @@ export function PinCatalogCreatePin(self: PinCatalog, pinDescriptor: PinDescript
   return pin;
 }
 
-export function PinCatalogAddPinToCategory(self: PinCatalog, categoryId: PinCategoryId, pin: Pin): Pin | null {
+export function PinCatalogAddPinToCategory(
+  self: PinCatalog,
+  categoryId: PinCategoryId,
+  pin: Pin,
+): Pin | null {
   const pinCategory = PinCatalogGetPinCategoryById(self, categoryId);
 
   if (pinCategory === null) {
-    console.error("Failed to add a pin to non-existent category.");
+    console.error('Failed to add a pin to non-existent category.');
     return null;
   }
 
@@ -274,7 +289,11 @@ export function PinCatalogAddPinToCategory(self: PinCatalog, categoryId: PinCate
   return pin;
 }
 
-export function PinCatalogCreateAndAddPinToCategory(self: PinCatalog, categoryId: PinCategoryId, pinDescriptor: PinDescriptor): Pin | null {
+export function PinCatalogCreateAndAddPinToCategory(
+  self: PinCatalog,
+  categoryId: PinCategoryId,
+  pinDescriptor: PinDescriptor,
+): Pin | null {
   const pin = PinCatalogCreatePin(self, pinDescriptor);
   return PinCatalogAddPinToCategory(self, categoryId, pin);
 }
@@ -284,8 +303,7 @@ export function PinCatalogRemovePin(self: PinCatalog, id: PinId): Pin | null {
 
   if (previousValue !== null) {
     // Delete from parents
-    for (const parent of Object.values(self.pinCategories))
-      PinCategoryRemovePin(parent, id);
+    for (const parent of Object.values(self.pinCategories)) PinCategoryRemovePin(parent, id);
 
     // Delete from map
     delete self.pins[id.key];
@@ -295,16 +313,17 @@ export function PinCatalogRemovePin(self: PinCatalog, id: PinId): Pin | null {
 }
 
 export function PinCatalogAddPinCategory(self: PinCatalog, pinCategory: PinCategory): boolean {
-  if (pinCategory.id.key in self.pinCategories)
-    return false;
-  else
-  {
+  if (pinCategory.id.key in self.pinCategories) return false;
+  else {
     self.pinCategories[pinCategory.id.key] = pinCategory.value;
     return true;
   }
 }
 
-export function PinCatalogCreatePinCategory(self: PinCatalog, pinCategoryDescriptor: PinCategoryDescriptor): PinCategory {
+export function PinCatalogCreatePinCategory(
+  self: PinCatalog,
+  pinCategoryDescriptor: PinCategoryDescriptor,
+): PinCategory {
   const pinCategory = {
     id: generatePinCategoryId(),
     value: pinCategoryDescriptor,
@@ -315,11 +334,15 @@ export function PinCatalogCreatePinCategory(self: PinCatalog, pinCategoryDescrip
   return pinCategory;
 }
 
-export function PinCatalogAddSubcategoryToCategory(self: PinCatalog, categoryId: PinCategoryId, subcategory: PinCategory): PinCategory | null {
+export function PinCatalogAddSubcategoryToCategory(
+  self: PinCatalog,
+  categoryId: PinCategoryId,
+  subcategory: PinCategory,
+): PinCategory | null {
   const pinCategory = PinCatalogGetPinCategoryById(self, categoryId);
 
   if (pinCategory === null) {
-    console.error("Failed to add a subcategory to non-existent category.");
+    console.error('Failed to add a subcategory to non-existent category.');
     return null;
   }
 
@@ -327,19 +350,24 @@ export function PinCatalogAddSubcategoryToCategory(self: PinCatalog, categoryId:
   return subcategory;
 }
 
-export function PinCatalogCreateAndAddSubcategoryToCategory(self: PinCatalog, categoryId: PinCategoryId | null, subcategoryDescriptor: PinCategoryDescriptor): PinCategory | null {
+export function PinCatalogCreateAndAddSubcategoryToCategory(
+  self: PinCatalog,
+  categoryId: PinCategoryId | null,
+  subcategoryDescriptor: PinCategoryDescriptor,
+): PinCategory | null {
   const subcategory = PinCatalogCreatePinCategory(self, subcategoryDescriptor);
-  if (categoryId !== null)
-    return PinCatalogAddSubcategoryToCategory(self, categoryId, subcategory);
-  else
-    return subcategory;
+  if (categoryId !== null) return PinCatalogAddSubcategoryToCategory(self, categoryId, subcategory);
+  else return subcategory;
 }
 
-export function PinCatalogRemoveSubcategoryFromCategory(self: PinCatalog, categoryId: PinCategoryId, subcategoryId: PinCategoryId): boolean {
+export function PinCatalogRemoveSubcategoryFromCategory(
+  self: PinCatalog,
+  categoryId: PinCategoryId,
+  subcategoryId: PinCategoryId,
+): boolean {
   const pinCategory = PinCatalogGetPinCategoryById(self, categoryId);
 
-  if (pinCategory === null)
-    return false;
+  if (pinCategory === null) return false;
 
   return PinCategoryRemoveSubcategory(pinCategory.value, subcategoryId);
 }
@@ -348,7 +376,10 @@ export function PinCatalogRemoveSubcategoryFromCategory(self: PinCatalog, catego
 //   const previousValue = PinCatalogRemovePinCategory(self, pinCategory.id);
 // }
 
-export function PinCatalogRemovePinCategory(self: PinCatalog, id: PinCategoryId): PinCategory | undefined {
+export function PinCatalogRemovePinCategory(
+  self: PinCatalog,
+  id: PinCategoryId,
+): PinCategory | undefined {
   const previousValue = PinCatalogGetPinCategoryById(self, id);
 
   if (previousValue !== null) {
@@ -371,24 +402,28 @@ export function PinCatalogGetPins<T extends MaybeRop<PinCatalog>>(self: T): PinT
     pins.push({
       id: keyToId(key, PIN_ID_SYMBOL),
       value: pin,
-    } as PinTypeOf<T>) // TODO: Why is type assertion here necessary while unnecessary in PinCatalogGetPinCategories?
+    } as PinTypeOf<T>); // TODO: Why is type assertion here necessary while unnecessary in PinCatalogGetPinCategories?
 
   return pins;
 }
 
-export function PinCatalogGetPinCategories<T extends MaybeRop<PinCatalog>>(self: T): PinCategoryTypeOf<T>[] {
+export function PinCatalogGetPinCategories<T extends MaybeRop<PinCatalog>>(
+  self: T,
+): PinCategoryTypeOf<T>[] {
   const pinCategories: PinCategoryTypeOf<T>[] = [];
 
   for (const [key, category] of Object.entries(self.pinCategories))
     pinCategories.push({
       id: keyToId(key, PIN_CATEGORY_ID_SYMBOL),
       value: category,
-    })
+    });
 
   return pinCategories;
 }
 
-export function PinCatalogGetRootCategories<T extends MaybeRop<PinCatalog>>(self: T): PinCategoryTypeOf<T>[] {
+export function PinCatalogGetRootCategories<T extends MaybeRop<PinCatalog>>(
+  self: T,
+): PinCategoryTypeOf<T>[] {
   const nonRootCategories = new Set();
 
   for (const pinCategory of Object.values(self.pinCategories))
@@ -402,7 +437,7 @@ export function PinCatalogGetRootCategories<T extends MaybeRop<PinCatalog>>(self
       rootCategories.push({
         id: keyToId(key, PIN_CATEGORY_ID_SYMBOL),
         value: category,
-      })
+      });
 
   return rootCategories;
 }
@@ -415,67 +450,69 @@ export function PinCatalogSerialize(self: MaybeRo<PinCatalog>): string {
   return JSON.stringify(PinCatalogAsJsonValue(self));
 }
 
-export function PinCatalogGetPinIdsInCategory(self: MaybeRop<PinCatalog>, pinCategoryId: PinCategoryId): PinId[] {
+export function PinCatalogGetPinIdsInCategory(
+  self: MaybeRop<PinCatalog>,
+  pinCategoryId: PinCategoryId,
+): PinId[] {
   const pinCategory = PinCatalogGetPinCategoryById(self, pinCategoryId);
 
-  if (pinCategory === null)
-    return [];
+  if (pinCategory === null) return [];
 
   const keySet = new Set<IdKey<PinId>>();
 
-  for (const pinIdKey of pinCategory.value.pins)
-    keySet.add(pinIdKey);
+  for (const pinIdKey of pinCategory.value.pins) keySet.add(pinIdKey);
 
   const result: PinId[] = [];
 
-  for (const pinIdKey of keySet)
-    result.push(keyToId(pinIdKey, PIN_ID_SYMBOL));
+  for (const pinIdKey of keySet) result.push(keyToId(pinIdKey, PIN_ID_SYMBOL));
 
   return Array.from(result);
 }
 
-export function PinCatalogGetPinsInCategory<T extends MaybeRop<PinCatalog>>(self: T, pinCategoryId: PinCategoryId): PinTypeOf<T>[] {
+export function PinCatalogGetPinsInCategory<T extends MaybeRop<PinCatalog>>(
+  self: T,
+  pinCategoryId: PinCategoryId,
+): PinTypeOf<T>[] {
   const result: PinTypeOf<T>[] = [];
 
-  for (const pinId of PinCatalogGetPinIdsInCategory(self, pinCategoryId))
-  {
+  for (const pinId of PinCatalogGetPinIdsInCategory(self, pinCategoryId)) {
     const pin = PinCatalogGetPinById(self, pinId);
 
-    if (pin !== null)
-      result.push(pin)
+    if (pin !== null) result.push(pin);
   }
 
   return result;
 }
 
-export function PinCatalogGetSubcategoryIdsInCategory(self: MaybeRop<PinCatalog>, pinCategoryId: PinCategoryId): PinCategoryId[] {
+export function PinCatalogGetSubcategoryIdsInCategory(
+  self: MaybeRop<PinCatalog>,
+  pinCategoryId: PinCategoryId,
+): PinCategoryId[] {
   const pinCategory = PinCatalogGetPinCategoryById(self, pinCategoryId);
 
-  if (pinCategory === null)
-    return [];
+  if (pinCategory === null) return [];
 
   const keySet = new Set<IdKey<PinId>>();
 
-  for (const subcategoryIdKey of pinCategory.value.subcategories)
-    keySet.add(subcategoryIdKey);
+  for (const subcategoryIdKey of pinCategory.value.subcategories) keySet.add(subcategoryIdKey);
 
   const result: PinCategoryId[] = [];
 
-  for (const pinIdKey of keySet)
-    result.push(keyToId(pinIdKey, PIN_CATEGORY_ID_SYMBOL));
+  for (const pinIdKey of keySet) result.push(keyToId(pinIdKey, PIN_CATEGORY_ID_SYMBOL));
 
   return Array.from(result);
 }
 
-export function PinCatalogGetSubcategoriesInCategory<T extends MaybeRop<PinCatalog>>(self: T, pinCategoryId: PinCategoryId): PinCategoryTypeOf<T>[] {
+export function PinCatalogGetSubcategoriesInCategory<T extends MaybeRop<PinCatalog>>(
+  self: T,
+  pinCategoryId: PinCategoryId,
+): PinCategoryTypeOf<T>[] {
   const result: PinCategoryTypeOf<T>[] = [];
 
-  for (const subcategoryId of PinCatalogGetSubcategoryIdsInCategory(self, pinCategoryId))
-  {
+  for (const subcategoryId of PinCatalogGetSubcategoryIdsInCategory(self, pinCategoryId)) {
     const subcategory = PinCatalogGetPinCategoryById(self, subcategoryId);
 
-    if (subcategory !== null)
-      result.push(subcategory)
+    if (subcategory !== null) result.push(subcategory);
   }
 
   return result;
@@ -493,29 +530,37 @@ export function PinCatalogDefault(): PinCatalog {
     subcategories: [],
     pins: [],
   });
-  const pinCategoryHealthPhysical = PinCatalogCreateAndAddSubcategoryToCategory(pinCatalog, pinCategoryHealth!.id, {
-    displayName: 'Physical Health',
-    description: 'Tasks focused on physical health.',
-    subcategories: [],
-    pins: [],
-  });
+  const pinCategoryHealthPhysical = PinCatalogCreateAndAddSubcategoryToCategory(
+    pinCatalog,
+    pinCategoryHealth!.id,
+    {
+      displayName: 'Physical Health',
+      description: 'Tasks focused on physical health.',
+      subcategories: [],
+      pins: [],
+    },
+  );
   PinCatalogCreateAndAddPinToCategory(pinCatalog, pinCategoryHealthPhysical!.id, {
-    displayName: "Go on a jog",
-    description: "Run at least 5 km",
+    displayName: 'Go on a jog',
+    description: 'Run at least 5 km',
     icon: { emoji: '', scale: 1 },
-    backgroundColor: "#FF0000",
+    backgroundColor: '#FF0000',
   });
-  const pinCategoryHealthMental = PinCatalogCreateAndAddSubcategoryToCategory(pinCatalog, pinCategoryHealth!.id, {
-    displayName: 'Mental Health',
-    description: 'Tasks focused on mental health.',
-    subcategories: [],
-    pins: [],
-  });
+  const pinCategoryHealthMental = PinCatalogCreateAndAddSubcategoryToCategory(
+    pinCatalog,
+    pinCategoryHealth!.id,
+    {
+      displayName: 'Mental Health',
+      description: 'Tasks focused on mental health.',
+      subcategories: [],
+      pins: [],
+    },
+  );
   PinCatalogCreateAndAddPinToCategory(pinCatalog, pinCategoryHealthMental!.id, {
-    displayName: "Do some self-care",
-    description: "Spend some personal time",
+    displayName: 'Do some self-care',
+    description: 'Spend some personal time',
     icon: { emoji: '', scale: 1 },
-    backgroundColor: "#00FF00",
+    backgroundColor: '#00FF00',
   });
   const pinCategoryHobbies = PinCatalogCreateAndAddSubcategoryToCategory(pinCatalog, null, {
     displayName: 'Hobbies',
@@ -524,25 +569,24 @@ export function PinCatalogDefault(): PinCatalog {
     pins: [],
   });
   PinCatalogCreateAndAddPinToCategory(pinCatalog, pinCategoryHobbies!.id, {
-    displayName: "Watch a movie",
-    description: "And enjoy it!",
+    displayName: 'Watch a movie',
+    description: 'And enjoy it!',
     icon: { emoji: '', scale: 1 },
-    backgroundColor: "#0000FF",
+    backgroundColor: '#0000FF',
   });
   return pinCatalog;
 }
 
 export function PinCatalogFromJsonValue(json: unknown): PinCatalog | null {
-  if (typeof json !== 'object' || json === null)
-    return null;
+  if (typeof json !== 'object' || json === null) return null;
 
   if (!('version' in json)) {
-    console.error("No version found.");
+    console.error('No version found.');
     return null;
   }
 
   if (typeof json.version !== 'number' || json.version > PinCatalogNew().version) {
-    console.error("Unsupported catalog version: " + json.version);
+    console.error('Unsupported catalog version: ' + json.version);
     return null;
   }
 
@@ -559,22 +603,22 @@ export function PinCatalogDeserialize(serialized: string): PinCatalog | null {
 }
 
 export type PinnedPin = {
-  count: number, // TODO: Allow more than 1
+  count: number; // TODO: Allow more than 1
 };
 
 export type PinDayPins = {
-  [pinId: IdKey<PinId>]: PinnedPin
+  [pinId: IdKey<PinId>]: PinnedPin;
 };
 
 const PinDaySchema = Type.Object({
   pins: Type.Array(IdKeySchema<PinId>()),
-})
+});
 
 export type PinDay = Static<typeof PinDaySchema>;
 
 function PinDayNew(): PinDay {
   return {
-    pins: []
+    pins: [],
   };
 }
 
@@ -587,8 +631,7 @@ export function PinDayHasPin(self: PinDay | Ro<PinDay>, pin: Pin): boolean {
 }
 
 function PinDayAddPinById(self: PinDay, pinId: PinId): boolean {
-  if (PinDayHasPinById(self, pinId))
-    return false;
+  if (PinDayHasPinById(self, pinId)) return false;
   else {
     self.pins.push(pinId.key);
     return true;
@@ -605,10 +648,9 @@ function PinDayRemovePinById(self: PinDay, pinId: PinId): boolean {
   while (true) {
     const index = self.pins.findIndex((currentPinId) => currentPinId === pinId.key);
 
-    if (index === -1)
-      break;
+    if (index === -1) break;
 
-    self.pins.splice(index, 1)
+    self.pins.splice(index, 1);
     removed = true;
   }
 
@@ -620,10 +662,8 @@ export function PinDayRemovePin(self: PinDay, pin: Pin): boolean {
 }
 
 export function PinDaySetPinPresence(self: PinDay, pin: Pin, presence: boolean): boolean {
-  if (presence)
-    return PinDayAddPin(self, pin);
-  else
-    return PinDayRemovePin(self, pin);
+  if (presence) return PinDayAddPin(self, pin);
+  else return PinDayRemovePin(self, pin);
 }
 
 export function PinDayTogglePin(self: PinDay, pin: Pin): boolean {
@@ -645,21 +685,22 @@ function PinDayAsJsonValue(self: MaybeRo<PinDay>): PinDay {
 }
 
 function PinDayFromJsonValue(json: unknown): PinDay | null {
-  if (typeof json !== 'object' || json === null)
-    return null;
+  if (typeof json !== 'object' || json === null) return null;
 
   const pinDay = PinDayNew();
 
   if ('pins' in json && Array.isArray(json.pins))
-    for (const pinId of json.pins)
-      PinDayAddPinById(pinDay, pinId);
+    for (const pinId of json.pins) PinDayAddPinById(pinDay, pinId);
 
   return pinDay;
 }
 
-const PinCalendarDaysSchema = Type.Record(Type.String({
-  format: 'date'
-}), PinDaySchema);
+const PinCalendarDaysSchema = Type.Record(
+  Type.String({
+    format: 'date',
+  }),
+  PinDaySchema,
+);
 
 export type PinCalendarDays = Static<typeof PinCalendarDaysSchema>;
 
@@ -667,8 +708,8 @@ const PinCalendarSchema = Type.Intersect([
   LocalStorageSerializableSchema,
   Type.Object({
     days: PinCalendarDaysSchema,
-  })
-])
+  }),
+]);
 
 export type PinCalendar = Static<typeof PinCalendarSchema>;
 
@@ -683,23 +724,26 @@ export function PinCalendarClear(self: PinCalendar) {
   self.days = {};
 }
 
-function PinCalendarGetDayRefByKey(self: Ref<Rop<PinCalendar>>, key: string): Ref<Rop<PinDay>> | null {
-  if (key in self.value.days)
-    return toRef(self.value.days, key);
-  else
-    return null;
+function PinCalendarGetDayRefByKey(
+  self: Ref<Rop<PinCalendar>>,
+  key: string,
+): Ref<Rop<PinDay>> | null {
+  if (key in self.value.days) return toRef(self.value.days, key);
+  else return null;
 }
 
-function PinCalendarGetDayByKey<P extends MaybeRop<PinCalendar>>(self: P, key: string): P['days'][string] | null {
+function PinCalendarGetDayByKey<P extends MaybeRop<PinCalendar>>(
+  self: P,
+  key: string,
+): P['days'][string] | null {
   return (self.days[key] as P['days'][string] | undefined) ?? null;
 }
 
 function PinCalendarGetOrDefaultDayByKey(self: PinCalendar, key: string): PinDay {
-  if (key in self.days)
-    return self.days[key];
+  if (key in self.days) return self.days[key];
   else {
     const day = PinDayNew();
-    self.days[key] = day
+    self.days[key] = day;
     return day;
   }
 }
@@ -708,18 +752,22 @@ function PinCalendarPrepareDayByKey(self: Rop<PinCalendar>, key: string): boolea
   if (!(key in self.days)) {
     self[changeSubtree]((pinCalendar: PinCalendar) => {
       pinCalendar.days[key] = PinDayNew();
-    })
+    });
     return false;
-  }
-  else
-    return true;
+  } else return true;
 }
 
-export function PinCalendarGetDayRef(self: Ref<Rop<PinCalendar>>, day: Temporal.PlainDate): Ref<Rop<PinDay>> | null {
+export function PinCalendarGetDayRef(
+  self: Ref<Rop<PinCalendar>>,
+  day: Temporal.PlainDate,
+): Ref<Rop<PinDay>> | null {
   return PinCalendarGetDayRefByKey(self, PinCalendarDayToKey(day));
 }
 
-export function PinCalendarGetDay<P extends MaybeRop<PinCalendar>>(self: P, day: Temporal.PlainDate): P['days'][string] | null {
+export function PinCalendarGetDay<P extends MaybeRop<PinCalendar>>(
+  self: P,
+  day: Temporal.PlainDate,
+): P['days'][string] | null {
   return PinCalendarGetDayByKey(self, PinCalendarDayToKey(day));
 }
 
@@ -728,7 +776,11 @@ export function PinCalendarPrepareDay(self: Rop<PinCalendar>, day: Temporal.Plai
   return PinCalendarPrepareDayByKey(self, PinCalendarDayToKey(day));
 }
 
-export function PinCalendarGetPinsOnDay(self: Rop<PinCalendar>, catalog: Rop<PinCatalog>, day: Temporal.PlainDate): Set<Pin> {
+export function PinCalendarGetPinsOnDay(
+  self: Rop<PinCalendar>,
+  catalog: Rop<PinCatalog>,
+  day: Temporal.PlainDate,
+): Set<Pin> {
   const result: Set<Pin> = new Set();
   const pinDay = PinCalendarGetDay(self, day);
 
@@ -761,16 +813,15 @@ export function PinCalendarSerialize(self: MaybeRo<PinCalendar>): string {
 // }
 
 function PinCalendarFromJsonValue(json: unknown): PinCalendar | null {
-  if (typeof json !== 'object' || json === null)
-    return null;
+  if (typeof json !== 'object' || json === null) return null;
 
   if (!('version' in json)) {
-    console.error("No version found.");
+    console.error('No version found.');
     return null;
   }
 
   if (typeof json.version !== 'number' || json.version > PinCalendarNew().version) {
-    console.error("Unsupported calendar version: " + json.version);
+    console.error('Unsupported calendar version: ' + json.version);
     return null;
   }
 
@@ -794,8 +845,7 @@ export function PinCalendarCombine(target: PinCalendar, source: PinCalendar) {
   for (const [key, loadedDay] of Object.entries(source.days)) {
     const day = PinCalendarGetOrDefaultDayByKey(target, key);
 
-    for (const pinIdKey of loadedDay.pins)
-      PinDayAddPinById(day, keyToId(pinIdKey, PIN_ID_SYMBOL));
+    for (const pinIdKey of loadedDay.pins) PinDayAddPinById(day, keyToId(pinIdKey, PIN_ID_SYMBOL));
   }
 }
 

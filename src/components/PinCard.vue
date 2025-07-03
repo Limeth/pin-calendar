@@ -1,10 +1,10 @@
 <script setup lang="ts">
-  import { type Pin } from '../pins';
-  import PinIcon from './PinIcon.vue';
+import { type Pin } from '../pins';
+import PinIcon from './PinIcon.vue';
 
-  const { pin } = defineProps<{
-    pin: Pin,
-  }>();
+const { pin } = defineProps<{
+  pin: Pin;
+}>();
 </script>
 
 <template>

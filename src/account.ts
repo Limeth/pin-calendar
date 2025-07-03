@@ -1,22 +1,27 @@
 import { ref, shallowRef, type Ref, type ShallowRef } from 'vue';
-import { AccountGetPinCatalogRoom, AccountGetRoomPassword, AccountLoadOrNew, type Account } from './auth';
+import {
+  AccountGetPinCatalogRoom,
+  AccountGetRoomPassword,
+  AccountLoadOrNew,
+  type Account,
+} from './auth';
 import { type PinCalendar, PinCalendarNew, type PinCatalog, PinCatalogDefault } from './pins';
-import * as A from "@automerge/automerge-repo";
-import { BroadcastChannelNetworkAdapter } from "@automerge/automerge-repo-network-broadcastchannel";
-import { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
-import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
+import * as A from '@automerge/automerge-repo';
+import { BroadcastChannelNetworkAdapter } from '@automerge/automerge-repo-network-broadcastchannel';
+import { WebSocketClientAdapter } from '@automerge/automerge-repo-network-websocket';
+import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
 import { changeSubtree, makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 
 export type DocData = {
   // account: Account,
-  pinCatalog: PinCatalog,
-  pinCalendar: PinCalendar,
-}
+  pinCatalog: PinCatalog;
+  pinCalendar: PinCalendar;
+};
 
 export type App = {
-  readonly docData: Ref<Rop<DocData>>,
-  readonly docHandle: A.DocHandle<DocData>,
-}
+  readonly docData: Ref<Rop<DocData>>;
+  readonly docHandle: A.DocHandle<DocData>;
+};
 
 async function LoadApp(): Promise<App> {
   // const account = await AccountLoadOrNew();
@@ -56,18 +61,17 @@ async function LoadApp(): Promise<App> {
 }
 
 export type AppStore = {
-  loadedApp: null | ShallowRef<App>,
+  loadedApp: null | ShallowRef<App>;
 
-  GetApp(): Promise<ShallowRef<App>>,
+  GetApp(): Promise<ShallowRef<App>>;
 };
 
 export const accountStore: ShallowRef<AppStore> = shallowRef<AppStore>({
   loadedApp: null,
 
   async GetApp(): Promise<ShallowRef<App>> {
-    if (this.loadedApp === null)
-      this.loadedApp = shallowRef(await LoadApp());
+    if (this.loadedApp === null) this.loadedApp = shallowRef(await LoadApp());
 
     return this.loadedApp;
-  }
-})
+  },
+});

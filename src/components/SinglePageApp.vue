@@ -22,7 +22,7 @@ enum Page {
   CALENDAR,
   MILESTONES,
   SETTINGS,
-};
+}
 
 const pages = [Page.CALENDAR, Page.MILESTONES, Page.SETTINGS];
 const currentPage = ref(pages[0]);
@@ -33,18 +33,28 @@ function setPage(newPage: Page) {
 </script>
 
 <template>
-  <div class="pb-16"><!-- Padding equal to the bottom navigation height -->
+  <div class="pb-16">
+    <!-- Padding equal to the bottom navigation height -->
     <Calendar v-if="currentPage === Page.CALENDAR" v-model="app" />
     <Milestones v-if="currentPage === Page.MILESTONES" v-model="app" />
     <Settings v-if="currentPage === Page.SETTINGS" v-model="app" />
   </div>
   <div class="dock">
-    <button @click="setPage(Page.CALENDAR)" v-html="feather.icons['calendar'].toSvg()"
-      :class="currentPage == Page.CALENDAR ? 'dock-active' : ''" />
-    <button @click="setPage(Page.MILESTONES)" v-html="feather.icons['bar-chart-2'].toSvg()"
-      :class="currentPage == Page.MILESTONES ? 'dock-active' : ''" />
-    <button @click="setPage(Page.SETTINGS)" v-html="feather.icons['settings'].toSvg()"
-      :class="currentPage == Page.SETTINGS ? 'dock-active' : ''" />
+    <button
+      @click="setPage(Page.CALENDAR)"
+      v-html="feather.icons['calendar'].toSvg()"
+      :class="currentPage == Page.CALENDAR ? 'dock-active' : ''"
+    />
+    <button
+      @click="setPage(Page.MILESTONES)"
+      v-html="feather.icons['bar-chart-2'].toSvg()"
+      :class="currentPage == Page.MILESTONES ? 'dock-active' : ''"
+    />
+    <button
+      @click="setPage(Page.SETTINGS)"
+      v-html="feather.icons['settings'].toSvg()"
+      :class="currentPage == Page.SETTINGS ? 'dock-active' : ''"
+    />
   </div>
 </template>
 

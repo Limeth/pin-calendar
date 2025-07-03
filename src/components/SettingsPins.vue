@@ -3,29 +3,39 @@ import type { App } from '../account';
 import * as feather from 'feather-icons';
 import { ref, watch, toRef } from 'vue';
 import type { Ref } from 'vue';
-import { PinCatalogCreateAndAddPinToCategory, PinCatalogCreateAndAddSubcategoryToCategory, PinCatalogGetRootCategories, type Pin, type PinCatalog, type PinCategoryDescriptor, type PinCategoryTypeOf, type PinDescriptor, type PinTypeOf } from '../pins';
+import {
+  PinCatalogCreateAndAddPinToCategory,
+  PinCatalogCreateAndAddSubcategoryToCategory,
+  PinCatalogGetRootCategories,
+  type Pin,
+  type PinCatalog,
+  type PinCategoryDescriptor,
+  type PinCategoryTypeOf,
+  type PinDescriptor,
+  type PinTypeOf,
+} from '../pins';
 import emojiRegex from 'emoji-regex';
 import SettingsPinCategory, { type SettingsPinCategoryEvent } from './SettingsPinCategory.vue';
 import * as R from 'ramda';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 
 type EditingPin = {
-  kind: 'pin',
-  element: PinTypeOf<Rop<PinCatalog>>,
+  kind: 'pin';
+  element: PinTypeOf<Rop<PinCatalog>>;
   // parent: PinCategoryTypeOf<Rop<PinCatalog>>,
   error?: {
-    displayNameError?: string,
-    iconEmojiError?: string,
-  },
+    displayNameError?: string;
+    iconEmojiError?: string;
+  };
 };
 
 type EditingPinCategory = {
-  kind: 'category',
-  element: PinCategoryTypeOf<Rop<PinCatalog>>,
+  kind: 'category';
+  element: PinCategoryTypeOf<Rop<PinCatalog>>;
   // parent?: PinCategoryTypeOf<Rop<PinCatalog>>,
   error?: {
-    displayNameError?: string,
-  },
+    displayNameError?: string;
+  };
 };
 
 type Editing = EditingPin | EditingPinCategory;
@@ -69,12 +79,16 @@ function onClickEditPin(pin: PinTypeOf<Rop<PinCatalog>>) {
 
 function onClickAddPinCategory(parent: PinCategoryTypeOf<Rop<PinCatalog>> | undefined) {
   getPinCatalog().value[changeSubtree]((pinCatalog) => {
-    const pinCategory = PinCatalogCreateAndAddSubcategoryToCategory(pinCatalog, parent?.id ?? null, {
-      displayName: "",
-      description: "",
-      subcategories: [],
-      pins: [],
-    });
+    const pinCategory = PinCatalogCreateAndAddSubcategoryToCategory(
+      pinCatalog,
+      parent?.id ?? null,
+      {
+        displayName: '',
+        description: '',
+        subcategories: [],
+        pins: [],
+      },
+    );
   });
 
   // TODO: Open the editing pane
@@ -83,15 +97,15 @@ function onClickAddPinCategory(parent: PinCategoryTypeOf<Rop<PinCatalog>> | unde
 function onClickAddPin(parent: PinCategoryTypeOf<Rop<PinCatalog>>) {
   getPinCatalog().value[changeSubtree]((pinCatalog) => {
     const pin = PinCatalogCreateAndAddPinToCategory(pinCatalog, parent.id, {
-      displayName: "",
-      description: "",
+      displayName: '',
+      description: '',
       icon: {
-        emoji: "",
+        emoji: '',
         scale: 1,
       },
-      backgroundColor: "black",
+      backgroundColor: 'black',
     });
-  })
+  });
 
   // TODO: Open the editing pane
 }
@@ -99,7 +113,7 @@ function onClickAddPin(parent: PinCategoryTypeOf<Rop<PinCatalog>>) {
 function onClickArchive(item: Rop<PinDescriptor | PinCategoryDescriptor>, archive: boolean) {
   item[changeSubtree]((item: PinDescriptor | PinCategoryDescriptor) => {
     item.archived = archive;
-  })
+  });
 }
 
 function onClickEditCancel() {
@@ -181,7 +195,10 @@ function onClickEditConfirmPin() {
         editing.value.error.iconEmojiError = 'Only a single emoji is allowed.';
       }
 
-      const stringWithoutEmojis = editing.value.element.value.icon.emoji.replaceAll(emojiRegexPattern, '');
+      const stringWithoutEmojis = editing.value.element.value.icon.emoji.replaceAll(
+        emojiRegexPattern,
+        '',
+      );
 
       if (stringWithoutEmojis.length > 0) {
         editing.value.error.iconEmojiError = 'The icon must not contain non-emoji symbols.';
@@ -218,21 +235,21 @@ function onClickEditConfirmPin() {
 
 function onClickDeletePinCategory(pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>) {
   getPinCatalog().value[changeSubtree]((pinCatalog) => {
-    console.log("TODO");
+    console.log('TODO');
     // PinCatalogRemovePinCategory(pinCatalog, pinCategory.id);
-  })
+  });
 }
 
 function onClickDeletePin(pin: Pin) {
   getPinCatalog().value[changeSubtree]((pinCatalog) => {
-    console.log("TODO");
+    console.log('TODO');
     // PinCatalogRemovePin(pinCatalog, pin.id);
-  })
+  });
 }
 
 watch(editing, () => {
   isDrawerOpen.value = editing.value !== undefined;
-})
+});
 
 function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
   switch (event.kind) {
@@ -277,14 +294,33 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
     <input id="settings-pins-drawer" type="checkbox" class="drawer-toggle" v-model="isDrawerOpen" />
     <div class="drawer-content">
       <div class="flex justify-center">
-        <ul class="flex flex-col gap-2 items-center lg:w-[64rem] lg:my-8 max-lg:w-full lg:shadow-xl px-4 py-2">
+        <ul
+          class="flex flex-col gap-2 items-center lg:w-[64rem] lg:my-8 max-lg:w-full lg:shadow-xl px-4 py-2"
+        >
           <li
-            v-for="rootCategory of R.filter((rootCategory) => !rootCategory.value.archived, PinCatalogGetRootCategories(getPinCatalog().value))"
-            :key="rootCategory.id.key" class="flex flex-row items-center w-full gap-1">
-            <SettingsPinCategory @event="onSettingsPinCategoryEvent" :depth=0 :pin-catalog="getPinCatalog().value" :pin-category="rootCategory" />
+            v-for="rootCategory of R.filter(
+              (rootCategory) => !rootCategory.value.archived,
+              PinCatalogGetRootCategories(getPinCatalog().value),
+            )"
+            :key="rootCategory.id.key"
+            class="flex flex-row items-center w-full gap-1"
+          >
+            <SettingsPinCategory
+              @event="onSettingsPinCategoryEvent"
+              :depth="0"
+              :pin-catalog="getPinCatalog().value"
+              :pin-category="rootCategory"
+            />
           </li>
-          <li v-if="R.any((pinCategory) => !!pinCategory.value.archived, PinCatalogGetRootCategories(getPinCatalog().value))"
-            class="collapse collapse-arrow">
+          <li
+            v-if="
+              R.any(
+                (pinCategory) => !!pinCategory.value.archived,
+                PinCatalogGetRootCategories(getPinCatalog().value),
+              )
+            "
+            class="collapse collapse-arrow"
+          >
             <input type="checkbox" v-model="isArchiveOpen" />
             <div class="collapse-title flex flex-row items-center pl-0">
               <div class="divider flex-1 my-0 mr-4 h-auto" />
@@ -292,15 +328,27 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
             </div>
             <ul class="collapse-content px-0 flex flex-col gap-1">
               <li
-                v-for="rootCategory of R.filter((rootCategory) => !!rootCategory.value.archived, PinCatalogGetRootCategories(getPinCatalog().value))"
-                :key="rootCategory.id.key" class="flex flex-row items-center w-full gap-1">
-                <SettingsPinCategory @event="onSettingsPinCategoryEvent" :depth=0 :pin-catalog="getPinCatalog().value" :pin-category="rootCategory" />
+                v-for="rootCategory of R.filter(
+                  (rootCategory) => !!rootCategory.value.archived,
+                  PinCatalogGetRootCategories(getPinCatalog().value),
+                )"
+                :key="rootCategory.id.key"
+                class="flex flex-row items-center w-full gap-1"
+              >
+                <SettingsPinCategory
+                  @event="onSettingsPinCategoryEvent"
+                  :depth="0"
+                  :pin-catalog="getPinCatalog().value"
+                  :pin-category="rootCategory"
+                />
               </li>
             </ul>
           </li>
           <li>
-            <button @click="onSettingsPinCategoryEvent({ kind: 'categoryAdd' })"
-              class="btn btn-primary max-sm:btn-square">
+            <button
+              @click="onSettingsPinCategoryEvent({ kind: 'categoryAdd' })"
+              class="btn btn-primary max-sm:btn-square"
+            >
               <div v-html="feather.icons['plus-square'].toSvg()" />
               <div class="max-sm:hidden">Add Category</div>
             </button>
@@ -311,23 +359,33 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
     <div class="drawer-side w-full z-10">
       <label for="settings-pins-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
       <div
-        class="bg-base-200 text-base-content min-h-full w-80 p-4 flex flex-col gap-1 shadow-[0_0_4rem_0px_rgba(0,0,0,0.3)]">
+        class="bg-base-200 text-base-content min-h-full w-80 p-4 flex flex-col gap-1 shadow-[0_0_4rem_0px_rgba(0,0,0,0.3)]"
+      >
         <template v-if="editing !== undefined">
           <template v-if="editing.kind === 'category'">
             <label class="form-control w-full max-w-xs">
               <div class="label">
                 <span class="label-text">Unique ID</span>
               </div>
-              <input v-model="editing.element.id.key" type="text" placeholder="example-category-id"
-                class="input input-bordered w-full max-w-xs" disabled />
+              <input
+                v-model="editing.element.id.key"
+                type="text"
+                placeholder="example-category-id"
+                class="input input-bordered w-full max-w-xs"
+                disabled
+              />
             </label>
             <label class="form-control w-full max-w-xs">
               <div class="label">
                 <span class="label-text">Display Name</span>
               </div>
-              <input v-model="editing.element.value.displayName" type="text" placeholder="Example Pin"
+              <input
+                v-model="editing.element.value.displayName"
+                type="text"
+                placeholder="Example Pin"
                 class="input input-bordered w-full max-w-xs"
-                :class="editing.error?.displayNameError !== undefined ? 'input-error' : ''" />
+                :class="editing.error?.displayNameError !== undefined ? 'input-error' : ''"
+              />
               <div v-if="editing.error?.displayNameError !== undefined" class="label">
                 <span class="label-text-alt text-error">{{ editing.error?.displayNameError }}</span>
               </div>
@@ -336,13 +394,18 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <div class="label">
                 <span class="label-text">Description</span>
               </div>
-              <textarea v-model="editing.element.value.description"
+              <textarea
+                v-model="editing.element.value.description"
                 placeholder="This is an example description of this example pin."
-                class="textarea textarea-bordered w-full max-w-xs min-h-32" style="line-height: 1;" />
+                class="textarea textarea-bordered w-full max-w-xs min-h-32"
+                style="line-height: 1"
+              />
             </label>
             <div class="flex gap-3 pt-4">
               <button @click="onClickEditCancel" class="btn btn-secondary flex-1">Cancel</button>
-              <button @click="onClickEditConfirmCategory" class="btn btn-primary flex-1">Apply</button>
+              <button @click="onClickEditConfirmCategory" class="btn btn-primary flex-1">
+                Apply
+              </button>
             </div>
           </template>
           <template v-if="editing.kind === 'pin'">
@@ -350,16 +413,25 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <div class="label">
                 <span class="label-text">Unique ID</span>
               </div>
-              <input v-model="editing.element.id.key" type="text" placeholder="example-pin-id"
-                class="input input-bordered w-full max-w-xs" disabled />
+              <input
+                v-model="editing.element.id.key"
+                type="text"
+                placeholder="example-pin-id"
+                class="input input-bordered w-full max-w-xs"
+                disabled
+              />
             </label>
             <label class="form-control w-full max-w-xs">
               <div class="label">
                 <span class="label-text">Display Name</span>
               </div>
-              <input v-model="editing.element.value.displayName" type="text" placeholder="Example Pin"
+              <input
+                v-model="editing.element.value.displayName"
+                type="text"
+                placeholder="Example Pin"
                 class="input input-bordered w-full max-w-xs"
-                :class="editing.error?.displayNameError !== undefined ? 'input-error' : ''" />
+                :class="editing.error?.displayNameError !== undefined ? 'input-error' : ''"
+              />
               <div v-if="editing.error?.displayNameError !== undefined" class="label">
                 <span class="label-text-alt text-error">{{ editing.error?.displayNameError }}</span>
               </div>
@@ -368,17 +440,24 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <div class="label">
                 <span class="label-text">Description</span>
               </div>
-              <textarea v-model="editing.element.value.description"
+              <textarea
+                v-model="editing.element.value.description"
                 placeholder="This is an example description of this example pin."
-                class="textarea textarea-bordered w-full max-w-xs min-h-32" style="line-height: 1;" />
+                class="textarea textarea-bordered w-full max-w-xs min-h-32"
+                style="line-height: 1"
+              />
             </label>
             <label class="form-control w-full max-w-xs">
               <div class="label">
                 <span class="label-text">Pin Emoji</span>
               </div>
-              <input v-model="editing.element.value.icon.emoji" type="text" placeholder="Example Pin"
+              <input
+                v-model="editing.element.value.icon.emoji"
+                type="text"
+                placeholder="Example Pin"
                 class="input input-bordered w-full max-w-xs"
-                :class="editing.error?.iconEmojiError !== undefined ? 'input-error' : ''" />
+                :class="editing.error?.iconEmojiError !== undefined ? 'input-error' : ''"
+              />
               <div v-if="editing.error?.iconEmojiError !== undefined" class="label">
                 <span class="label-text-alt text-error">{{ editing.error?.iconEmojiError }}</span>
               </div>
@@ -387,14 +466,25 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <div class="label">
                 <span class="label-text">Pin Emoji Scale</span>
               </div>
-              <input type="range" min="0.5" max="1.5" class="range" step="0.1" v-model="editing.element.value.icon.scale" />
+              <input
+                type="range"
+                min="0.5"
+                max="1.5"
+                class="range"
+                step="0.1"
+                v-model="editing.element.value.icon.scale"
+              />
             </label>
             <label class="form-control w-full max-w-xs">
               <div class="label">
                 <span class="label-text">Pin Background Color</span>
               </div>
-              <input v-model="editing.element.value.backgroundColor" type="color" placeholder="CSS color"
-                class="input input-bordered w-full max-w-xs" />
+              <input
+                v-model="editing.element.value.backgroundColor"
+                type="color"
+                placeholder="CSS color"
+                class="input input-bordered w-full max-w-xs"
+              />
             </label>
             <div class="flex gap-3 pt-4">
               <button @click="onClickEditCancel" class="btn btn-secondary flex-1">Cancel</button>

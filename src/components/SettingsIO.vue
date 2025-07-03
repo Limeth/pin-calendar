@@ -3,7 +3,28 @@ import type { App } from '../account';
 import * as feather from 'feather-icons';
 import { ref, toRef } from 'vue';
 import type { Ref } from 'vue';
-import { type PinCalendar, type PinCatalog, PinCalendarClear, PinCalendarCombine, PinCalendarDeserialize, PinCalendarSerialize, PinCatalogSerialize, PinCatalogDeserialize, PinCatalogClear, PinCatalogRemovePinCategory, type PinCategoryId, type PinId, keyToId, PIN_ID_SYMBOL, PIN_CATEGORY_ID_SYMBOL, PinCatalogRemovePin, PinCatalogAddPinCategory, PinCatalogGetPinCategories, PinCatalogGetPins, PinCatalogAddPin } from '../pins';
+import {
+  type PinCalendar,
+  type PinCatalog,
+  PinCalendarClear,
+  PinCalendarCombine,
+  PinCalendarDeserialize,
+  PinCalendarSerialize,
+  PinCatalogSerialize,
+  PinCatalogDeserialize,
+  PinCatalogClear,
+  PinCatalogRemovePinCategory,
+  type PinCategoryId,
+  type PinId,
+  keyToId,
+  PIN_ID_SYMBOL,
+  PIN_CATEGORY_ID_SYMBOL,
+  PinCatalogRemovePin,
+  PinCatalogAddPinCategory,
+  PinCatalogGetPinCategories,
+  PinCatalogGetPins,
+  PinCatalogAddPin,
+} from '../pins';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 // import { Temporal } from '@js-temporal/polyfill';
 // import * as emojiSearch from 'node-emoji';
@@ -13,42 +34,42 @@ import { changeSubtree } from 'automerge-diy-vue-hooks';
 // import PinIcon from './PinIcon.vue';
 
 type ModalSimple = {
-  kind: 'simple',
-  title: string,
-  message: string,
-  buttonConfirm: string,
-  actionConfirm(): void,
-}
+  kind: 'simple';
+  title: string;
+  message: string;
+  buttonConfirm: string;
+  actionConfirm(): void;
+};
 
 type ModalImport = {
-  kind: 'import',
-  import: Import,
-}
+  kind: 'import';
+  import: Import;
+};
 
 type ModalData = ModalSimple | ModalImport;
 
 type Download = {
-  fileName: string,
-  content: Blob,
+  fileName: string;
+  content: Blob;
 };
 
 type Upload = {
-  onSuccess: (fileContent: string) => void,
-}
+  onSuccess: (fileContent: string) => void;
+};
 
 type ImportPins = {
-  kind: 'pins',
-  pinCatalog: PinCatalog,
+  kind: 'pins';
+  pinCatalog: PinCatalog;
   conflicts: {
-    pinCategories: PinCategoryId[],
-    pins: PinId[],
-  },
-  overwrite: boolean,
+    pinCategories: PinCategoryId[];
+    pins: PinId[];
+  };
+  overwrite: boolean;
 };
 
 type ImportCalendar = {
-  kind: 'calendar',
-  calendar: PinCalendar,
+  kind: 'calendar';
+  calendar: PinCalendar;
 };
 
 type Import = ImportPins | ImportCalendar;
@@ -85,12 +106,12 @@ function triggerUpload(upload: Upload) {
   element.accept = 'application/json';
   element.onchange = () => {
     if (element.files === null || element.files === undefined || element.files.length < 1) {
-      console.warn("Upload: No files specified. Aborting upload.");
+      console.warn('Upload: No files specified. Aborting upload.');
       return;
     }
 
     if (element.files.length > 1) {
-      console.warn("Upload: More than 1 file specified. Aborting upload.");
+      console.warn('Upload: More than 1 file specified. Aborting upload.');
       return;
     }
 
@@ -98,8 +119,8 @@ function triggerUpload(upload: Upload) {
     reader.onload = (e) => {
       const contents = e.target?.result;
 
-      if (typeof (contents) !== 'string') {
-        console.warn("Upload: Not a text file. Aborting upload.");
+      if (typeof contents !== 'string') {
+        console.warn('Upload: Not a text file. Aborting upload.');
         return;
       }
 
@@ -124,18 +145,19 @@ function onClickPinsImport() {
 
       console.log(loadedPinCatalog);
 
-      if (loadedPinCatalog === null)
-        return;
+      if (loadedPinCatalog === null) return;
 
-      const conflictingPinIdKeys = new Set(Object.keys(loadedPinCatalog.pins))
-        .intersection(new Set(Object.keys(getPinCatalog().value.pins)));
+      const conflictingPinIdKeys = new Set(Object.keys(loadedPinCatalog.pins)).intersection(
+        new Set(Object.keys(getPinCatalog().value.pins)),
+      );
       const conflictingPinIds: PinId[] = [];
 
       for (const conflictingIdKey of conflictingPinIdKeys)
         conflictingPinIds.push(keyToId(conflictingIdKey, PIN_ID_SYMBOL));
 
-      const conflictingPinCategoryIdKeys = new Set(Object.keys(loadedPinCatalog.pinCategories))
-        .intersection(new Set(Object.keys(getPinCatalog().value.pinCategories)));
+      const conflictingPinCategoryIdKeys = new Set(
+        Object.keys(loadedPinCatalog.pinCategories),
+      ).intersection(new Set(Object.keys(getPinCatalog().value.pinCategories)));
       const conflictingPinCategoryIds: PinCategoryId[] = [];
 
       for (const conflictingIdKey of conflictingPinCategoryIdKeys)
@@ -163,12 +185,13 @@ function onClickPinsClear() {
   modalData.value = {
     kind: 'simple',
     title: 'Clear Pin Catalog',
-    message: 'Are you sure you want to delete all pin definitions from the pin catalog? This action cannot be undone.',
+    message:
+      'Are you sure you want to delete all pin definitions from the pin catalog? This action cannot be undone.',
     buttonConfirm: 'Delete All Pins',
     actionConfirm: () => {
       getPinCatalog().value[changeSubtree]((pinCatalog) => {
         PinCatalogClear(pinCatalog);
-      })
+      });
     },
   };
   getSettingsIoModal().showModal();
@@ -188,8 +211,7 @@ function onClickCalendarImport() {
 
       console.log(loadedPinCalendar);
 
-      if (loadedPinCalendar === null)
-        return;
+      if (loadedPinCalendar === null) return;
 
       modalData.value = {
         kind: 'import',
@@ -208,12 +230,13 @@ function onClickCalendarClear() {
   modalData.value = {
     kind: 'simple',
     title: 'Clear Calendar',
-    message: 'Are you sure you want to clear all pins from the calendar? This action cannot be undone.',
+    message:
+      'Are you sure you want to clear all pins from the calendar? This action cannot be undone.',
     buttonConfirm: 'Clear Calendar',
     actionConfirm: () => {
       getPinCalendar().value![changeSubtree]((pinCalendar) => {
         PinCalendarClear(pinCalendar);
-      })
+      });
     },
   };
   getSettingsIoModal().showModal();
@@ -226,19 +249,21 @@ function onClickImportPinsConfirm(importPins: ImportPins) {
       for (const pinCategoryId of importPins.conflicts.pinCategories)
         PinCatalogRemovePinCategory(pinCatalog, pinCategoryId);
 
-      for (const pinId of importPins.conflicts.pins)
-        PinCatalogRemovePin(pinCatalog, pinId);
+      for (const pinId of importPins.conflicts.pins) PinCatalogRemovePin(pinCatalog, pinId);
 
       // Add all elements
       for (const pinCategory of PinCatalogGetPinCategories(importPins.pinCatalog))
         PinCatalogAddPinCategory(pinCatalog, pinCategory);
 
-      for (const pin of PinCatalogGetPins(importPins.pinCatalog))
-        PinCatalogAddPin(pinCatalog, pin);
+      for (const pin of PinCatalogGetPins(importPins.pinCatalog)) PinCatalogAddPin(pinCatalog, pin);
     } else {
       // Only add non-conflicting elements.
       for (const pinCategory of PinCatalogGetPinCategories(importPins.pinCatalog))
-        if (!importPins.conflicts.pinCategories.find((current) => current.isEqualStatic(pinCategory.id)))
+        if (
+          !importPins.conflicts.pinCategories.find((current) =>
+            current.isEqualStatic(pinCategory.id),
+          )
+        )
           PinCatalogAddPinCategory(pinCatalog, pinCategory);
 
       for (const pin of PinCatalogGetPins(importPins.pinCatalog))
@@ -251,7 +276,7 @@ function onClickImportPinsConfirm(importPins: ImportPins) {
 function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
   getPinCalendar().value![changeSubtree]((pinCalendar) => {
     PinCalendarCombine(pinCalendar, importCalendar.calendar);
-  })
+  });
 }
 </script>
 
@@ -262,7 +287,9 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
       <p class="py-4">{{ modalData.message }}</p>
       <form method="dialog" class="modal-action flex flex-row gap-2">
         <button class="btn btn-neutral flex-1">Cancel</button>
-        <button class="btn btn-error flex-1" @click="modalData.actionConfirm">{{ modalData.buttonConfirm }}</button>
+        <button class="btn btn-error flex-1" @click="modalData.actionConfirm">
+          {{ modalData.buttonConfirm }}
+        </button>
       </form>
     </div>
     <div class="modal-box" v-if="modalData !== undefined && modalData.kind == 'import'">
@@ -270,30 +297,55 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
         <h3 class="text-lg font-bold pb-4">Pin Catalog Import</h3>
         <div class="flex flex-col gap-4">
           <div>
-            <p>{{ Object.keys(modalData.import.pinCatalog.pinCategories).length }} categories to import.</p>
+            <p>
+              {{ Object.keys(modalData.import.pinCatalog.pinCategories).length }} categories to
+              import.
+            </p>
             <p>{{ Object.keys(modalData.import.pinCatalog.pins).length }} pins to import.</p>
           </div>
-          <div class="flex flex-col gap-4 border-2 border-warning rounded-xl p-4"
-            v-if="modalData.import.conflicts.pinCategories.length > 0 || modalData.import.conflicts.pins.length > 0">
+          <div
+            class="flex flex-col gap-4 border-2 border-warning rounded-xl p-4"
+            v-if="
+              modalData.import.conflicts.pinCategories.length > 0 ||
+              modalData.import.conflicts.pins.length > 0
+            "
+          >
             <div>
-              <p v-if="modalData.import.conflicts.pinCategories.length > 0"><span class="font-semibold">Found {{
-                modalData.import.conflicts.pinCategories.length }} conflicting categories</span>: {{
-                    Array.from(modalData.import.conflicts.pinCategories).join(", ") }}.</p>
-              <p v-if="modalData.import.conflicts.pins.length > 0"><span class="font-semibold">Found {{
-                modalData.import.conflicts.pins.length }} conflicting pins</span>: {{
-                    Array.from(modalData.import.conflicts.pins).join(", ") }}.</p>
+              <p v-if="modalData.import.conflicts.pinCategories.length > 0">
+                <span class="font-semibold"
+                  >Found {{ modalData.import.conflicts.pinCategories.length }} conflicting
+                  categories</span
+                >: {{ Array.from(modalData.import.conflicts.pinCategories).join(', ') }}.
+              </p>
+              <p v-if="modalData.import.conflicts.pins.length > 0">
+                <span class="font-semibold"
+                  >Found {{ modalData.import.conflicts.pins.length }} conflicting pins</span
+                >: {{ Array.from(modalData.import.conflicts.pins).join(', ') }}.
+              </p>
             </div>
             <div>
               What do you wish to perform with conflicting elements?
               <label class="label cursor-pointer items-start justify-start gap-2">
-                <input type="radio" name="radio-1" class="radio radio-sm" v-model="modalData.import.overwrite"
-                  :value="false" />
+                <input
+                  type="radio"
+                  name="radio-1"
+                  class="radio radio-sm"
+                  v-model="modalData.import.overwrite"
+                  :value="false"
+                />
                 <span class="label-text">Keep existing elements with conflicting ID's</span>
               </label>
               <label class="label cursor-pointer items-start justify-start gap-2">
-                <input type="radio" name="radio-1" class="radio radio-sm" v-model="modalData.import.overwrite"
-                  :value="true" />
-                <span class="label-text">Overwrite existing elements with conflicting ID's with imported elements</span>
+                <input
+                  type="radio"
+                  name="radio-1"
+                  class="radio radio-sm"
+                  v-model="modalData.import.overwrite"
+                  :value="true"
+                />
+                <span class="label-text"
+                  >Overwrite existing elements with conflicting ID's with imported elements</span
+                >
               </label>
             </div>
           </div>
@@ -301,16 +353,33 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
         <form method="dialog" class="modal-action flex flex-row gap-2">
           <button class="btn btn-neutral flex-1">Cancel</button>
           <template
-            v-if="modalData.import.conflicts.pinCategories.length > 0 || modalData.import.conflicts.pins.length > 0">
-            <button v-if="!modalData.import.overwrite" class="btn btn-primary flex-1"
-              @click="onClickImportPinsConfirm(modalData.import)">Import, Keeping Existing
-              Elements</button>
-            <button v-else class="btn btn-error flex-1 " @click="onClickImportPinsConfirm(modalData.import)">Import,
-              Overwriting Existing
-              Elements</button>
+            v-if="
+              modalData.import.conflicts.pinCategories.length > 0 ||
+              modalData.import.conflicts.pins.length > 0
+            "
+          >
+            <button
+              v-if="!modalData.import.overwrite"
+              class="btn btn-primary flex-1"
+              @click="onClickImportPinsConfirm(modalData.import)"
+            >
+              Import, Keeping Existing Elements
+            </button>
+            <button
+              v-else
+              class="btn btn-error flex-1"
+              @click="onClickImportPinsConfirm(modalData.import)"
+            >
+              Import, Overwriting Existing Elements
+            </button>
           </template>
-          <button v-else class="btn btn-primary flex-1"
-            @click="onClickImportPinsConfirm(modalData.import)">Import</button>
+          <button
+            v-else
+            class="btn btn-primary flex-1"
+            @click="onClickImportPinsConfirm(modalData.import)"
+          >
+            Import
+          </button>
         </form>
       </template>
       <template v-if="modalData.import.kind === 'calendar'">
@@ -322,7 +391,12 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
         </div>
         <form method="dialog" class="modal-action flex flex-row gap-2">
           <button class="btn btn-neutral flex-1">Cancel</button>
-          <button class="btn btn-primary flex-1" @click="onClickImportCalendarConfirm(modalData.import)">Import</button>
+          <button
+            class="btn btn-primary flex-1"
+            @click="onClickImportCalendarConfirm(modalData.import)"
+          >
+            Import
+          </button>
         </form>
       </template>
     </div>
