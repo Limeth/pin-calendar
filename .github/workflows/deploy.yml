@@ -21,11 +21,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # TODO: Enable checks
-  # job-check-deploy:
-  #   uses: ./.github/workflows/check.yml
+  job-check-deploy:
+    uses: ./.github/workflows/check.yml
   job-deploy:
-    # needs: [job-check-deploy]
+    needs: [job-check-deploy]
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
