@@ -5,7 +5,6 @@
 
   watch(darkModeEnabled, () => {
     localStorage.setItem("dark-mode", darkModeEnabled.value ? "true" : "false");
-    const colorTheme = darkModeEnabled.value ? "dark" : "light";
     if (darkModeEnabled.value) {
         document.documentElement.classList.add("dark");
     } else {

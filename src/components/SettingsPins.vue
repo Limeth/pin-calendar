@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { App } from '../account';
 import * as feather from 'feather-icons';
-import { ref, watch, toRaw, toRef } from 'vue';
+import { ref, watch, toRef } from 'vue';
 import type { Ref } from 'vue';
-import { PinCatalogCreateAndAddPinToCategory, PinCatalogCreateAndAddSubcategoryToCategory, PinCatalogGetPinById, PinCatalogGetRootCategories, type Pin, type PinCatalog, type PinCategory, type PinCategoryDescriptor, type PinCategoryTypeOf, type PinDescriptor, type PinId, type PinTypeOf } from '../pins';
+import { PinCatalogCreateAndAddPinToCategory, PinCatalogCreateAndAddSubcategoryToCategory, PinCatalogGetRootCategories, type Pin, type PinCatalog, type PinCategoryDescriptor, type PinCategoryTypeOf, type PinDescriptor, type PinTypeOf } from '../pins';
 import emojiRegex from 'emoji-regex';
 import SettingsPinCategory, { type SettingsPinCategoryEvent } from './SettingsPinCategory.vue';
 import * as R from 'ramda';

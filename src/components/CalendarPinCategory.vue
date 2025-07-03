@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import * as feather from 'feather-icons';
 import { ref } from 'vue';
-import { type PinDay, type Pin, type PinCategory, type Registered, type PinCategoryId, type PinCategoryDescriptor, PinCatalogGetPinsInCategory, type PinCatalog, PinCatalogGetSubcategoriesInCategory, type PinCategoryTypeOf } from '../pins';
+import { type PinDay, type Pin, PinCatalogGetPinsInCategory, type PinCatalog, PinCatalogGetSubcategoriesInCategory, type PinCategoryTypeOf } from '../pins';
 import * as R from 'ramda';
 import CalendarPinButton from './CalendarPinButton.vue';
 import type { Rop } from 'automerge-diy-vue-hooks';

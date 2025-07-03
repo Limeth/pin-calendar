@@ -2,7 +2,6 @@
 import type { App } from '../account';
 import SettingsPins from './SettingsPins.vue';
 import SettingsIO from './SettingsIO.vue';
-import type { Rop } from 'automerge-diy-vue-hooks';
 
 const app = defineModel<App>();
 </script>
