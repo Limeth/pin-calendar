@@ -23,6 +23,7 @@
     "@automerge/automerge-repo-network-websocket": "^2.0.4",
     "@automerge/automerge-repo-storage-indexeddb": "^2.0.4",
     "@js-temporal/polyfill": "^0.5.1",
+    "@sinclair/typebox": "^0.34.37",
     "@tailwindcss/vite": "^4.1.10",
     "@types/ramda": "^0.30.2",
     "automerge-diy-vue-hooks": "^0.4.1",

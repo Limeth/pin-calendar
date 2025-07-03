@@ -3,7 +3,19 @@ import * as A from '@automerge/automerge'
 import { changeSubtree, type Ro, type Rop } from "automerge-diy-vue-hooks";
 import { toRef, type Ref } from "vue";
 import * as uuid from 'uuid';
+import { FormatRegistry, Type, type Static } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value'
 // import * as Y from 'yjs';
+
+FormatRegistry.Set('uuid', (value) => uuid.validate(value));
+FormatRegistry.Set('date', (value) => {
+  try {
+    Temporal.PlainDate.from(value)
+    return true;
+  } catch {
+    return false;
+  }
+})
 
 const LOCAL_STORAGE_KEY_PIN_CATALOG = "pin_catalog";
 const LOCAL_STORAGE_KEY_PIN_CALENDAR = "pin_calendar";
@@ -11,34 +23,43 @@ const LOCAL_STORAGE_KEY_PIN_CALENDAR = "pin_calendar";
 type MaybeRop<T> = T | Rop<T>;
 type MaybeRo<T> = T | Ro<T>;
 
-type LocalStorageSerializable = {
-  version: number;
-};
+const LocalStorageSerializableSchema = Type.Object({
+  version: Type.Integer(),
+});
+
+type LocalStorageSerializable = Static<typeof LocalStorageSerializableSchema>;
 
 // ID's are stringified UUIDv7
 type Uuid = string;
 
-const PIN_ID_SYMBOL: unique symbol = Symbol.for('pinId');
-const PIN_CATEGORY_ID_SYMBOL: unique symbol = Symbol.for('pinCategoryId');
+export const PIN_ID_SYMBOL: unique symbol = Symbol.for('pinId');
+export const PIN_CATEGORY_ID_SYMBOL: unique symbol = Symbol.for('pinCategoryId');
 
 export type PinId = RegistryId<typeof PIN_ID_SYMBOL>;
 export type PinCategoryId = RegistryId<typeof PIN_CATEGORY_ID_SYMBOL>;
 
-type IconSvg = {
-  svg: string,
-};
+const IconSvgSchema = Type.Object({
+  svg: Type.String(),
+});
 
-type IconEmoji = {
-  emoji: string,
-  scale: number,
-};
+type IconSvg = Static<typeof IconSvgSchema>;
 
-// type Icon = IconSvg | IconEmoji;
-type Icon = IconEmoji;
+const IconEmojiSchema = Type.Object({
+  emoji: Type.String(),
+  scale: Type.Number(),
+})
 
-export type Archiveable = {
-  archived?: boolean,
-}
+type IconEmoji = Static<typeof IconEmojiSchema>;
+
+const IconSchema = Type.Union([IconEmojiSchema, /*IconSvgSchema*/]);
+
+type Icon = Static<typeof IconSchema>;
+
+const ArchivableSchema = Type.Object({
+  archived: Type.Optional(Type.Boolean()),
+})
+
+export type Archiveable = Static<typeof ArchivableSchema>;
 
 export class RegistryId<S extends symbol> {
   readonly idSymbol: S;
@@ -58,6 +79,13 @@ export class RegistryId<S extends symbol> {
   }
 }
 
+// TODO: Assert that IdKey is the same type?
+function IdKeySchema<I extends { key: unknown }>() {
+  return Type.String({
+    format: 'uuid',
+  });
+}
+
 export type IdKey<I extends { key: unknown }> = I['key'];
 
 export type Registered<I, T> = {
@@ -65,25 +93,35 @@ export type Registered<I, T> = {
   value: T,
 };
 
-export type PinCategoryDescriptor = Archiveable & {
-  subcategories: IdKey<PinCategoryId>[],
-  pins: IdKey<PinId>[],
-  displayName: string,
-  description: string,
-};
+const PinCategoryDescriptorSchema = Type.Intersect([
+  ArchivableSchema,
+  Type.Object({
+    subcategories: Type.Array(IdKeySchema<PinCategoryId>()),
+    pins: Type.Array(IdKeySchema<PinId>()),
+    displayName: Type.String(),
+    description: Type.String(),
+  })
+])
+
+export type PinCategoryDescriptor = Static<typeof PinCategoryDescriptorSchema>;
 
 export type PinCategory = Registered<PinCategoryId, PinCategoryDescriptor>;
 
-export type PinDescriptor = Archiveable & {
-  displayName: string,
-  description: string,
-  icon: Icon,
-  backgroundColor: string,
-};
+const PinDescriptorSchema = Type.Intersect([
+  ArchivableSchema,
+  Type.Object({
+    displayName: Type.String(),
+    description: Type.String(),
+    icon: IconSchema,
+    backgroundColor: Type.String(),
+  })
+])
+
+export type PinDescriptor = Static<typeof PinDescriptorSchema>;
 
 export type Pin = Registered<PinId, PinDescriptor>;
 
-function keyToId<S extends symbol>(key: IdKey<RegistryId<S>>, idSymbol: S): RegistryId<S> {
+export function keyToId<S extends symbol>(key: IdKey<RegistryId<S>>, idSymbol: S): RegistryId<S> {
   return new RegistryId(idSymbol, key);
 }
 
@@ -99,17 +137,19 @@ export function generatePinCategoryId(): PinCategoryId {
   return generateId(PIN_CATEGORY_ID_SYMBOL);
 }
 
-export type PinTypeOf<T extends { pins: { [id: IdKey<PinId>]: unknown } }> = Registered<PinId, T['pins'][IdKey<PinId>]>;
+export type PinDescriptorTypeOf<T extends { pins: { [id: IdKey<PinId>]: unknown } }> = T['pins'][IdKey<PinId>];
+export type PinTypeOf<T extends { pins: { [id: IdKey<PinId>]: unknown } }> = Registered<PinId, PinDescriptorTypeOf<T>>;
 export type PinCategoryTypeOf<T extends { pinCategories: { [id: IdKey<PinCategoryId>]: unknown } }> = Registered<PinCategoryId, T['pinCategories'][IdKey<PinCategoryId>]>;
 
-export type PinCatalog = LocalStorageSerializable & {
-  pins: {
-    [id: IdKey<PinId>]: PinDescriptor,
-  };
-  pinCategories: {
-    [id: IdKey<PinCategoryId>]: PinCategoryDescriptor,
-  };
-};
+const PinCatalogSchema = Type.Intersect([
+  LocalStorageSerializableSchema,
+  Type.Object({
+    pins: Type.Record(IdKeySchema<PinId>(), PinDescriptorSchema),
+    pinCategories: Type.Record(IdKeySchema<PinCategoryId>(), PinCategoryDescriptorSchema),
+  })
+])
+
+export type PinCatalog = Static<typeof PinCatalogSchema>;
 
 export function PinCatalogNew(): PinCatalog {
   return {
@@ -201,13 +241,25 @@ export function PinCategoryRemoveSubcategory(self: PinCategoryDescriptor, pinCat
   return idSetRemove(self.subcategories, pinCategoryId);
 }
 
+export function PinCatalogAddPin(self: PinCatalog, pin: Pin): boolean {
+  if (pin.id.key in self.pinCategories)
+    return false;
+  else
+  {
+    self.pins[pin.id.key] = pin.value;
+    return true;
+  }
+}
+
 export function PinCatalogCreatePin(self: PinCatalog, pinDescriptor: PinDescriptor): Pin {
-  const pinId = generatePinId();
-  self.pins[pinId.key] = pinDescriptor;
-  return {
-    id: pinId,
+  const pin = {
+    id: generatePinId(),
     value: pinDescriptor,
   };
+
+  PinCatalogAddPin(self, pin);
+
+  return pin;
 }
 
 export function PinCatalogAddPinToCategory(self: PinCatalog, categoryId: PinCategoryId, pin: Pin): Pin | null {
@@ -242,13 +294,25 @@ export function PinCatalogRemovePin(self: PinCatalog, id: PinId): Pin | null {
   return previousValue;
 }
 
+export function PinCatalogAddPinCategory(self: PinCatalog, pinCategory: PinCategory): boolean {
+  if (pinCategory.id.key in self.pinCategories)
+    return false;
+  else
+  {
+    self.pinCategories[pinCategory.id.key] = pinCategory.value;
+    return true;
+  }
+}
+
 export function PinCatalogCreatePinCategory(self: PinCatalog, pinCategoryDescriptor: PinCategoryDescriptor): PinCategory {
-  const pinCategoryId = generatePinCategoryId();
-  self.pinCategories[pinCategoryId.key] = pinCategoryDescriptor;
-  return {
-    id: pinCategoryId,
+  const pinCategory = {
+    id: generatePinCategoryId(),
     value: pinCategoryDescriptor,
   };
+
+  PinCatalogAddPinCategory(self, pinCategory);
+
+  return pinCategory;
 }
 
 export function PinCatalogAddSubcategoryToCategory(self: PinCatalog, categoryId: PinCategoryId, subcategory: PinCategory): PinCategory | null {
@@ -298,6 +362,30 @@ export function PinCatalogRemovePinCategory(self: PinCatalog, id: PinCategoryId)
   }
 
   return previousValue ?? undefined;
+}
+
+export function PinCatalogGetPins<T extends MaybeRop<PinCatalog>>(self: T): PinTypeOf<T>[] {
+  const pins: PinTypeOf<T>[] = [];
+
+  for (const [key, pin] of Object.entries(self.pins))
+    pins.push({
+      id: keyToId(key, PIN_ID_SYMBOL),
+      value: pin,
+    } as PinTypeOf<T>) // TODO: Why is type assertion here necessary while unnecessary in PinCatalogGetPinCategories?
+
+  return pins;
+}
+
+export function PinCatalogGetPinCategories<T extends MaybeRop<PinCatalog>>(self: T): PinCategoryTypeOf<T>[] {
+  const pinCategories: PinCategoryTypeOf<T>[] = [];
+
+  for (const [key, category] of Object.entries(self.pinCategories))
+    pinCategories.push({
+      id: keyToId(key, PIN_CATEGORY_ID_SYMBOL),
+      value: category,
+    })
+
+  return pinCategories;
 }
 
 export function PinCatalogGetRootCategories<T extends MaybeRop<PinCatalog>>(self: T): PinCategoryTypeOf<T>[] {
@@ -458,40 +546,17 @@ export function PinCatalogFromJsonValue(json: unknown): PinCatalog | null {
     return null;
   }
 
-  const catalog = PinCatalogNew();
-
-  if ('pins' in json && typeof json.pins === 'object' && json.pins !== null)
-    for (const [pinIdKey, pin] of Object.entries(json.pins)) {
-      PinCatalogAddPinCategory(catalog, undefined, rootCategory);
-    }
-
-  return catalog;
+  try {
+    return Value.Parse(PinCatalogSchema, json);
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
 }
 
 export function PinCatalogDeserialize(serialized: string): PinCatalog | null {
   return PinCatalogFromJsonValue(JSON.parse(serialized));
 }
-
-// static loadFromLocalStorage(): PinCatalog | null {
-//   const string = localStorage.getItem(LOCAL_STORAGE_KEY_PIN_CATALOG);
-
-//   if (string === null)
-//     return null;
-
-//   return this.deserialize(string);
-// }
-
-// static loadFromLocalStorageOrDefault(): PinCatalog {
-//   const loaded = this.loadFromLocalStorage();
-
-//   if (loaded !== null)
-//     return loaded;
-//   else {
-//     const catalog = this.default();
-//     catalog.saveToLocalStorage();
-//     return catalog;
-//   }
-// }
 
 export type PinnedPin = {
   count: number, // TODO: Allow more than 1
@@ -501,9 +566,11 @@ export type PinDayPins = {
   [pinId: IdKey<PinId>]: PinnedPin
 };
 
-export type PinDay = {
-  pins: Array<IdKey<PinId>>;
-}
+const PinDaySchema = Type.Object({
+  pins: Type.Array(IdKeySchema<PinId>()),
+})
+
+export type PinDay = Static<typeof PinDaySchema>;
 
 function PinDayNew(): PinDay {
   return {
@@ -590,13 +657,20 @@ function PinDayFromJsonValue(json: unknown): PinDay | null {
   return pinDay;
 }
 
-export type PinCalendarDays = {
-  [key: string]: PinDay,
-};
+const PinCalendarDaysSchema = Type.Record(Type.String({
+  format: 'date'
+}), PinDaySchema);
 
-export type PinCalendar = LocalStorageSerializable & {
-  days: PinCalendarDays;
-}
+export type PinCalendarDays = Static<typeof PinCalendarDaysSchema>;
+
+const PinCalendarSchema = Type.Intersect([
+  LocalStorageSerializableSchema,
+  Type.Object({
+    days: PinCalendarDaysSchema,
+  })
+])
+
+export type PinCalendar = Static<typeof PinCalendarSchema>;
 
 export function PinCalendarNew(): PinCalendar {
   return {
@@ -675,13 +749,7 @@ export function PinCalendarGetPinsOnDay(self: Rop<PinCalendar>, catalog: Rop<Pin
 }
 
 function PinCalendarAsJsonValue(self: MaybeRo<PinCalendar>): object {
-  const calendarToSave: { days: { [key: string]: PinDay } } = { days: {} };
-
-  for (const [key, day] of Object.entries(self.days))
-    if (!PinDayIsEmpty(day))
-      calendarToSave.days[key] = PinDayAsJsonValue(day);
-
-  return calendarToSave;
+  return self;
 }
 
 export function PinCalendarSerialize(self: MaybeRo<PinCalendar>): string {
@@ -706,17 +774,12 @@ function PinCalendarFromJsonValue(json: unknown): PinCalendar | null {
     return null;
   }
 
-  const calendar = PinCalendarNew();
-
-  if ('days' in json && typeof json.days === 'object' && json.days !== null)
-    for (const [key, value] of Object.entries(json.days)) {
-      const pinDay = PinDayFromJsonValue(value)
-
-      if (pinDay !== null)
-        calendar.days[key] = pinDay;
-    }
-
-  return calendar;
+  try {
+    return Value.Parse(PinCalendarSchema, json);
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
 }
 
 export function PinCalendarDayToKey(day: Temporal.PlainDate): string {
@@ -739,25 +802,3 @@ export function PinCalendarCombine(target: PinCalendar, source: PinCalendar) {
 export function PinCalendarDeserialize(serialized: string): PinCalendar | null {
   return PinCalendarFromJsonValue(JSON.parse(serialized));
 }
-
-// function PinCalendarLoadFromLocalStorage(self: Y.Map<PinCalendar>): PinCalendar | null {
-//     const string = localStorage.getItem(LOCAL_STORAGE_KEY_PIN_CALENDAR);
-
-//     if (string === null)
-//         return null;
-
-//     return this.deserialize(string);
-// }
-
-// function PinCalendarLoadFromLocalStorageOrDefault(self: Y.Map<PinCalendar>): PinCalendar {
-//     const loaded = this.loadFromLocalStorage();
-
-//     if (loaded !== null)
-//         return loaded;
-//     else
-//     {
-//         const calendar = new PinCalendar();
-//         calendar.saveToLocalStorage();
-//         return calendar;
-//     }
-// }
