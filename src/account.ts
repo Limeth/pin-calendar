@@ -1,16 +1,9 @@
-import { ref, shallowRef, type Ref, type ShallowRef } from 'vue';
-import {
-  AccountGetPinCatalogRoom,
-  AccountGetRoomPassword,
-  AccountLoadOrNew,
-  type Account,
-} from './auth';
+import { shallowRef, type Ref, type ShallowRef } from 'vue';
 import { type PinCalendar, PinCalendarNew, type PinCatalog, PinCatalogDefault } from './pins';
 import * as A from '@automerge/automerge-repo';
 import { BroadcastChannelNetworkAdapter } from '@automerge/automerge-repo-network-broadcastchannel';
-import { WebSocketClientAdapter } from '@automerge/automerge-repo-network-websocket';
 import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
-import { changeSubtree, makeReactive, type Rop } from 'automerge-diy-vue-hooks';
+import { makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 
 export type DocData = {
   // account: Account,

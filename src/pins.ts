@@ -1,9 +1,8 @@
 import { Temporal } from '@js-temporal/polyfill';
-import * as A from '@automerge/automerge';
 import { changeSubtree, type Ro, type Rop } from 'automerge-diy-vue-hooks';
 import { toRef, type Ref } from 'vue';
 import * as uuid from 'uuid';
-import { FormatRegistry, Type, type Static } from '@sinclair/typebox';
+import { FormatRegistry, Type, type Static, type TObject } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 // import * as Y from 'yjs';
 
@@ -38,22 +37,42 @@ export const PIN_CATEGORY_ID_SYMBOL: unique symbol = Symbol.for('pinCategoryId')
 export type PinId = RegistryId<typeof PIN_ID_SYMBOL>;
 export type PinCategoryId = RegistryId<typeof PIN_CATEGORY_ID_SYMBOL>;
 
-const IconSvgSchema = Type.Object({
-  svg: Type.String(),
+const IconTypeImageSchema = Type.Object({
+  base64: Type.String(),
+  scale: Type.Number(),
 });
 
-type IconSvg = Static<typeof IconSvgSchema>;
+export type IconTypeImage = Static<typeof IconTypeImageSchema>;
 
-const IconEmojiSchema = Type.Object({
+const IconTypeEmojiSchema = Type.Object({
   emoji: Type.String(),
   scale: Type.Number(),
 });
 
-type IconEmoji = Static<typeof IconEmojiSchema>;
+export type IconTypeEmoji = Static<typeof IconTypeEmojiSchema>;
 
-const IconSchema = Type.Union([IconEmojiSchema /*IconSvgSchema*/]);
+const IconSchema = Variant(
+  'type',
+  Type.Object({
+    image: IconTypeImageSchema,
+    emoji: IconTypeEmojiSchema,
+  }),
+);
 
-type Icon = Static<typeof IconSchema>;
+type Literal<T, PrimitiveType> = T extends PrimitiveType
+  ? PrimitiveType extends T
+    ? never
+    : T
+  : never;
+function Variant<D, T extends TObject>(discriminantField: Literal<D, string>, object: T) {
+  // TODO: Check that discriminantField doesn't interfere with the variants.
+  return Type.Composite([
+    Type.Mapped(Type.Literal(discriminantField), () => Type.KeyOf(object)),
+    object,
+  ]);
+}
+
+export type Icon = Static<typeof IconSchema>;
 
 const ArchivableSchema = Type.Object({
   archived: Type.Optional(Type.Boolean()),
@@ -543,7 +562,7 @@ export function PinCatalogDefault(): PinCatalog {
   PinCatalogCreateAndAddPinToCategory(pinCatalog, pinCategoryHealthPhysical!.id, {
     displayName: 'Go on a jog',
     description: 'Run at least 5 km',
-    icon: { emoji: '', scale: 1 },
+    icon: { type: 'emoji', emoji: { emoji: '', scale: 1 }, image: { base64: '', scale: 1 } },
     backgroundColor: '#FF0000',
   });
   const pinCategoryHealthMental = PinCatalogCreateAndAddSubcategoryToCategory(
@@ -559,7 +578,7 @@ export function PinCatalogDefault(): PinCatalog {
   PinCatalogCreateAndAddPinToCategory(pinCatalog, pinCategoryHealthMental!.id, {
     displayName: 'Do some self-care',
     description: 'Spend some personal time',
-    icon: { emoji: '', scale: 1 },
+    icon: { type: 'emoji', emoji: { emoji: '', scale: 1 }, image: { base64: '', scale: 1 } },
     backgroundColor: '#00FF00',
   });
   const pinCategoryHobbies = PinCatalogCreateAndAddSubcategoryToCategory(pinCatalog, null, {
@@ -571,7 +590,7 @@ export function PinCatalogDefault(): PinCatalog {
   PinCatalogCreateAndAddPinToCategory(pinCatalog, pinCategoryHobbies!.id, {
     displayName: 'Watch a movie',
     description: 'And enjoy it!',
-    icon: { emoji: '', scale: 1 },
+    icon: { type: 'emoji', emoji: { emoji: '', scale: 1 }, image: { base64: '', scale: 1 } },
     backgroundColor: '#0000FF',
   });
   return pinCatalog;

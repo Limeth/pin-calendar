@@ -1,27 +1,32 @@
 <script setup lang="ts">
 import type { App } from '../account';
 import * as feather from 'feather-icons';
-import { ref, watch, toRef } from 'vue';
+import { ref, watch, toRef, computed } from 'vue';
 import type { Ref } from 'vue';
 import {
   PinCatalogCreateAndAddPinToCategory,
   PinCatalogCreateAndAddSubcategoryToCategory,
+  PinCatalogGetPinById,
+  PinCatalogGetPinCategoryById,
   PinCatalogGetRootCategories,
   type Pin,
   type PinCatalog,
   type PinCategoryDescriptor,
+  type PinCategoryId,
   type PinCategoryTypeOf,
   type PinDescriptor,
+  type PinId,
   type PinTypeOf,
 } from '../pins';
 import emojiRegex from 'emoji-regex';
 import SettingsPinCategory, { type SettingsPinCategoryEvent } from './SettingsPinCategory.vue';
 import * as R from 'ramda';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
+import ValidatedInput from './ValidatedInput.vue';
 
 type EditingPin = {
   kind: 'pin';
-  element: PinTypeOf<Rop<PinCatalog>>;
+  elementId: PinId;
   // parent: PinCategoryTypeOf<Rop<PinCatalog>>,
   error?: {
     displayNameError?: string;
@@ -31,7 +36,7 @@ type EditingPin = {
 
 type EditingPinCategory = {
   kind: 'category';
-  element: PinCategoryTypeOf<Rop<PinCatalog>>;
+  elementId: PinCategoryId;
   // parent?: PinCategoryTypeOf<Rop<PinCatalog>>,
   error?: {
     displayNameError?: string;
@@ -48,31 +53,45 @@ function getPinCatalog(): Ref<Rop<PinCatalog>> {
   return toRef(app.value!.docData.value, 'pinCatalog');
 }
 
+const editingPinCategory = computed(() => {
+  if (editing.value !== undefined && editing.value.kind == 'category')
+    return PinCatalogGetPinCategoryById(getPinCatalog().value, editing.value.elementId);
+
+  return null;
+});
+
+const editingPin = computed(() => {
+  if (editing.value !== undefined && editing.value.kind == 'pin')
+    return PinCatalogGetPinById(getPinCatalog().value, editing.value.elementId);
+
+  return null;
+});
+
 const editing: Ref<Editing | undefined> = ref(undefined);
 const isDrawerOpen = ref(false);
 const isArchiveOpen = ref(false);
 
 function onClickEditPinCategory(pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>) {
-  if (editing.value?.element.id.isEqualDynamic(pinCategory.id)) {
+  if (editing.value?.elementId.isEqualDynamic(pinCategory.id)) {
     editing.value = undefined;
   } else {
     // const parentId = getPinCatalog().value.pinCategories[pinCategory.id].parentId;
     // const parent = parentId !== undefined ? getPinCatalog().value.pinCategories[parentId].pinCategory : undefined;
     editing.value = {
       kind: 'category',
-      element: pinCategory,
+      elementId: pinCategory.id,
     };
   }
 }
 
 function onClickEditPin(pin: PinTypeOf<Rop<PinCatalog>>) {
-  if (editing.value?.element.id.isEqualDynamic(pin.id)) {
+  if (editing.value?.elementId.isEqualDynamic(pin.id)) {
     editing.value = undefined;
   } else {
     editing.value = {
       kind: 'pin',
       // parent: getPinCatalog().value.pinCategories[getPinCatalog().value.pins[pin.id].categoryId].pinCategory,
-      element: pin,
+      elementId: pin.id,
     };
   }
 }
@@ -100,8 +119,15 @@ function onClickAddPin(parent: PinCategoryTypeOf<Rop<PinCatalog>>) {
       displayName: '',
       description: '',
       icon: {
-        emoji: '',
-        scale: 1,
+        type: 'emoji',
+        emoji: {
+          emoji: '',
+          scale: 1,
+        },
+        image: {
+          base64: '',
+          scale: 1,
+        },
       },
       backgroundColor: 'black',
     });
@@ -121,7 +147,11 @@ function onClickEditCancel() {
 }
 
 function onClickEditConfirmCategory() {
-  if (editing.value === undefined || editing.value.kind !== 'category') {
+  if (
+    editing.value === undefined ||
+    editing.value.kind !== 'category' ||
+    editingPinCategory.value === null
+  ) {
     return;
   }
 
@@ -129,8 +159,8 @@ function onClickEditConfirmCategory() {
   {
     editing.value.error = {};
 
-    if (editing.value.element.value.displayName.length === 0) {
-      editing.value.error.displayNameError = 'The display name must not be empty.';
+    if (editingPinCategory.value.value.displayName.length === 0) {
+      editing.value.error.displayNameError = 'The display name is empty.';
     }
 
     if (Object.keys(editing.value.error).length === 0) {
@@ -176,7 +206,7 @@ function onClickEditConfirmCategory() {
 }
 
 function onClickEditConfirmPin() {
-  if (editing.value === undefined || editing.value.kind !== 'pin') {
+  if (editing.value === undefined || editing.value.kind !== 'pin' || editingPin.value === null) {
     return;
   }
 
@@ -184,18 +214,18 @@ function onClickEditConfirmPin() {
   {
     editing.value.error = {};
 
-    if (editing.value.element.value.displayName.length === 0) {
-      editing.value.error.displayNameError = 'The display name must not be empty.';
+    if (editingPin.value.value.displayName.length === 0) {
+      editing.value.error.displayNameError = 'The display name is empty.';
     }
 
     {
-      const emojis = [...editing.value.element.value.icon.emoji.matchAll(emojiRegexPattern)];
+      const emojis = [...editingPin.value.value.icon.emoji.emoji.matchAll(emojiRegexPattern)];
 
       if (emojis.length > 1) {
         editing.value.error.iconEmojiError = 'Only a single emoji is allowed.';
       }
 
-      const stringWithoutEmojis = editing.value.element.value.icon.emoji.replaceAll(
+      const stringWithoutEmojis = editingPin.value.value.icon.emoji.emoji.replaceAll(
         emojiRegexPattern,
         '',
       );
@@ -362,44 +392,63 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
         class="bg-base-200 text-base-content min-h-full w-80 p-4 flex flex-col gap-1 shadow-[0_0_4rem_0px_rgba(0,0,0,0.3)]"
       >
         <template v-if="editing !== undefined">
-          <template v-if="editing.kind === 'category'">
+          <template v-if="editing.kind === 'category' && editingPinCategory !== null">
             <label class="form-control w-full max-w-xs">
               <div class="label">
                 <span class="label-text">Unique ID</span>
               </div>
               <input
-                v-model="editing.element.id.key"
+                :value="editingPinCategory.id.key"
                 type="text"
-                placeholder="example-category-id"
                 class="input input-bordered w-full max-w-xs"
                 disabled
               />
             </label>
             <label class="form-control w-full max-w-xs">
-              <div class="label">
-                <span class="label-text">Display Name</span>
-              </div>
-              <input
-                v-model="editing.element.value.displayName"
-                type="text"
-                placeholder="Example Pin"
-                class="input input-bordered w-full max-w-xs"
-                :class="editing.error?.displayNameError !== undefined ? 'input-error' : ''"
-              />
-              <div v-if="editing.error?.displayNameError !== undefined" class="label">
-                <span class="label-text-alt text-error">{{ editing.error?.displayNameError }}</span>
-              </div>
+              <ValidatedInput
+                v-slot="slot"
+                :subtree="editingPinCategory.value"
+                property="displayName"
+                label="Display Name"
+                :validate="
+                  (value) => {
+                    if (value.length === 0) return 'The display name is empty.';
+                  }
+                "
+                change="updateText"
+              >
+                <input
+                  type="text"
+                  placeholder="Example Category"
+                  class="input input-bordered w-full max-w-xs"
+                  :value="slot.value"
+                  @input="slot.onChange"
+                  :class="slot.class"
+                />
+              </ValidatedInput>
             </label>
             <label class="form-control w-full max-w-xs">
-              <div class="label">
-                <span class="label-text">Description</span>
-              </div>
-              <textarea
-                v-model="editing.element.value.description"
-                placeholder="This is an example description of this example pin."
-                class="textarea textarea-bordered w-full max-w-xs min-h-32"
-                style="line-height: 1"
-              />
+              <ValidatedInput
+                v-slot="slot"
+                :subtree="editingPinCategory.value"
+                property="description"
+                label="Description"
+                :validate="
+                  (value) => {
+                    if (value.length === 0) return 'The description is empty.';
+                  }
+                "
+                change="updateText"
+              >
+                <input
+                  type="text"
+                  placeholder="Example Description"
+                  class="input input-bordered w-full max-w-xs"
+                  :value="slot.value"
+                  @input="slot.onChange"
+                  :class="slot.class"
+                />
+              </ValidatedInput>
             </label>
             <div class="flex gap-3 pt-4">
               <button @click="onClickEditCancel" class="btn btn-secondary flex-1">Cancel</button>
@@ -408,83 +457,136 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               </button>
             </div>
           </template>
-          <template v-if="editing.kind === 'pin'">
+          <template v-if="editing.kind === 'pin' && editingPin !== null">
             <label class="form-control w-full max-w-xs">
               <div class="label">
                 <span class="label-text">Unique ID</span>
               </div>
               <input
-                v-model="editing.element.id.key"
+                :value="editingPin.id.key"
                 type="text"
-                placeholder="example-pin-id"
                 class="input input-bordered w-full max-w-xs"
                 disabled
               />
             </label>
             <label class="form-control w-full max-w-xs">
-              <div class="label">
-                <span class="label-text">Display Name</span>
-              </div>
-              <input
-                v-model="editing.element.value.displayName"
-                type="text"
-                placeholder="Example Pin"
-                class="input input-bordered w-full max-w-xs"
-                :class="editing.error?.displayNameError !== undefined ? 'input-error' : ''"
-              />
-              <div v-if="editing.error?.displayNameError !== undefined" class="label">
-                <span class="label-text-alt text-error">{{ editing.error?.displayNameError }}</span>
-              </div>
+              <ValidatedInput
+                v-slot="slot"
+                :subtree="editingPin.value"
+                property="displayName"
+                label="Display Name"
+                :validate="
+                  (value) => {
+                    if (value.length === 0) return 'The display name is empty.';
+                  }
+                "
+                change="updateText"
+              >
+                <input
+                  type="text"
+                  placeholder="Example Category"
+                  class="input input-bordered w-full max-w-xs"
+                  :value="slot.value"
+                  @input="slot.onChange"
+                  :class="slot.class"
+                />
+              </ValidatedInput>
             </label>
             <label class="form-control w-full max-w-xs">
-              <div class="label">
-                <span class="label-text">Description</span>
-              </div>
-              <textarea
-                v-model="editing.element.value.description"
-                placeholder="This is an example description of this example pin."
-                class="textarea textarea-bordered w-full max-w-xs min-h-32"
-                style="line-height: 1"
-              />
+              <ValidatedInput
+                v-slot="slot"
+                :subtree="editingPin.value"
+                property="description"
+                label="Description"
+                :validate="
+                  (value) => {
+                    if (value.length === 0) return 'The description is empty.';
+                  }
+                "
+                change="updateText"
+              >
+                <input
+                  type="text"
+                  placeholder="Example Description"
+                  class="input input-bordered w-full max-w-xs"
+                  :value="slot.value"
+                  @input="slot.onChange"
+                  :class="slot.class"
+                />
+              </ValidatedInput>
             </label>
             <label class="form-control w-full max-w-xs">
-              <div class="label">
-                <span class="label-text">Pin Emoji</span>
-              </div>
-              <input
-                v-model="editing.element.value.icon.emoji"
-                type="text"
-                placeholder="Example Pin"
-                class="input input-bordered w-full max-w-xs"
-                :class="editing.error?.iconEmojiError !== undefined ? 'input-error' : ''"
-              />
-              <div v-if="editing.error?.iconEmojiError !== undefined" class="label">
-                <span class="label-text-alt text-error">{{ editing.error?.iconEmojiError }}</span>
-              </div>
+              <ValidatedInput
+                v-slot="slot"
+                :subtree="editingPin.value.icon.emoji"
+                property="emoji"
+                label="Emoji"
+                :validate="
+                  (value) => {
+                    const emojis = [...value.matchAll(emojiRegexPattern)];
+
+                    if (emojis.length > 1) return 'More than one emojis present.';
+
+                    const stringWithoutEmojis = value.replaceAll(emojiRegexPattern, '');
+
+                    if (stringWithoutEmojis.length > 0) return 'Non-emoji characters present.';
+                  }
+                "
+                change="assign"
+              >
+                <input
+                  type="text"
+                  placeholder="⭐"
+                  class="input input-bordered w-full max-w-xs"
+                  :value="slot.value"
+                  @input="slot.onChange"
+                  :class="slot.class"
+                />
+              </ValidatedInput>
             </label>
             <label class="form-control w-full max-w-xs">
-              <div class="label">
-                <span class="label-text">Pin Emoji Scale</span>
-              </div>
-              <input
-                type="range"
-                min="0.5"
-                max="1.5"
-                class="range"
-                step="0.1"
-                v-model="editing.element.value.icon.scale"
-              />
+              <ValidatedInput
+                v-slot="slot"
+                :subtree="editingPin.value.icon.emoji"
+                property="scale"
+                label="Emoji Scale"
+                :parse="(string) => parseFloat(string)"
+                :validate="
+                  (value) => {
+                    if (value <= 0) return 'Non-positive scale entered.';
+                  }
+                "
+                change="assign"
+              >
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  class="range"
+                  step="0.1"
+                  :value="slot.value"
+                  @input="slot.onChange"
+                  :class="slot.class"
+                />
+              </ValidatedInput>
             </label>
             <label class="form-control w-full max-w-xs">
-              <div class="label">
-                <span class="label-text">Pin Background Color</span>
-              </div>
-              <input
-                v-model="editing.element.value.backgroundColor"
-                type="color"
-                placeholder="CSS color"
-                class="input input-bordered w-full max-w-xs"
-              />
+              <ValidatedInput
+                v-slot="slot"
+                :subtree="editingPin.value"
+                property="backgroundColor"
+                label="Background Color"
+                change="assign"
+              >
+                <input
+                  type="color"
+                  placeholder="CSS color"
+                  class="input input-bordered w-full max-w-xs"
+                  :value="slot.value"
+                  @input="slot.onChange"
+                  :class="slot.class"
+                />
+              </ValidatedInput>
             </label>
             <div class="flex gap-3 pt-4">
               <button @click="onClickEditCancel" class="btn btn-secondary flex-1">Cancel</button>

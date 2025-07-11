@@ -26,7 +26,7 @@
     "@sinclair/typebox": "^0.34.37",
     "@tailwindcss/vite": "^4.1.10",
     "@types/ramda": "^0.30.2",
-    "automerge-diy-vue-hooks": "^0.4.1",
+    "automerge-diy-vue-hooks": "^0.4.2",
     "daisyui": "^5.0.43",
     "emoji-regex": "^10.4.0",
     "feather-icons": "^4.29.2",

@@ -7,18 +7,20 @@ const { pin } = defineProps<{
 </script>
 
 <template>
-  <div
-    class="w-6 h-6 rounded-full overflow-hidden align-center items-center flex text-[24px]"
-    :style="
-      'background-color: ' +
-      pin.value.backgroundColor +
-      '; font-size: ' +
-      20 * pin.value.icon.scale +
-      'px'
-    "
-  >
-    <div class="text-center ml-[-100%] mr-[-100%] w-[400%]">
-      {{ pin.value.icon.emoji }}
+  <template v-if="pin.value.icon.type === 'emoji'">
+    <div
+      class="w-6 h-6 rounded-full overflow-hidden align-center items-center flex text-[24px]"
+      :style="
+        'background-color: ' +
+        pin.value.backgroundColor +
+        '; font-size: ' +
+        20 * pin.value.icon.emoji.scale +
+        'px'
+      "
+    >
+      <div class="text-center ml-[-100%] mr-[-100%] w-[400%]">
+        {{ pin.value.icon.emoji.emoji }}
+      </div>
     </div>
-  </div>
+  </template>
 </template>

@@ -1,5 +1,3 @@
-import * as uuid from 'uuid';
-
 const LOCAL_STORAGE_KEY_SECRET_KEY: string = 'secret_key';
 const SECRET_KEY_BYTES: number = 32;
 const SECRET_KEY_ALGORITHM: AlgorithmIdentifier = { name: 'HKDF' };
