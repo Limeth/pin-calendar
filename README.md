@@ -2,7 +2,13 @@
 
 A calendar-based activity tracking web app with multi-client synchronization.
 
+## TODO:
+
+- Display orphaned pins in settings
+- Periodically clean up pins/categories in `PinCatalog::removed`
+
 ## Running on Windows:
+
 ```ps1
 fnm env --use-on-cd | Out-String | Invoke-Expression && fnm use 22
 npm run dev

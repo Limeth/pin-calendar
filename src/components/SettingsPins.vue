@@ -9,6 +9,8 @@ import {
   PinCatalogGetPinById,
   PinCatalogGetPinCategoryById,
   PinCatalogGetRootCategories,
+  PinCatalogRemovePin,
+  PinCatalogRemovePinCategory,
   type Pin,
   type PinCatalog,
   type PinCategoryDescriptor,
@@ -267,15 +269,13 @@ function onClickEditConfirmPin() {
 
 function onClickDeletePinCategory(pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>) {
   getPinCatalog().value[changeSubtree]((pinCatalog) => {
-    console.log('TODO');
-    // PinCatalogRemovePinCategory(pinCatalog, pinCategory.id);
+    PinCatalogRemovePinCategory(pinCatalog, pinCategory.id);
   });
 }
 
 function onClickDeletePin(pin: Pin) {
   getPinCatalog().value[changeSubtree]((pinCatalog) => {
-    console.log('TODO');
-    // PinCatalogRemovePin(pinCatalog, pin.id);
+    PinCatalogRemovePin(pinCatalog, pin.id);
   });
 }
 

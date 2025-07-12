@@ -61,8 +61,8 @@ const IconSchema = Variant(
 
 type Literal<T, PrimitiveType> = T extends PrimitiveType
   ? PrimitiveType extends T
-    ? never
-    : T
+  ? never
+  : T
   : never;
 function Variant<D, T extends TObject>(discriminantField: Literal<D, string>, object: T) {
   // TODO: Check that discriminantField doesn't interfere with the variants.
@@ -166,11 +166,13 @@ export type PinCategoryTypeOf<
   T extends { pinCategories: { [id: IdKey<PinCategoryId>]: unknown } },
 > = Registered<PinCategoryId, T['pinCategories'][IdKey<PinCategoryId>]>;
 
-const PinCatalogSchema = Type.Intersect([
+const PinCatalogSchema = Type.Composite([
   LocalStorageSerializableSchema,
   Type.Object({
     pins: Type.Record(IdKeySchema<PinId>(), PinDescriptorSchema),
     pinCategories: Type.Record(IdKeySchema<PinCategoryId>(), PinCategoryDescriptorSchema),
+    /// Any elements that should be removed from all peers are added to this array.
+    removed: Type.Array(Type.Union([IdKeySchema<PinId>(), IdKeySchema<PinCategoryId>()])),
   }),
 ]);
 
@@ -181,6 +183,7 @@ export function PinCatalogNew(): PinCatalog {
     version: 1,
     pins: {},
     pinCategories: {},
+    removed: [],
   };
 }
 
@@ -328,6 +331,9 @@ export function PinCatalogRemovePin(self: PinCatalog, id: PinId): Pin | null {
     delete self.pins[id.key];
   }
 
+  // Ensure it is deleted from peers in the future.
+  idSetAdd(self.removed, id);
+
   return previousValue;
 }
 
@@ -403,13 +409,15 @@ export function PinCatalogRemovePinCategory(
 
   if (previousValue !== null) {
     // Delete from parents
-    for (const parent of Object.values(self.pinCategories)) {
+    for (const parent of Object.values(self.pinCategories))
       PinCategoryRemoveSubcategory(parent, id);
-    }
 
-    /// Delete from map
+    // Delete from map
     delete self.pinCategories[id.key];
   }
+
+  // Ensure it is deleted from peers in the future.
+  idSetAdd(self.removed, id);
 
   return previousValue ?? undefined;
 }
