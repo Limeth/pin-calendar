@@ -16,8 +16,8 @@ FormatRegistry.Set('date', (value) => {
   }
 });
 
-const LOCAL_STORAGE_KEY_PIN_CATALOG = 'pin_catalog';
-const LOCAL_STORAGE_KEY_PIN_CALENDAR = 'pin_calendar';
+// const LOCAL_STORAGE_KEY_PIN_CATALOG = 'pin_catalog';
+// const LOCAL_STORAGE_KEY_PIN_CALENDAR = 'pin_calendar';
 
 type MaybeRop<T> = T | Rop<T>;
 type MaybeRo<T> = T | Ro<T>;
@@ -26,7 +26,7 @@ const LocalStorageSerializableSchema = Type.Object({
   version: Type.Integer(),
 });
 
-type LocalStorageSerializable = Static<typeof LocalStorageSerializableSchema>;
+export type LocalStorageSerializable = Static<typeof LocalStorageSerializableSchema>;
 
 // ID's are stringified UUIDv7
 type Uuid = string;
@@ -61,8 +61,8 @@ const IconSchema = Variant(
 
 type Literal<T, PrimitiveType> = T extends PrimitiveType
   ? PrimitiveType extends T
-  ? never
-  : T
+    ? never
+    : T
   : never;
 function Variant<D, T extends TObject>(discriminantField: Literal<D, string>, object: T) {
   // TODO: Check that discriminantField doesn't interfere with the variants.
@@ -99,7 +99,7 @@ export class RegistryId<S extends symbol> {
 }
 
 // TODO: Assert that IdKey is the same type?
-function IdKeySchema<I extends { key: unknown }>() {
+function IdKeySchema<_ extends { key: unknown }>() {
   return Type.String({
     format: 'uuid',
   });
@@ -701,25 +701,6 @@ export function PinDayTogglePin(self: PinDay, pin: Pin): boolean {
 
 export function PinDayIsEmpty(self: PinDay): boolean {
   return self.pins.length === 0;
-}
-
-/// Creates an optimized clone of this pin day.
-function PinDayAsJsonValue(self: MaybeRo<PinDay>): PinDay {
-  return {
-    // Deduplicate pins.
-    pins: Array.from(new Set(self.pins)),
-  };
-}
-
-function PinDayFromJsonValue(json: unknown): PinDay | null {
-  if (typeof json !== 'object' || json === null) return null;
-
-  const pinDay = PinDayNew();
-
-  if ('pins' in json && Array.isArray(json.pins))
-    for (const pinId of json.pins) PinDayAddPinById(pinDay, pinId);
-
-  return pinDay;
 }
 
 const PinCalendarDaysSchema = Type.Record(

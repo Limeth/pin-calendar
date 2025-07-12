@@ -45,7 +45,7 @@ async function LoadApp(): Promise<App> {
     handle = repo.create<DocData>({ pinCatalog, pinCalendar });
   }
 
-  const docUrl = (document.location.hash = handle.url);
+  document.location.hash = handle.url;
 
   return {
     docData: makeReactive(handle),
