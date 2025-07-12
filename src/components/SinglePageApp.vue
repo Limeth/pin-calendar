@@ -43,7 +43,7 @@ function setPage(newPage: Page) {
     <button
       @click="setPage(Page.CALENDAR)"
       v-html="feather.icons['calendar'].toSvg()"
-      :class="currentPage == Page.CALENDAR ? 'dock-active' : ''"
+      :class="'!max-w-none ' + (currentPage == Page.CALENDAR ? 'dock-active' : '')"
     />
     <!-- <button
       @click="setPage(Page.MILESTONES)"
@@ -53,7 +53,7 @@ function setPage(newPage: Page) {
     <button
       @click="setPage(Page.SETTINGS)"
       v-html="feather.icons['settings'].toSvg()"
-      :class="currentPage == Page.SETTINGS ? 'dock-active' : ''"
+      :class="'!max-w-none ' + (currentPage == Page.SETTINGS ? 'dock-active' : '')"
     />
   </div>
 </template>
