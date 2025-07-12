@@ -119,7 +119,7 @@ function onClickAddPinCategory(parent: PinCategoryTypeOf<Rop<PinCatalog>> | unde
       pinCatalog,
       parent?.id ?? null,
       {
-        displayName: '',
+        displayName: 'New category',
         description: '',
         subcategories: [],
         pins: [],
@@ -135,13 +135,27 @@ function onClickAddPin(parent: PinCategoryTypeOf<Rop<PinCatalog>>) {
   let id: PinId | undefined;
 
   getPinCatalog().value[changeSubtree]((pinCatalog) => {
+    // prettier-ignore
+    const DEFAULT_EMOJIS = [
+      '🎀', '🎗️', '🥼', '🦺', '👔', '👟', '💎', '🎵', '📖', '📒', '📓', '🔖', '🏷️', '✏️', '🖊️', '💼', '💸', '💳', '🧶', '🪚', '🧪', '🔭', '🛏️', '♻️', '🧭', '🏕️', '🏖️', '🚲', '🛹', '🛼', '⚽', '⚾', '🥎', '🏀', '🏐', '🏈', '🏉', '🎾', '🥏', '🎳', '🏏', '🏑', '🏒', '🥍', '🏓', '🏸', '🥊', '🥋', '🥅', '⛳', '⛸️', '🎣', '🤿', '🎿', '🛷', '🥌', '🎯', '🏹', '🪀', '🪁', '🪄', '🎮', '🕹️', '🎲', '🧩', '♟️', '🃏', '🀄', '🎴', '🎭', '🖼️', '🎨', '🍳', '🥘', '🍲', '🥗', '🍱', '🍜', '🍻', '🥂', '🍽️', '☀️', '🌙', '⭐', '🌈', '⚡', '❄️', '🔥', '💧', '✍️', '💅', '💪', '🧠', '🐈', '🐕', '🐱', '🐶', '🐰', '🐾', '🐹', '🐇', '🐈‍⬛', '🦎', '🦔', '🐠', '🐦',
+    ];
+
+    function getRandomColor(): string {
+      const letters = '0123456789ABCDEF';
+      let color = '#';
+      for (let i = 0; i < 6; i++) {
+        color += letters[Math.floor(Math.random() * 16)];
+      }
+      return color;
+    }
+
     const pin = PinCatalogCreateAndAddPinToCategory(pinCatalog, parent.id, {
-      displayName: '',
+      displayName: 'New pin',
       description: '',
       icon: {
         type: 'emoji',
         emoji: {
-          emoji: '',
+          emoji: DEFAULT_EMOJIS[Math.floor(Math.random() * DEFAULT_EMOJIS.length)],
           scale: 1,
         },
         image: {
@@ -149,7 +163,7 @@ function onClickAddPin(parent: PinCategoryTypeOf<Rop<PinCatalog>>) {
           scale: 1,
         },
       },
-      backgroundColor: 'black',
+      backgroundColor: getRandomColor(),
     });
     id = pin?.id;
   });
