@@ -146,7 +146,7 @@ function onClickArchive(item: Rop<PinDescriptor | PinCategoryDescriptor>, archiv
   });
 }
 
-function onClickEditCancel() {
+function onClickEditClose() {
   editing.value = undefined;
 }
 
@@ -454,12 +454,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                 />
               </ValidatedInput>
             </label>
-            <div class="flex gap-3 pt-4">
-              <button @click="onClickEditCancel" class="btn btn-secondary flex-1">Cancel</button>
-              <button @click="onClickEditConfirmCategory" class="btn btn-primary flex-1">
-                Apply
-              </button>
-            </div>
+            <button @click="onClickEditClose" class="btn btn-secondary mt-3">Close</button>
           </template>
           <template v-if="editing.kind === 'pin' && editingPin !== null">
             <label class="form-control w-full max-w-xs">
@@ -594,10 +589,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                 />
               </ValidatedInput>
             </label>
-            <div class="flex gap-3 pt-4">
-              <button @click="onClickEditCancel" class="btn btn-secondary flex-1">Cancel</button>
-              <button @click="onClickEditConfirmPin" class="btn btn-primary flex-1">Apply</button>
-            </div>
+            <button @click="onClickEditClose" class="btn btn-secondary mt-3">Close</button>
           </template>
         </template>
       </div>
