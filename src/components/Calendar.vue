@@ -248,11 +248,10 @@ app.value!.docHandle.on('change', () => {
           <input type="checkbox" checked />
           <div class="collapse-title text-xl font-medium">Add/Remove Pins</div>
           <div class="collapse-content">
-            <ul class="gap-1">
+            <ul class="flex flex-col gap-2">
               <li
                 v-for="rootCategory of PinCatalogGetRootCategories(getPinCatalog().value)"
                 :key="rootCategory.id.key"
-                class="flex flex-row items-center w-full gap-1"
               >
                 <CalendarPinCategory
                   v-if="!rootCategory.value.archived"
