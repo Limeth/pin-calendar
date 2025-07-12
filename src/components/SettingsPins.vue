@@ -29,7 +29,7 @@ import ValidatedInput from './ValidatedInput.vue';
 type EditingPin = {
   kind: 'pin';
   elementId: PinId;
-  original: Ro<PinDescriptor>;
+  original?: Ro<PinDescriptor>;
   error?: {
     displayNameError?: string;
     iconEmojiError?: string;
@@ -39,7 +39,7 @@ type EditingPin = {
 type EditingPinCategory = {
   kind: 'category';
   elementId: PinCategoryId;
-  original: Ro<PinCategoryDescriptor>;
+  original?: Ro<PinCategoryDescriptor>;
   error?: {
     displayNameError?: string;
   };
@@ -73,34 +73,47 @@ const editing: Ref<Editing | undefined> = ref(undefined);
 const isDrawerOpen = ref(false);
 const isArchiveOpen = ref(false);
 
-function onClickEditPinCategory(pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>) {
-  if (editing.value?.elementId.isEqualDynamic(pinCategory.id)) {
+function editPinCategory(
+  pinCategoryId: PinCategoryId,
+  pinCategory: Rop<PinCategoryDescriptor> | undefined,
+) {
+  if (editing.value?.elementId.isEqualDynamic(pinCategoryId)) {
     editing.value = undefined;
   } else {
     // const parentId = getPinCatalog().value.pinCategories[pinCategory.id].parentId;
     // const parent = parentId !== undefined ? getPinCatalog().value.pinCategories[parentId].pinCategory : undefined;
     editing.value = {
       kind: 'category',
-      elementId: pinCategory.id,
-      original: structuredClone(toRaw(pinCategory.value)),
+      elementId: pinCategoryId,
+      original: pinCategory !== undefined ? structuredClone(toRaw(pinCategory)) : undefined,
     };
   }
 }
 
-function onClickEditPin(pin: PinTypeOf<Rop<PinCatalog>>) {
-  if (editing.value?.elementId.isEqualDynamic(pin.id)) {
+function editPin(pinId: PinId, pin: Rop<PinDescriptor> | undefined) {
+  if (editing.value?.elementId.isEqualDynamic(pinId)) {
     editing.value = undefined;
   } else {
     editing.value = {
       kind: 'pin',
       // parent: getPinCatalog().value.pinCategories[getPinCatalog().value.pins[pin.id].categoryId].pinCategory,
-      elementId: pin.id,
-      original: structuredClone(toRaw(pin.value)),
+      elementId: pinId,
+      original: pin !== undefined ? structuredClone(toRaw(pin)) : undefined,
     };
   }
 }
 
+function onClickEditPinCategory(pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>) {
+  editPinCategory(pinCategory.id, pinCategory.value);
+}
+
+function onClickEditPin(pin: PinTypeOf<Rop<PinCatalog>>) {
+  editPin(pin.id, pin.value);
+}
+
 function onClickAddPinCategory(parent: PinCategoryTypeOf<Rop<PinCatalog>> | undefined) {
+  let id: PinCategoryId | undefined;
+
   getPinCatalog().value[changeSubtree]((pinCatalog) => {
     const pinCategory = PinCatalogCreateAndAddSubcategoryToCategory(
       pinCatalog,
@@ -112,12 +125,15 @@ function onClickAddPinCategory(parent: PinCategoryTypeOf<Rop<PinCatalog>> | unde
         pins: [],
       },
     );
+    id = pinCategory?.id;
   });
 
-  // TODO: Open the editing pane
+  if (id !== undefined) editPinCategory(id, undefined);
 }
 
 function onClickAddPin(parent: PinCategoryTypeOf<Rop<PinCatalog>>) {
+  let id: PinId | undefined;
+
   getPinCatalog().value[changeSubtree]((pinCatalog) => {
     const pin = PinCatalogCreateAndAddPinToCategory(pinCatalog, parent.id, {
       displayName: '',
@@ -135,9 +151,10 @@ function onClickAddPin(parent: PinCategoryTypeOf<Rop<PinCatalog>>) {
       },
       backgroundColor: 'black',
     });
+    id = pin?.id;
   });
 
-  // TODO: Open the editing pane
+  if (id !== undefined) editPin(id, undefined);
 }
 
 function onClickArchive(item: Rop<PinDescriptor | PinCategoryDescriptor>, archive: boolean) {
@@ -147,123 +164,6 @@ function onClickArchive(item: Rop<PinDescriptor | PinCategoryDescriptor>, archiv
 }
 
 function onClickEditClose() {
-  editing.value = undefined;
-}
-
-function onClickEditConfirmCategory() {
-  if (
-    editing.value === undefined ||
-    editing.value.kind !== 'category' ||
-    editingPinCategory.value === null
-  ) {
-    return;
-  }
-
-  // Perform input validation.
-  {
-    editing.value.error = {};
-
-    if (editingPinCategory.value.value.displayName.length === 0) {
-      editing.value.error.displayNameError = 'The display name is empty.';
-    }
-
-    if (Object.keys(editing.value.error).length === 0) {
-      delete editing.value.error;
-    } else {
-      return;
-    }
-  }
-
-  // if (editing.value.parent !== undefined) {
-  //   if (editing.value.originalId !== undefined) {
-  //     const index = editing.value.parent.subcategories.findIndex((subcategory) => subcategory.id === editing.value?.originalId);
-
-  //     if (index != -1) {
-  //       editing.value.parent.subcategories[index] = editing.value.pinCategoryClone;
-  //     } else {
-  //       console.error("Pin category not found in parent.");
-  //     }
-  //   } else {
-  //     editing.value.parent.subcategories.push(editing.value.pinCategoryClone);
-  //   }
-  // } else {
-  //   if (editing.value.originalId !== undefined) {
-  //     const index = pinCatalog.rootCategories.findIndex((pinCategory) => pinCategory.id === editing.value?.originalId);
-
-  //     if (index != -1) {
-  //       pinCatalog.rootCategories[index] = editing.value.pinCategoryClone;
-  //     } else {
-  //       console.error("Pin category not found in root.");
-  //     }
-  //   } else {
-  //     pinCatalog.rootCategories.push(editing.value.pinCategoryClone);
-  //   }
-  // }
-
-  // pinCatalog.pinCategories[editing.value.pinCategoryClone.id] = {
-  //   parentId: editing.value.parent?.id,
-  //   pinCategory: editing.value.pinCategoryClone,
-  // };
-
-  // pinCatalog.saveToLocalStorage();
-  editing.value = undefined;
-}
-
-function onClickEditConfirmPin() {
-  if (editing.value === undefined || editing.value.kind !== 'pin' || editingPin.value === null) {
-    return;
-  }
-
-  // Perform input validation.
-  {
-    editing.value.error = {};
-
-    if (editingPin.value.value.displayName.length === 0) {
-      editing.value.error.displayNameError = 'The display name is empty.';
-    }
-
-    {
-      const emojis = [...editingPin.value.value.icon.emoji.emoji.matchAll(emojiRegexPattern)];
-
-      if (emojis.length > 1) {
-        editing.value.error.iconEmojiError = 'Only a single emoji is allowed.';
-      }
-
-      const stringWithoutEmojis = editingPin.value.value.icon.emoji.emoji.replaceAll(
-        emojiRegexPattern,
-        '',
-      );
-
-      if (stringWithoutEmojis.length > 0) {
-        editing.value.error.iconEmojiError = 'The icon must not contain non-emoji symbols.';
-      }
-    }
-
-    if (Object.keys(editing.value.error).length === 0) {
-      delete editing.value.error;
-    } else {
-      return;
-    }
-  }
-
-  // if (editing.value.originalId !== undefined) {
-  //   const index = editing.value.parent.pins.findIndex((pin) => pin.id === editing.value?.originalId);
-
-  //   if (index != -1) {
-  //     editing.value.parent.pins[index] = editing.value.element.value;
-  //   } else {
-  //     console.error("Pin not found in parent.");
-  //   }
-  // } else {
-  //   editing.value.parent.pins.push(editing.value.pinClone);
-  // }
-
-  // pinCatalog.pins[editing.value.pinClone.id] = {
-  //   categoryId: editing.value.parent.id,
-  //   pin: editing.value.pinClone,
-  // };
-
-  // pinCatalog.saveToLocalStorage();
   editing.value = undefined;
 }
 
@@ -520,7 +420,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <ValidatedInput
                 v-slot="slot"
                 :subtree="editingPin.value.icon.emoji"
-                :original="editing.original.icon.emoji"
+                :original="editing.original?.icon.emoji"
                 property="emoji"
                 label="Emoji"
                 :validate="
@@ -547,7 +447,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <ValidatedInput
                 v-slot="slot"
                 :subtree="editingPin.value.icon.emoji"
-                :original="editing.original.icon.emoji"
+                :original="editing.original?.icon.emoji"
                 property="scale"
                 label="Emoji Scale"
                 :parse="(string) => parseFloat(string)"
