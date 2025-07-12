@@ -18,7 +18,7 @@ const app = defineModel<App>();
     </div>
     <div class="!isolation-auto join-item collapse collapse-arrow bg-base-200">
       <input type="radio" name="my-accordion-2" />
-      <div class="collapse-title text-xl font-medium">Import/Export Settings</div>
+      <div class="collapse-title text-xl font-medium">Import and Export</div>
       <div class="collapse-content">
         <SettingsIO v-model="app" />
       </div>
