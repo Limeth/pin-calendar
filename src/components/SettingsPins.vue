@@ -402,7 +402,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <input
                 :value="editingPinCategory.id.key"
                 type="text"
-                class="input input-bordered w-full max-w-xs"
+                class="input input-bordered w-full max-w-xs !cursor-auto"
                 disabled
               />
             </label>
@@ -464,7 +464,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <input
                 :value="editingPin.id.key"
                 type="text"
-                class="input input-bordered w-full max-w-xs"
+                class="input input-bordered w-full max-w-xs !cursor-auto"
                 disabled
               />
             </label>
