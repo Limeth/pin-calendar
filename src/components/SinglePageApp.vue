@@ -45,11 +45,11 @@ function setPage(newPage: Page) {
       v-html="feather.icons['calendar'].toSvg()"
       :class="currentPage == Page.CALENDAR ? 'dock-active' : ''"
     />
-    <button
+    <!-- <button
       @click="setPage(Page.MILESTONES)"
       v-html="feather.icons['bar-chart-2'].toSvg()"
       :class="currentPage == Page.MILESTONES ? 'dock-active' : ''"
-    />
+    /> -->
     <button
       @click="setPage(Page.SETTINGS)"
       v-html="feather.icons['settings'].toSvg()"
