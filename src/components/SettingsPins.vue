@@ -308,203 +308,210 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
         class="bg-base-200 text-base-content min-h-full w-80 p-4 flex flex-col gap-1 shadow-[0_0_4rem_0px_rgba(0,0,0,0.3)]"
       >
         <template v-if="editing !== undefined">
-          <template v-if="editing.kind === 'category' && editingPinCategory !== null">
+          <template v-if="editing.kind === 'category'">
             <label class="form-control w-full max-w-xs">
               <div class="label">
                 <span class="label-text">Unique ID</span>
               </div>
               <input
-                :value="editingPinCategory.id.key"
+                :value="editing.elementId.key"
                 type="text"
                 class="input input-bordered w-full max-w-xs !cursor-auto"
                 disabled
               />
             </label>
-            <label class="form-control w-full max-w-xs">
-              <ValidatedInput
-                v-slot="slot"
-                :subtree="editingPinCategory.value"
-                :original="editing.original"
-                property="displayName"
-                label="Display Name"
-                :validate="
-                  (value) => {
-                    if (value.length === 0) return 'The display name is empty.';
-                  }
-                "
-                change="updateText"
-              >
-                <input
-                  type="text"
-                  placeholder="Example Category"
-                  class="input input-bordered w-full max-w-xs"
-                  :value="slot.value"
-                  @input="slot.onChange"
-                  :class="slot.class"
-                />
-              </ValidatedInput>
-            </label>
-            <label class="form-control w-full max-w-xs">
-              <ValidatedInput
-                v-slot="slot"
-                :subtree="editingPinCategory.value"
-                :original="editing.original"
-                property="description"
-                label="Description"
-                :validate="
-                  (value) => {
-                    if (value.length === 0) return 'The description is empty.';
-                  }
-                "
-                change="updateText"
-              >
-                <input
-                  type="text"
-                  placeholder="Example Description"
-                  class="input input-bordered w-full max-w-xs"
-                  :value="slot.value"
-                  @input="slot.onChange"
-                  :class="slot.class"
-                />
-              </ValidatedInput>
-            </label>
-            <button @click="onClickEditClose" class="btn btn-secondary mt-3">Close</button>
+            <template v-if="editingPinCategory === null"
+              ><div>This category was deleted.</div></template
+            >
+            <template v-else>
+              <label class="form-control w-full max-w-xs">
+                <ValidatedInput
+                  v-slot="slot"
+                  :subtree="editingPinCategory.value"
+                  :original="editing.original"
+                  property="displayName"
+                  label="Display Name"
+                  :validate="
+                    (value) => {
+                      if (value.length === 0) return 'The display name is empty.';
+                    }
+                  "
+                  change="updateText"
+                >
+                  <input
+                    type="text"
+                    placeholder="Example Category"
+                    class="input input-bordered w-full max-w-xs"
+                    :value="slot.value"
+                    @input="slot.onChange"
+                    :class="slot.class"
+                  />
+                </ValidatedInput>
+              </label>
+              <label class="form-control w-full max-w-xs">
+                <ValidatedInput
+                  v-slot="slot"
+                  :subtree="editingPinCategory.value"
+                  :original="editing.original"
+                  property="description"
+                  label="Description"
+                  :validate="
+                    (value) => {
+                      if (value.length === 0) return 'The description is empty.';
+                    }
+                  "
+                  change="updateText"
+                >
+                  <input
+                    type="text"
+                    placeholder="Example Description"
+                    class="input input-bordered w-full max-w-xs"
+                    :value="slot.value"
+                    @input="slot.onChange"
+                    :class="slot.class"
+                  />
+                </ValidatedInput>
+              </label>
+            </template>
           </template>
-          <template v-if="editing.kind === 'pin' && editingPin !== null">
+          <template v-if="editing.kind === 'pin'">
             <label class="form-control w-full max-w-xs">
               <div class="label">
                 <span class="label-text">Unique ID</span>
               </div>
               <input
-                :value="editingPin.id.key"
+                :value="editing.elementId.key"
                 type="text"
                 class="input input-bordered w-full max-w-xs !cursor-auto"
                 disabled
               />
             </label>
-            <label class="form-control w-full max-w-xs">
-              <ValidatedInput
-                v-slot="slot"
-                :subtree="editingPin.value"
-                :original="editing.original"
-                property="displayName"
-                label="Display Name"
-                :validate="
-                  (value) => {
-                    if (value.length === 0) return 'The display name is empty.';
-                  }
-                "
-                change="updateText"
-              >
-                <input
-                  type="text"
-                  placeholder="Example Category"
-                  class="input input-bordered w-full max-w-xs"
-                  :value="slot.value"
-                  @input="slot.onChange"
-                  :class="slot.class"
-                />
-              </ValidatedInput>
-            </label>
-            <label class="form-control w-full max-w-xs">
-              <ValidatedInput
-                v-slot="slot"
-                :subtree="editingPin.value"
-                :original="editing.original"
-                property="description"
-                label="Description"
-                :validate="
-                  (value) => {
-                    if (value.length === 0) return 'The description is empty.';
-                  }
-                "
-                change="updateText"
-              >
-                <input
-                  type="text"
-                  placeholder="Example Description"
-                  class="input input-bordered w-full max-w-xs"
-                  :value="slot.value"
-                  @input="slot.onChange"
-                  :class="slot.class"
-                />
-              </ValidatedInput>
-            </label>
-            <label class="form-control w-full max-w-xs">
-              <ValidatedInput
-                v-slot="slot"
-                :subtree="editingPin.value.icon.emoji"
-                :original="editing.original?.icon.emoji"
-                property="emoji"
-                label="Emoji"
-                :validate="
-                  (value) => {
-                    const emojis = [...value.matchAll(emojiRegexPattern)];
-                    if (emojis.length > 1) return 'More than one emojis present.';
-                    const stringWithoutEmojis = value.replaceAll(emojiRegexPattern, '');
-                    if (stringWithoutEmojis.length > 0) return 'Non-emoji characters present.';
-                  }
-                "
-                change="assign"
-              >
-                <input
-                  type="text"
-                  placeholder="⭐"
-                  class="input input-bordered w-full max-w-xs"
-                  :value="slot.value"
-                  @input="slot.onChange"
-                  :class="slot.class"
-                />
-              </ValidatedInput>
-            </label>
-            <label class="form-control w-full max-w-xs">
-              <ValidatedInput
-                v-slot="slot"
-                :subtree="editingPin.value.icon.emoji"
-                :original="editing.original?.icon.emoji"
-                property="scale"
-                label="Emoji Scale"
-                :parse="(string) => parseFloat(string)"
-                :validate="
-                  (value) => {
-                    if (value <= 0) return 'Non-positive scale entered.';
-                  }
-                "
-                change="assign"
-              >
-                <input
-                  type="range"
-                  min="0.5"
-                  max="1.5"
-                  class="range"
-                  step="0.1"
-                  :value="slot.value"
-                  @input="slot.onChange"
-                  :class="slot.class"
-                />
-              </ValidatedInput>
-            </label>
-            <label class="form-control w-full max-w-xs">
-              <ValidatedInput
-                v-slot="slot"
-                :subtree="editingPin.value"
-                :original="editing.original"
-                property="backgroundColor"
-                label="Background Color"
-                change="assign"
-              >
-                <input
-                  type="color"
-                  placeholder="CSS color"
-                  class="input input-bordered w-full max-w-xs"
-                  :value="slot.value"
-                  @input="slot.onChange"
-                  :class="slot.class"
-                />
-              </ValidatedInput>
-            </label>
-            <button @click="onClickEditClose" class="btn btn-secondary mt-3">Close</button>
+            <template v-if="editingPin === null"><div>This pin was deleted.</div></template
+            ><template v-else>
+              <label class="form-control w-full max-w-xs">
+                <ValidatedInput
+                  v-slot="slot"
+                  :subtree="editingPin.value"
+                  :original="editing.original"
+                  property="displayName"
+                  label="Display Name"
+                  :validate="
+                    (value) => {
+                      if (value.length === 0) return 'The display name is empty.';
+                    }
+                  "
+                  change="updateText"
+                >
+                  <input
+                    type="text"
+                    placeholder="Example Category"
+                    class="input input-bordered w-full max-w-xs"
+                    :value="slot.value"
+                    @input="slot.onChange"
+                    :class="slot.class"
+                  />
+                </ValidatedInput>
+              </label>
+              <label class="form-control w-full max-w-xs">
+                <ValidatedInput
+                  v-slot="slot"
+                  :subtree="editingPin.value"
+                  :original="editing.original"
+                  property="description"
+                  label="Description"
+                  :validate="
+                    (value) => {
+                      if (value.length === 0) return 'The description is empty.';
+                    }
+                  "
+                  change="updateText"
+                >
+                  <input
+                    type="text"
+                    placeholder="Example Description"
+                    class="input input-bordered w-full max-w-xs"
+                    :value="slot.value"
+                    @input="slot.onChange"
+                    :class="slot.class"
+                  />
+                </ValidatedInput>
+              </label>
+              <label class="form-control w-full max-w-xs">
+                <ValidatedInput
+                  v-slot="slot"
+                  :subtree="editingPin.value.icon.emoji"
+                  :original="editing.original?.icon.emoji"
+                  property="emoji"
+                  label="Emoji"
+                  :validate="
+                    (value) => {
+                      const emojis = [...value.matchAll(emojiRegexPattern)];
+                      if (emojis.length > 1) return 'More than one emojis present.';
+                      const stringWithoutEmojis = value.replaceAll(emojiRegexPattern, '');
+                      if (stringWithoutEmojis.length > 0) return 'Non-emoji characters present.';
+                    }
+                  "
+                  change="assign"
+                >
+                  <input
+                    type="text"
+                    placeholder="⭐"
+                    class="input input-bordered w-full max-w-xs"
+                    :value="slot.value"
+                    @input="slot.onChange"
+                    :class="slot.class"
+                  />
+                </ValidatedInput>
+              </label>
+              <label class="form-control w-full max-w-xs">
+                <ValidatedInput
+                  v-slot="slot"
+                  :subtree="editingPin.value.icon.emoji"
+                  :original="editing.original?.icon.emoji"
+                  property="scale"
+                  label="Emoji Scale"
+                  :parse="(string) => parseFloat(string)"
+                  :validate="
+                    (value) => {
+                      if (value <= 0) return 'Non-positive scale entered.';
+                    }
+                  "
+                  change="assign"
+                >
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="1.5"
+                    class="range"
+                    step="0.1"
+                    :value="slot.value"
+                    @input="slot.onChange"
+                    :class="slot.class"
+                  />
+                </ValidatedInput>
+              </label>
+              <label class="form-control w-full max-w-xs">
+                <ValidatedInput
+                  v-slot="slot"
+                  :subtree="editingPin.value"
+                  :original="editing.original"
+                  property="backgroundColor"
+                  label="Background Color"
+                  change="assign"
+                >
+                  <input
+                    type="color"
+                    placeholder="CSS color"
+                    class="input input-bordered w-full max-w-xs"
+                    :value="slot.value"
+                    @input="slot.onChange"
+                    :class="slot.class"
+                  />
+                </ValidatedInput>
+              </label>
+            </template>
           </template>
+          <button @click="onClickEditClose" class="btn btn-secondary mt-3">Close</button>
         </template>
       </div>
     </div>
