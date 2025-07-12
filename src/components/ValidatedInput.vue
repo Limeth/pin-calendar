@@ -1,20 +1,23 @@
 <script setup lang="ts" generic="T, P extends Property & keyof T">
 import type { Doc } from '@automerge/automerge-repo';
 import { updateText } from '@automerge/automerge/next';
-import { changeSubtree, type Property, type Rop } from 'automerge-diy-vue-hooks';
+import { changeSubtree, type Property, type Ro, type Rop } from 'automerge-diy-vue-hooks';
 import { ref, type Ref } from 'vue';
+import feather from 'feather-icons';
 
 const {
   subtree,
+  original,
   property,
   parse,
   validate,
   change: changeInner,
 } = defineProps<{
   subtree: Rop<T>;
+  original?: Ro<T>;
   property: P;
   label?: string;
-  parse?: (value: string) => T[P]; // Make mandatory if T[P] !== string
+  parse?: (value: string) => T[P]; // TODO: Make mandatory if T[P] !== string
   validate?: (value: T[P]) => string | undefined;
   change: 'assign' | 'updateText' | ((subtree: T, property: P, value: T[P]) => void);
 }>();
@@ -47,16 +50,34 @@ function onChange(event: Event) {
     change(subtreeMut, property, value);
   });
 }
+
+function onRevert() {
+  if (original !== undefined) {
+    subtree[changeSubtree]((subtreeMut) => {
+      change(subtreeMut, property, original[property] as T[P]);
+    });
+  }
+}
 </script>
 <template>
   <div class="label" v-if="label !== undefined">
     <span class="label-text">{{ label }}</span>
   </div>
-  <slot
-    :value="subtree?.[property]"
-    :onChange="onChange"
-    :class="warning !== undefined ? 'input-warning' : ''"
-  />
+  <div class="flex gap-2 items-center">
+    <slot
+      :value="subtree?.[property]"
+      :onChange="onChange"
+      :class="'flex-1' + (warning !== undefined ? 'input-warning' : '')"
+    />
+    <div v-if="original !== undefined" class="tooltip tooltip-left" data-tip="Revert changes">
+      <button
+        class="btn btn-square btn-ghost"
+        v-html="feather.icons['rotate-ccw'].toSvg()"
+        :disabled="subtree[property] === original[property]"
+        @click="onRevert"
+      />
+    </div>
+  </div>
   <div v-if="warning !== undefined" class="label">
     <span class="label-text-alt text-warning">{{ warning }}</span>
   </div>

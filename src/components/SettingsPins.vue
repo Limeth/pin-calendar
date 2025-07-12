@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { App } from '../account';
 import * as feather from 'feather-icons';
-import { ref, watch, toRef, computed } from 'vue';
+import { ref, watch, toRef, computed, toRaw } from 'vue';
 import type { Ref } from 'vue';
 import {
   PinCatalogCreateAndAddPinToCategory,
@@ -21,13 +21,13 @@ import {
 import emojiRegex from 'emoji-regex';
 import SettingsPinCategory, { type SettingsPinCategoryEvent } from './SettingsPinCategory.vue';
 import * as R from 'ramda';
-import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
+import { changeSubtree, type Ro, type Rop } from 'automerge-diy-vue-hooks';
 import ValidatedInput from './ValidatedInput.vue';
 
 type EditingPin = {
   kind: 'pin';
   elementId: PinId;
-  // parent: PinCategoryTypeOf<Rop<PinCatalog>>,
+  original: Ro<PinDescriptor>;
   error?: {
     displayNameError?: string;
     iconEmojiError?: string;
@@ -37,7 +37,7 @@ type EditingPin = {
 type EditingPinCategory = {
   kind: 'category';
   elementId: PinCategoryId;
-  // parent?: PinCategoryTypeOf<Rop<PinCatalog>>,
+  original: Ro<PinCategoryDescriptor>;
   error?: {
     displayNameError?: string;
   };
@@ -80,6 +80,7 @@ function onClickEditPinCategory(pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>)
     editing.value = {
       kind: 'category',
       elementId: pinCategory.id,
+      original: structuredClone(toRaw(pinCategory.value)),
     };
   }
 }
@@ -92,6 +93,7 @@ function onClickEditPin(pin: PinTypeOf<Rop<PinCatalog>>) {
       kind: 'pin',
       // parent: getPinCatalog().value.pinCategories[getPinCatalog().value.pins[pin.id].categoryId].pinCategory,
       elementId: pin.id,
+      original: structuredClone(toRaw(pin.value)),
     };
   }
 }
@@ -408,6 +410,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <ValidatedInput
                 v-slot="slot"
                 :subtree="editingPinCategory.value"
+                :original="editing.original"
                 property="displayName"
                 label="Display Name"
                 :validate="
@@ -431,6 +434,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <ValidatedInput
                 v-slot="slot"
                 :subtree="editingPinCategory.value"
+                :original="editing.original"
                 property="description"
                 label="Description"
                 :validate="
@@ -473,6 +477,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <ValidatedInput
                 v-slot="slot"
                 :subtree="editingPin.value"
+                :original="editing.original"
                 property="displayName"
                 label="Display Name"
                 :validate="
@@ -496,6 +501,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <ValidatedInput
                 v-slot="slot"
                 :subtree="editingPin.value"
+                :original="editing.original"
                 property="description"
                 label="Description"
                 :validate="
@@ -519,16 +525,14 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <ValidatedInput
                 v-slot="slot"
                 :subtree="editingPin.value.icon.emoji"
+                :original="editing.original.icon.emoji"
                 property="emoji"
                 label="Emoji"
                 :validate="
                   (value) => {
                     const emojis = [...value.matchAll(emojiRegexPattern)];
-
                     if (emojis.length > 1) return 'More than one emojis present.';
-
                     const stringWithoutEmojis = value.replaceAll(emojiRegexPattern, '');
-
                     if (stringWithoutEmojis.length > 0) return 'Non-emoji characters present.';
                   }
                 "
@@ -548,6 +552,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <ValidatedInput
                 v-slot="slot"
                 :subtree="editingPin.value.icon.emoji"
+                :original="editing.original.icon.emoji"
                 property="scale"
                 label="Emoji Scale"
                 :parse="(string) => parseFloat(string)"
@@ -574,6 +579,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <ValidatedInput
                 v-slot="slot"
                 :subtree="editingPin.value"
+                :original="editing.original"
                 property="backgroundColor"
                 label="Background Color"
                 change="assign"
