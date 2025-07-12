@@ -53,8 +53,10 @@ function onChange(event: Event) {
 
 function onRevert() {
   if (original !== undefined) {
+    const value = original[property] as T[P];
+    warning.value = validate?.(value);
     subtree[changeSubtree]((subtreeMut) => {
-      change(subtreeMut, property, original[property] as T[P]);
+      change(subtreeMut, property, value);
     });
   }
 }
