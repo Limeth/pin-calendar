@@ -9,6 +9,9 @@ import tailwindcss from '@tailwindcss/vite';
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    host: '0.0.0.0',
+  },
   root: 'src',
   base: '/pin-calendar/',
   plugins: [vue(), vueDevTools(), wasm(), topLevelAwait(), tailwindcss()],
