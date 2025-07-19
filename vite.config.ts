@@ -10,6 +10,8 @@ import tailwindcss from '@tailwindcss/vite';
 // https://vite.dev/config/
 export default defineConfig({
   server: {
+    // A workaround for Firefox's inability to find ICE candidates on the `localhost` host.
+    // https://bugzilla.mozilla.org/show_bug.cgi?id=1672145
     host: '0.0.0.0',
   },
   root: 'src',
