@@ -5,7 +5,7 @@ import {
   type PeerMetadata,
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
-import type { DeepReadonly, Ref } from 'vue';
+import { ref, type DeepReadonly, type Ref } from 'vue';
 import { ClientSettingsAddPeer, type ClientSettings } from './client';
 
 export type WebRtcNetworkAdapterOptions = {
@@ -37,7 +37,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   readyResolver: () => void;
   peer: Peer | undefined;
   peerJsPeerId: string | undefined;
-  connectedPeers: Array<ConnectedPeer>;
+  connectedPeers: Ref<ConnectedPeer[]>;
   /// Incremented every time this peer is disconnected.
   sessionCounter: number;
 
@@ -50,7 +50,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       readyResolver = resolve;
     });
     this.readyResolver = readyResolver!;
-    this.connectedPeers = [];
+    this.connectedPeers = ref([]);
     this.sessionCounter = 0;
   }
 
@@ -98,7 +98,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   getAutomergePeerId(peerJsPeerId: string): PeerId | undefined {
-    return this.connectedPeers.find(
+    return this.connectedPeers.value.find(
       (connectedPeer) => connectedPeer.dataConnection.peer === peerJsPeerId,
     )?.connectMetadata.automergePeerId;
   }
@@ -155,11 +155,11 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       console.error(`Data connection error: ${error}`);
     });
 
-    const firstConnection = this.connectedPeers.length === 0;
+    const firstConnection = this.connectedPeers.value.length === 0;
 
     console.log(`Adding opened peer peerJsPeerId:${connectedPeer.dataConnection.peer}`);
     ClientSettingsAddPeer(this.options.clientSettings.value, connectedPeer.dataConnection.peer);
-    this.connectedPeers.push(connectedPeer);
+    this.connectedPeers.value.push(connectedPeer);
     this.emit('peer-candidate', {
       peerId: connectedPeer.connectMetadata.automergePeerId,
       peerMetadata: connectedPeer.connectMetadata.automergePeerMetadata,
@@ -189,7 +189,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   onPeerDisconnected(peer: ConnectedPeer) {
-    this.connectedPeers = this.connectedPeers.filter(
+    this.connectedPeers.value = this.connectedPeers.value.filter(
       (connectedPeer) => connectedPeer.dataConnection.peer !== peer.dataConnection.peer,
     );
     this.emit('peer-disconnected', {
@@ -198,14 +198,14 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   disconnect(): void {
-    for (const connectedPeer of this.connectedPeers) connectedPeer.dataConnection.close();
+    for (const connectedPeer of this.connectedPeers.value) connectedPeer.dataConnection.close();
 
-    console.assert(this.connectedPeers.length === 0);
+    console.assert(this.connectedPeers.value.length === 0);
     this.sessionCounter++;
   }
 
   send(message: Message): void {
-    for (const connectedPeer of this.connectedPeers) {
+    for (const connectedPeer of this.connectedPeers.value) {
       const packet: Packet = {
         message,
       };

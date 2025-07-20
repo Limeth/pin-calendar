@@ -50,6 +50,7 @@ export type DocData = {
 };
 
 export type App = {
+  readonly webRtcAdapter: WebRtcNetworkAdapter;
   readonly docData: Ref<Rop<DocData>>;
   readonly docHandle: A.DocHandle<DocData>;
 };
@@ -105,6 +106,7 @@ async function LoadApp(): Promise<App> {
   }
 
   return {
+    webRtcAdapter,
     docData: makeReactive(handle),
     docHandle: handle,
   };

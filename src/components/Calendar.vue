@@ -270,7 +270,7 @@ app.value!.docHandle.on('change', () => {
   </div>
 </template>
 
-<style lang="css">
+<style scoped lang="css">
 .custom-drawer {
   width: calc(min(max(20rem, 50%), 80%));
 }
