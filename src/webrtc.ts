@@ -1,29 +1,34 @@
-import { NetworkAdapter, type Message, type PeerId, type PeerMetadata } from "@automerge/automerge-repo";
+import {
+  NetworkAdapter,
+  type Message,
+  type PeerId,
+  type PeerMetadata,
+} from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
-import type { DeepReadonly, Ref } from "vue";
-import { ClientSettingsAddPeer, type ClientSettings } from "./client";
+import type { DeepReadonly, Ref } from 'vue';
+import { ClientSettingsAddPeer, type ClientSettings } from './client';
 
 export type WebRtcNetworkAdapterOptions = {
-  clientSettings: Ref<ClientSettings>,
+  clientSettings: Ref<ClientSettings>;
 };
 
 export type ConnectedPeer = {
   dataConnection: DataConnection;
-  connectMetadata: ConnectMetadata,
-}
+  connectMetadata: ConnectMetadata;
+};
 
 type Packet = {
-  message: Message,
-}
+  message: Message;
+};
 
 type ConnectMetadata = {
   automergePeerId: PeerId;
   automergePeerMetadata: PeerMetadata;
-}
+};
 
 type ConnectResponsePacket = {
-  metadata: ConnectMetadata,
-}
+  metadata: ConnectMetadata;
+};
 
 export class WebRtcNetworkAdapter extends NetworkAdapter {
   readonly options: WebRtcNetworkAdapterOptions;
@@ -37,21 +42,21 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   sessionCounter: number;
 
   constructor(options: WebRtcNetworkAdapterOptions) {
-    super()
+    super();
     this.options = options;
     this.ready = false;
     let readyResolver;
-    this.readyPromise = new Promise<void>(resolve => {
-      readyResolver = resolve
-    })
+    this.readyPromise = new Promise<void>((resolve) => {
+      readyResolver = resolve;
+    });
     this.readyResolver = readyResolver!;
     this.connectedPeers = [];
     this.sessionCounter = 0;
   }
 
   connect(peerId: PeerId, peerMetadata?: PeerMetadata): void {
-    this.peerId = peerId
-    this.peerMetadata = peerMetadata
+    this.peerId = peerId;
+    this.peerMetadata = peerMetadata;
 
     this.peer = new Peer(this.options.clientSettings.value.localPeer.peerJsPeerId, {
       debug: 3,
@@ -65,7 +70,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       }
 
       console.error('Unhandled peer error: ', error);
-    })
+    });
 
     this.peer.on('open', (id) => {
       // Invoked when a connection to the signaling server is established.
@@ -83,7 +88,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
         dataConection.once('open', () => {
           this.onOutboundConnectionOpened(dataConection);
-        })
+        });
       }
     });
 
@@ -93,17 +98,19 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   getAutomergePeerId(peerJsPeerId: string): PeerId | undefined {
-    return this.connectedPeers.find((connectedPeer) => connectedPeer.dataConnection.peer === peerJsPeerId)?.connectMetadata.automergePeerId;
+    return this.connectedPeers.find(
+      (connectedPeer) => connectedPeer.dataConnection.peer === peerJsPeerId,
+    )?.connectMetadata.automergePeerId;
   }
 
   onOutboundConnectionOpened(dataConnection: DataConnection) {
     dataConnection.once('data', (data) => {
       const packet = data as ConnectResponsePacket; // TODO: Validation?
-      console.log("Received ConnectResponsePacket: ", packet);
+      console.log('Received ConnectResponsePacket: ', packet);
       this.onConnectionOpened({
         dataConnection,
         connectMetadata: packet.metadata,
-      })
+      });
     });
   }
 
@@ -115,18 +122,18 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       },
     };
     dataConnection.once('open', () => {
-      console.log("Sending ConnectResponsePacket: ", connectResponsePacket);
+      console.log('Sending ConnectResponsePacket: ', connectResponsePacket);
       dataConnection.send(connectResponsePacket);
       this.onConnectionOpened({
         dataConnection,
         connectMetadata: dataConnection.metadata as ConnectMetadata, // TODO: Validation?
       });
-    })
+    });
   }
 
   onConnectionOpened(connectedPeer: ConnectedPeer) {
     console.assert(connectedPeer.dataConnection.open);
-    console.log("Connection established: ", connectedPeer);
+    console.log('Connection established: ', connectedPeer);
 
     // const automergePeerId = this.getAutomergePeerId(dataConnection.peer)
 
@@ -156,14 +163,13 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     this.emit('peer-candidate', {
       peerId: connectedPeer.connectMetadata.automergePeerId,
       peerMetadata: connectedPeer.connectMetadata.automergePeerMetadata,
-    })
+    });
 
-    if (firstConnection)
-      this.setReady();
+    if (firstConnection) this.setReady();
   }
 
   setReady() {
-    console.log("WebRTC Network Adapter set to ready.");
+    console.log('WebRTC Network Adapter set to ready.');
     this.ready = true;
     this.readyResolver();
   }
@@ -183,15 +189,16 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   onPeerDisconnected(peer: ConnectedPeer) {
-    this.connectedPeers = this.connectedPeers.filter((connectedPeer) => connectedPeer.dataConnection.peer !== peer.dataConnection.peer);
+    this.connectedPeers = this.connectedPeers.filter(
+      (connectedPeer) => connectedPeer.dataConnection.peer !== peer.dataConnection.peer,
+    );
     this.emit('peer-disconnected', {
       peerId: peer.connectMetadata.automergePeerId,
-    })
+    });
   }
 
   disconnect(): void {
-    for (const connectedPeer of this.connectedPeers)
-      connectedPeer.dataConnection.close();
+    for (const connectedPeer of this.connectedPeers) connectedPeer.dataConnection.close();
 
     console.assert(this.connectedPeers.length === 0);
     this.sessionCounter++;
@@ -202,8 +209,11 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       const packet: Packet = {
         message,
       };
-      console.log(`Attempting to send packet to peer ${connectedPeer.dataConnection.peer}: `, packet);
-      connectedPeer.dataConnection.send(packet)
+      console.log(
+        `Attempting to send packet to peer ${connectedPeer.dataConnection.peer}: `,
+        packet,
+      );
+      connectedPeer.dataConnection.send(packet);
     }
   }
 

@@ -5,7 +5,12 @@ import { BroadcastChannelNetworkAdapter } from '@automerge/automerge-repo-networ
 import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
 import { makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 import { WebRtcNetworkAdapter } from './webrtc';
-import { ClientSettingsLoadOrDefault, ClientSettingsProcessHash, ClientSettingsSave, type ClientSettings } from './client';
+import {
+  ClientSettingsLoadOrDefault,
+  ClientSettingsProcessHash,
+  ClientSettingsSave,
+  type ClientSettings,
+} from './client';
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { decodeHash, encodeHash } from './hash';
@@ -16,21 +21,27 @@ export type ClientSettingsStore = {
   GetClientSettings(): Promise<Ref<ClientSettings>>;
 };
 
-export const clientSettingsStore: ShallowRef<ClientSettingsStore> = shallowRef<ClientSettingsStore>({
-  loadedClientSettings: null,
+export const clientSettingsStore: ShallowRef<ClientSettingsStore> = shallowRef<ClientSettingsStore>(
+  {
+    loadedClientSettings: null,
 
-  async GetClientSettings(): Promise<Ref<ClientSettings>> {
-    if (this.loadedClientSettings === null)
-      this.loadedClientSettings = ref(ClientSettingsLoadOrDefault());
+    async GetClientSettings(): Promise<Ref<ClientSettings>> {
+      if (this.loadedClientSettings === null)
+        this.loadedClientSettings = ref(ClientSettingsLoadOrDefault());
 
-    // Automatically update stored value.
-    watch(this.loadedClientSettings, (loadedClientSettings) => {
-      ClientSettingsSave(loadedClientSettings);
-    }, { deep: true })
+      // Automatically update stored value.
+      watch(
+        this.loadedClientSettings,
+        (loadedClientSettings) => {
+          ClientSettingsSave(loadedClientSettings);
+        },
+        { deep: true },
+      );
 
-    return this.loadedClientSettings;
+      return this.loadedClientSettings;
+    },
   },
-});
+);
 
 export type DocData = {
   // account: Account,
@@ -54,8 +65,7 @@ async function LoadApp(): Promise<App> {
   const currentUrl = URL.parse(window.location.href) ?? undefined;
   const currentHash = currentUrl !== undefined ? decodeHash(currentUrl.hash) : undefined;
 
-  if (currentHash !== undefined)
-    ClientSettingsProcessHash(clientSettings.value, currentHash);
+  if (currentHash !== undefined) ClientSettingsProcessHash(clientSettings.value, currentHash);
 
   const webRtcAdapter = new WebRtcNetworkAdapter({
     clientSettings,
@@ -90,7 +100,7 @@ async function LoadApp(): Promise<App> {
       action: 'addPeer',
       documentId: clientSettings.value.documentId,
       peerJsPeerId: clientSettings.value.localPeer.peerJsPeerId,
-    })
+    });
     console.log(`Peer invitation URL: ${inviteUrl.href}`);
   }
 

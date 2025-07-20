@@ -1,13 +1,13 @@
-import type { PeerId } from "@automerge/automerge-repo";
+import type { PeerId } from '@automerge/automerge-repo';
 import { FormatRegistry, Type, type Static, type TObject } from '@sinclair/typebox';
-import { Value } from "@sinclair/typebox/value";
+import { Value } from '@sinclair/typebox/value';
 import * as uuid from 'uuid';
-import type { Hash } from "./hash";
+import type { Hash } from './hash';
 const LOCAL_STORAGE_KEY_CLIENT_SETTINGS = 'clientSettings';
 
 const RemotePeerSchema = Type.Object({
   peerJsPeerId: Type.String({ format: 'uuid' }),
-})
+});
 
 export type RemotePeer = Static<typeof RemotePeerSchema>;
 
@@ -15,7 +15,7 @@ const LocalPeerSchema = Type.Object({
   deviceName: Type.String(),
   /// Peer JS peer ID's are not secret, but should be unique if possible.
   peerJsPeerId: Type.String({ format: 'uuid' }),
-})
+});
 
 export type LocalPeer = Static<typeof LocalPeerSchema>;
 
@@ -24,7 +24,7 @@ const ClientSettingsSchema = Type.Object({
   documentId: Type.Optional(Type.String()),
   localPeer: LocalPeerSchema,
   remotePeers: Type.Array(RemotePeerSchema),
-})
+});
 
 /// TODO: Automerge sync via BroadcastChannelNetworkAdapter only
 export type ClientSettings = Static<typeof ClientSettingsSchema>;
@@ -36,8 +36,7 @@ export function ClientSettingsSave(self: ClientSettings) {
 export function ClientSettingsLoadOrDefault(): ClientSettings {
   let clientSettings = ClientSettingsLoad();
 
-  if (clientSettings !== undefined)
-    return clientSettings;
+  if (clientSettings !== undefined) return clientSettings;
 
   clientSettings = ClientSettingsDefault();
   ClientSettingsSave(clientSettings);
@@ -47,8 +46,7 @@ export function ClientSettingsLoadOrDefault(): ClientSettings {
 function ClientSettingsLoad(): ClientSettings | undefined {
   const string = localStorage.getItem(LOCAL_STORAGE_KEY_CLIENT_SETTINGS);
 
-  if (string === null)
-    return undefined;
+  if (string === null) return undefined;
 
   const json = JSON.parse(string);
 
@@ -63,33 +61,35 @@ function ClientSettingsLoad(): ClientSettings | undefined {
 function ClientSettingsDefault(): ClientSettings {
   return {
     localPeer: {
-      deviceName: "New device",
+      deviceName: 'New device',
       peerJsPeerId: uuid.v7(),
     },
     remotePeers: [],
-  }
+  };
 }
 
 export function ClientSettingsAddPeer(self: ClientSettings, peerJsPeerId: string): boolean {
-  const peerAlreadyAdded = self.localPeer.peerJsPeerId === peerJsPeerId
-    || self.remotePeers.find((remotePeer) => remotePeer.peerJsPeerId === peerJsPeerId) !== undefined;
+  const peerAlreadyAdded =
+    self.localPeer.peerJsPeerId === peerJsPeerId ||
+    self.remotePeers.find((remotePeer) => remotePeer.peerJsPeerId === peerJsPeerId) !== undefined;
 
   if (peerAlreadyAdded) {
     console.log(`Not adding peer ${peerJsPeerId}, because this peer is already known.`);
     return false;
-  }
-  else {
+  } else {
     self.remotePeers.push({
-      peerJsPeerId: peerJsPeerId
-    })
-    console.log(`Added new peer ${peerJsPeerId}.`)
+      peerJsPeerId: peerJsPeerId,
+    });
+    console.log(`Added new peer ${peerJsPeerId}.`);
     return true;
   }
 }
 
 export function ClientSettingsProcessHash(self: ClientSettings, hash: Hash) {
   if (self.documentId !== undefined && self.documentId !== hash.documentId) {
-    console.warn(`Document ID mismatch (current: ${self.documentId}, requested: ${hash.documentId})`);
+    console.warn(
+      `Document ID mismatch (current: ${self.documentId}, requested: ${hash.documentId})`,
+    );
   } else {
     if (self.documentId === undefined) {
       self.documentId = hash.documentId;
@@ -98,5 +98,4 @@ export function ClientSettingsProcessHash(self: ClientSettings, hash: Hash) {
 
     ClientSettingsAddPeer(self, hash.peerJsPeerId);
   }
-
 }
