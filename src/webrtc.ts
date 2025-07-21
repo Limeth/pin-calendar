@@ -7,9 +7,12 @@ import {
 import { type DataConnection, Peer } from 'peerjs';
 import { ref, type DeepReadonly, type Ref } from 'vue';
 import { ClientSettingsAddPeer, type ClientSettings } from './client';
+import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
+import type { ConnectedPeers } from './account';
 
 export type WebRtcNetworkAdapterOptions = {
-  clientSettings: Ref<ClientSettings>;
+  clientSettings: Ref<Rop<ClientSettings>>;
+  connectedPeers: Ref<Rop<ConnectedPeers>>;
 };
 
 export type ConnectedPeer = {
@@ -21,8 +24,8 @@ type Packet = {
   message: Message;
 };
 
-type ConnectMetadata = {
-  automergePeerId: PeerId;
+export type ConnectMetadata = {
+  automergePeerId: string;
   automergePeerMetadata: PeerMetadata;
 };
 
@@ -37,7 +40,9 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   readyResolver: () => void;
   peer: Peer | undefined;
   peerJsPeerId: string | undefined;
-  connectedPeers: Ref<ConnectedPeer[]>;
+  dataConnections: {
+    [peerJsPeerId: string]: DataConnection;
+  };
   /// Incremented every time this peer is disconnected.
   sessionCounter: number;
 
@@ -50,7 +55,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       readyResolver = resolve;
     });
     this.readyResolver = readyResolver!;
-    this.connectedPeers = ref([]);
+    this.dataConnections = {};
     this.sessionCounter = 0;
   }
 
@@ -77,12 +82,14 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       this.peerJsPeerId = id;
 
       // TODO
-      for (const remotePeer of this.options.clientSettings.value.remotePeers) {
+      for (const remotePeerPeerJsPeerId of Object.keys(
+        this.options.clientSettings.value.remotePeers,
+      )) {
         const connectMetadata: ConnectMetadata = {
           automergePeerId: peerId,
           automergePeerMetadata: peerMetadata ?? {},
         };
-        const dataConection = this.peer!.connect(remotePeer.peerJsPeerId, {
+        const dataConection = this.peer!.connect(remotePeerPeerJsPeerId, {
           metadata: connectMetadata,
         });
 
@@ -98,9 +105,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   getAutomergePeerId(peerJsPeerId: string): PeerId | undefined {
-    return this.connectedPeers.value.find(
-      (connectedPeer) => connectedPeer.dataConnection.peer === peerJsPeerId,
-    )?.connectMetadata.automergePeerId;
+    return this.options.connectedPeers.value[peerJsPeerId]?.automergePeerId as PeerId | undefined;
   }
 
   onOutboundConnectionOpened(dataConnection: DataConnection) {
@@ -155,13 +160,19 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       console.error(`Data connection error: ${error}`);
     });
 
-    const firstConnection = this.connectedPeers.value.length === 0;
+    const firstConnection = Object.keys(this.options.connectedPeers).length === 0;
 
     console.log(`Adding opened peer peerJsPeerId:${connectedPeer.dataConnection.peer}`);
-    ClientSettingsAddPeer(this.options.clientSettings.value, connectedPeer.dataConnection.peer);
-    this.connectedPeers.value.push(connectedPeer);
+    ClientSettingsAddPeer(this.options.clientSettings.value, {
+      peerJsPeerId: connectedPeer.dataConnection.peer,
+      deviceName: '', // TODO
+    });
+    this.options.connectedPeers.value[changeSubtree]((connectedPeers) => {
+      connectedPeers[connectedPeer.dataConnection.peer] = connectedPeer.connectMetadata;
+    });
+    this.dataConnections[connectedPeer.dataConnection.peer] = connectedPeer.dataConnection;
     this.emit('peer-candidate', {
-      peerId: connectedPeer.connectMetadata.automergePeerId,
+      peerId: connectedPeer.connectMetadata.automergePeerId as PeerId,
       peerMetadata: connectedPeer.connectMetadata.automergePeerMetadata,
     });
 
@@ -189,31 +200,37 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   onPeerDisconnected(peer: ConnectedPeer) {
-    this.connectedPeers.value = this.connectedPeers.value.filter(
-      (connectedPeer) => connectedPeer.dataConnection.peer !== peer.dataConnection.peer,
-    );
+    this.options.connectedPeers.value[changeSubtree]((connectedPeers) => {
+      delete connectedPeers[peer.dataConnection.peer];
+    });
+    delete this.dataConnections[peer.dataConnection.peer];
     this.emit('peer-disconnected', {
-      peerId: peer.connectMetadata.automergePeerId,
+      peerId: peer.connectMetadata.automergePeerId as PeerId,
     });
   }
 
   disconnect(): void {
-    for (const connectedPeer of this.connectedPeers.value) connectedPeer.dataConnection.close();
+    this.options.connectedPeers.value[changeSubtree]((connectedPeers) => {
+      for (const peerJsPeerId of Object.keys(connectedPeers)) delete connectedPeers[peerJsPeerId];
+    });
 
-    console.assert(this.connectedPeers.value.length === 0);
+    for (const [peerJsPeerId, dataConnection] of Object.entries(this.dataConnections)) {
+      dataConnection.close();
+      delete this.dataConnections[peerJsPeerId];
+    }
+
+    console.assert(Object.keys(this.options.connectedPeers.value).length === 0);
+    console.assert(Object.keys(this.dataConnections).length === 0);
     this.sessionCounter++;
   }
 
   send(message: Message): void {
-    for (const connectedPeer of this.connectedPeers.value) {
+    for (const [peerJsPeerId, dataConnection] of Object.entries(this.dataConnections)) {
       const packet: Packet = {
         message,
       };
-      console.log(
-        `Attempting to send packet to peer ${connectedPeer.dataConnection.peer}: `,
-        packet,
-      );
-      connectedPeer.dataConnection.send(packet);
+      console.log(`Attempting to send packet to peer ${peerJsPeerId}: `, packet);
+      dataConnection.send(packet);
     }
   }
 

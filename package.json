@@ -20,6 +20,7 @@
     "@automerge/automerge": "^2.2.9",
     "@automerge/automerge-repo": "^2.0.4",
     "@automerge/automerge-repo-network-broadcastchannel": "^2.0.4",
+    "@automerge/automerge-repo-network-messagechannel": "^2.1.0",
     "@automerge/automerge-repo-network-websocket": "^2.0.4",
     "@automerge/automerge-repo-storage-indexeddb": "^2.0.4",
     "@js-temporal/polyfill": "^0.5.1",

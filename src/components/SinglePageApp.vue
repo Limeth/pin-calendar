@@ -6,6 +6,8 @@ import Settings from './Settings.vue';
 import feather from 'feather-icons';
 import { accountStore, type App } from '../account';
 import type { Repo } from '@automerge/automerge-repo';
+import type { Rop } from 'automerge-diy-vue-hooks';
+import type { RemotePeer } from '@/client';
 
 // const app: Ref<App> = ref({
 //   pinCatalog: PinCatalog.loadFromLocalStorageOrDefault(),
@@ -15,48 +17,37 @@ import type { Repo } from '@automerge/automerge-repo';
 const app: ShallowRef<App> = await accountStore.value.GetApp();
 const isDrawerOpen = ref(false);
 const connected = computed(() => {
-  return app.value.webRtcAdapter.connectedPeers.value.length;
+  return Object.keys(app.value.ephemeralDocData.value.connectedPeers).length;
 });
 const peers = computed(() => {
-  const remotePeers = app.value.webRtcAdapter.options.clientSettings.value.remotePeers;
-  const connectedPeers = app.value.webRtcAdapter.connectedPeers.value;
+  const remotePeers = app.value.localDocData.value.remotePeers;
+  const connectedPeers = app.value.ephemeralDocData.value.connectedPeers;
   const result = [];
 
-  for (const remotePeer of remotePeers) {
-    const connectedPeersFiltered = connectedPeers.filter(
-      (connectedPeer) => connectedPeer.dataConnection.peer === remotePeer.peerJsPeerId,
-    );
+  for (const [peerJsPeerId, remotePeer] of Object.entries(remotePeers)) {
+    const connectedPeer = connectedPeers[peerJsPeerId];
 
-    if (connectedPeersFiltered.length > 0) {
-      console.assert(
-        connectedPeersFiltered.length === 1,
-        `Peer ${remotePeer.peerJsPeerId} connected multiple times!`,
-      );
-      for (const connectedPeer of connectedPeersFiltered) {
-        result.push({
-          ...remotePeer,
-          ...connectedPeer.connectMetadata,
-          connected: true,
-        });
-      }
-    } else {
+    if (connectedPeer === undefined) {
       result.push({
         ...remotePeer,
+        peerJsPeerId,
         connected: false,
       });
-    }
+    } else
+      result.push({
+        ...remotePeer,
+        ...connectedPeer,
+        peerJsPeerId,
+        connected: true,
+      });
   }
 
   // Include peers that we are connected to, but that aren't known.
-  for (const connectedPeer of connectedPeers)
-    if (
-      !remotePeers.find(
-        (remotePeer) => remotePeer.peerJsPeerId === connectedPeer.dataConnection.peer,
-      )
-    )
+  for (const [peerJsPeerId, connectedPeer] of Object.entries(connectedPeers))
+    if (!(peerJsPeerId in remotePeers))
       result.push({
-        ...connectedPeer.connectMetadata,
-        peerJsPeerId: connectedPeer.dataConnection.peer,
+        ...connectedPeer,
+        peerJsPeerId,
         connected: true,
       });
 
@@ -64,7 +55,6 @@ const peers = computed(() => {
 });
 
 console.log('pinCalendar', app.value!.docData.value!.pinCalendar);
-console.log('pinCatalog', app.value!.docData.value!.pinCatalog);
 
 // const account = await accountStore.value.GetAccount();
 
