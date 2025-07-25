@@ -33,7 +33,10 @@ type ConnectResponsePacket = {
   metadata: ConnectMetadata;
 };
 
+export const SYMBOL_IS_WEBRTC_NETWORK_ADAPTER = Symbol.for('WebRtcNetworkAdapter');
+
 export class WebRtcNetworkAdapter extends NetworkAdapter {
+  readonly [SYMBOL_IS_WEBRTC_NETWORK_ADAPTER] = SYMBOL_IS_WEBRTC_NETWORK_ADAPTER;
   readonly options: WebRtcNetworkAdapterOptions;
   ready: boolean;
   readyPromise: Promise<void>;

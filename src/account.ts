@@ -1,10 +1,10 @@
-import { ref, shallowRef, watch, type Ref, type ShallowRef } from 'vue';
+import { ref, shallowRef, toRef, watch, type Ref, type ShallowRef } from 'vue';
 import { type PinCalendar, PinCalendarNew, type PinCatalog, PinCatalogDefault } from './pins';
 import * as A from '@automerge/automerge-repo';
 import { BroadcastChannelNetworkAdapter } from '@automerge/automerge-repo-network-broadcastchannel';
 import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
 import { changeSubtree, makeReactive, type Rop } from 'automerge-diy-vue-hooks';
-import { WebRtcNetworkAdapter, type ConnectMetadata } from './webrtc';
+import { SYMBOL_IS_WEBRTC_NETWORK_ADAPTER, WebRtcNetworkAdapter, type ConnectMetadata } from './webrtc';
 import {
   type LocalDocument,
   type LocalStorageData,
@@ -16,7 +16,7 @@ import {
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { decodeHash, encodeHash } from './hash';
-import { type FromSharedRepoMessage, type ToSharedRepoMessage } from './workers/sharedRepo';
+import { type FromSharedRepoMessage, type FromSharedRepoMessageReady, type ToSharedRepoMessage } from './workers/sharedRepo';
 import { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-messagechannel';
 
 import SharedRepoWorker from './workers/sharedRepo?sharedworker';
@@ -50,22 +50,27 @@ export class MessagePortWrapper<MessageSend, MessageRecv> {
     });
   }
 
-  once(messageHandler: (message: MessageRecv) => void) {
+  once(messageHandler: (message: MessageRecv) => boolean) {
     const wrapper: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       outerHandler?: (this: MessagePort, ev: MessagePortEventMap['message']) => any;
     } = {};
     wrapper.outerHandler = (event: MessageEvent) => {
-      this.port.removeEventListener('message', wrapper.outerHandler!);
-      messageHandler(event.data as MessageRecv);
+      if (messageHandler(event.data as MessageRecv))
+        this.port.removeEventListener('message', wrapper.outerHandler!);
     };
     this.port.addEventListener('message', wrapper.outerHandler);
   }
 
   /// Implies start().
-  onceAsync(): Promise<MessageRecv> {
+  onceAsync(filter: (message: MessageRecv) => boolean = () => true): Promise<MessageRecv> {
     return new Promise((resolve) => {
-      this.once(resolve);
+      this.once((message) => {
+        const accepted = filter(message);
+        if (accepted)
+          resolve(message);
+        return accepted;
+      });
       this.start();
     });
   }
@@ -88,26 +93,31 @@ export function EphemeralDocumentDefault(): EphemeralDocument {
 }
 
 export type LocalStorageDataStore = {
-  ref: null | Ref<LocalStorageData>;
+  ref?: Promise<Ref<LocalStorageData>>;
 
   GetData(): Promise<Ref<LocalStorageData>>;
 };
 
 export const localStorageDataStore: ShallowRef<LocalStorageDataStore> =
   shallowRef<LocalStorageDataStore>({
-    ref: null,
+    GetData(): Promise<Ref<LocalStorageData>> {
+      if (this.ref !== undefined)
+        return this.ref;
 
-    async GetData(): Promise<Ref<LocalStorageData>> {
-      if (this.ref === null) this.ref = ref(LocalStorageDataLoadOrDefault());
+      this.ref = (async () => {
+        const innerRef = ref(LocalStorageDataLoadOrDefault());
 
-      // Automatically update stored value.
-      watch(
-        this.ref,
-        (localStorageData) => {
-          LocalStorageDataSave(localStorageData);
-        },
-        { deep: true },
-      );
+        // Automatically update stored value.
+        watch(
+          innerRef,
+          (localStorageData) => {
+            LocalStorageDataSave(localStorageData);
+          },
+          { deep: true },
+        );
+
+        return innerRef;
+      })();
 
       return this.ref;
     },
@@ -120,6 +130,7 @@ export type SharedDocument = {
 };
 
 export type DocumentWrapper<T> = {
+  repo: A.Repo,
   data: Ref<Rop<T>>;
   handle: A.DocHandle<T>;
 };
@@ -167,7 +178,49 @@ async function LoadApp(): Promise<App> {
     ],
   );
 
-  const readyMsg = await sharedRepoWorker.onceAsync();
+  sharedRepoWorker.on((message) => {
+    // TODO: These promises could race.
+    switch (message.type) {
+      case 'webrtc-start':
+        {
+          (async () => {
+            const app = await accountStore.value.GetApp();
+            const webrtc = new WebRtcNetworkAdapter({
+              clientSettings: app.value.docLocal.data,
+              connectedPeers: toRef(app.value.docEphemeral.data.value.connectedPeers),
+            });
+
+            app.value.docShared.repo.networkSubsystem.addNetworkAdapter(webrtc)
+          })();
+          break;
+        }
+      case 'webrtc-stop':
+        {
+          (async () => {
+            const app = await accountStore.value.GetApp();
+            while (true) {
+              const webrtc = app.value.docShared.repo.networkSubsystem.adapters.find((adapter) => SYMBOL_IS_WEBRTC_NETWORK_ADAPTER in adapter) as undefined | WebRtcNetworkAdapter;
+
+              if (webrtc !== undefined)
+                app.value.docShared.repo.networkSubsystem.removeNetworkAdapter(webrtc);
+              else
+                break;
+            }
+          })();
+          break;
+        }
+      case 'webrtc-pollalive':
+        {
+          sharedRepoWorker.postMessage({
+            type: 'webrtc-pollalive-acq'
+          })
+          break;
+        }
+    }
+
+  });
+
+  const readyMsg = await sharedRepoWorker.onceAsync((msg) => msg.type === 'ready') as FromSharedRepoMessageReady;
 
   localStorageData.value.documentIdEphemeral = readyMsg.documentIdEphemeral;
   localStorageData.value.documentIdLocal = readyMsg.documentIdLocal;
@@ -189,7 +242,6 @@ async function LoadApp(): Promise<App> {
   const dataEphemeral: Ref<Rop<EphemeralDocument>> = makeReactive(handleEphemeral);
   const repoLocal = new A.Repo({
     network: [new MessageChannelNetworkAdapter(repoLocalMessageChannel.port1)],
-    // storage: new IndexedDBStorageAdapter(),
   });
 
   let handleLocal: A.DocHandle<LocalDocument>;
@@ -206,8 +258,6 @@ async function LoadApp(): Promise<App> {
 
   const repoShared = new A.Repo({
     network: [new MessageChannelNetworkAdapter(repoSharedMessageChannel.port1)],
-    // TODO: Is this needed?
-    storage: new IndexedDBStorageAdapter(),
   });
 
   let handleShared: A.DocHandle<SharedDocument>;
@@ -235,14 +285,17 @@ async function LoadApp(): Promise<App> {
 
   return {
     docEphemeral: {
+      repo: repoEphemeral,
       data: dataEphemeral,
       handle: handleEphemeral,
     },
     docLocal: {
+      repo: repoLocal,
       data: dataLocal,
       handle: handleLocal,
     },
     docShared: {
+      repo: repoShared,
       data: makeReactive(handleShared),
       handle: handleShared,
     },
@@ -250,17 +303,20 @@ async function LoadApp(): Promise<App> {
 }
 
 export type AppStore = {
-  loadedApp: null | ShallowRef<App>;
+  ref?: Promise<ShallowRef<App>>;
 
   GetApp(): Promise<ShallowRef<App>>;
 };
 
 export const accountStore: ShallowRef<AppStore> = shallowRef<AppStore>({
-  loadedApp: null,
+  GetApp(): Promise<ShallowRef<App>> {
+    if (this.ref !== undefined)
+      return this.ref;
 
-  async GetApp(): Promise<ShallowRef<App>> {
-    if (this.loadedApp === null) this.loadedApp = shallowRef(await LoadApp());
+    this.ref = (async () => {
+      return shallowRef(await LoadApp());
+    })();
 
-    return this.loadedApp;
+    return this.ref;
   },
 });
