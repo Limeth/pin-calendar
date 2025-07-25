@@ -6,12 +6,12 @@ import {
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
 import { ref, type DeepReadonly, type Ref } from 'vue';
-import { ClientSettingsAddPeer, type ClientSettings } from './client';
+import { LocalDocumentAddPeer, type LocalDocument } from './client';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { ConnectedPeers } from './account';
 
 export type WebRtcNetworkAdapterOptions = {
-  clientSettings: Ref<Rop<ClientSettings>>;
+  clientSettings: Ref<Rop<LocalDocument>>;
   connectedPeers: Ref<Rop<ConnectedPeers>>;
 };
 
@@ -163,7 +163,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     const firstConnection = Object.keys(this.options.connectedPeers).length === 0;
 
     console.log(`Adding opened peer peerJsPeerId:${connectedPeer.dataConnection.peer}`);
-    ClientSettingsAddPeer(this.options.clientSettings.value, {
+    LocalDocumentAddPeer(this.options.clientSettings.value, {
       peerJsPeerId: connectedPeer.dataConnection.peer,
       deviceName: '', // TODO
     });

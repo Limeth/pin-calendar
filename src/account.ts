@@ -6,12 +6,12 @@ import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-index
 import { changeSubtree, makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 import { WebRtcNetworkAdapter, type ConnectMetadata } from './webrtc';
 import {
-  type ClientSettings,
+  type LocalDocument,
   type LocalStorageData,
   LocalStorageDataSave,
   LocalStorageDataLoadOrDefault,
-  ClientSettingsDefault,
-  ClientSettingsProcessHash,
+  LocalDocumentDefault,
+  LocalDocumentProcessHash,
 } from './client';
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
@@ -68,43 +68,17 @@ export type ConnectedPeers = {
   [peerJsPeerId: string]: ConnectMetadata;
 };
 
-export type EphemeralData = {
+export type EphemeralDocument = {
   connectedPeers: {
     [peerJsPeerId: string]: ConnectMetadata;
   };
 };
 
-export function EphemeralDataDefault(): EphemeralData {
+export function EphemeralDocumentDefault(): EphemeralDocument {
   return {
     connectedPeers: {},
   };
 }
-
-// export type EphemeralDataStore = {
-//   ref: null | Ref<EphemeralData>;
-
-//   GetData(): Promise<Ref<EphemeralData>>;
-// };
-
-// export const ephemeralDataStore: ShallowRef<EphemeralDataStore> = shallowRef<EphemeralDataStore>({
-//   ref: null,
-
-//   async GetData(): Promise<Ref<EphemeralData>> {
-//     if (this.ref === null)
-//       this.ref = ref(EphemeralDataDefault());
-
-//     // Automatically update stored value.
-//     watch(
-//       this.ref,
-//       (localStorageData) => {
-//         LocalStorageDataSave(localStorageData);
-//       },
-//       { deep: true },
-//     );
-
-//     return this.ref;
-//   },
-// })
 
 export type LocalStorageDataStore = {
   ref: null | Ref<LocalStorageData>;
@@ -132,7 +106,7 @@ export const localStorageDataStore: ShallowRef<LocalStorageDataStore> =
     },
   });
 
-export type DocData = {
+export type SharedDocument = {
   // account: Account,
   pinCatalog: PinCatalog;
   pinCalendar: PinCalendar;
@@ -140,12 +114,12 @@ export type DocData = {
 
 export type App = {
   // TODO: Deduplicate entries
-  readonly ephemeralDocData: Ref<Rop<EphemeralData>>;
-  readonly ephemeralDocHandle: A.DocHandle<EphemeralData>;
-  readonly localDocData: Ref<Rop<ClientSettings>>;
-  readonly localDocHandle: A.DocHandle<ClientSettings>;
-  readonly docData: Ref<Rop<DocData>>;
-  readonly docHandle: A.DocHandle<DocData>;
+  readonly ephemeralDocData: Ref<Rop<EphemeralDocument>>;
+  readonly ephemeralDocHandle: A.DocHandle<EphemeralDocument>;
+  readonly localDocData: Ref<Rop<LocalDocument>>;
+  readonly localDocHandle: A.DocHandle<LocalDocument>;
+  readonly docData: Ref<Rop<SharedDocument>>;
+  readonly docHandle: A.DocHandle<SharedDocument>;
 };
 
 async function LoadApp(): Promise<App> {
@@ -191,33 +165,33 @@ async function LoadApp(): Promise<App> {
     network: [new MessageChannelNetworkAdapter(repoEphemeralMessageChannel.port1)],
   });
 
-  let handleEphemeral: A.DocHandle<EphemeralData>;
+  let handleEphemeral: A.DocHandle<EphemeralDocument>;
 
   if (A.isValidDocumentId(localStorageData.value.documentIdEphemeral)) {
-    handleEphemeral = await repoEphemeral.find<EphemeralData>(
+    handleEphemeral = await repoEphemeral.find<EphemeralDocument>(
       localStorageData.value.documentIdEphemeral,
     );
   } else {
     throw new Error('Failed to open the ephemeral document.');
   }
 
-  const dataEphemeral: Ref<Rop<EphemeralData>> = makeReactive(handleEphemeral);
+  const dataEphemeral: Ref<Rop<EphemeralDocument>> = makeReactive(handleEphemeral);
   const repoLocal = new A.Repo({
     network: [new MessageChannelNetworkAdapter(repoLocalMessageChannel.port1)],
     // storage: new IndexedDBStorageAdapter(),
   });
 
-  let handleLocal: A.DocHandle<ClientSettings>;
+  let handleLocal: A.DocHandle<LocalDocument>;
 
   if (A.isValidDocumentId(readyMsg.documentIdLocal)) {
-    handleLocal = await repoLocal.find<ClientSettings>(readyMsg.documentIdLocal);
+    handleLocal = await repoLocal.find<LocalDocument>(readyMsg.documentIdLocal);
   } else {
     throw new Error('Failed to open the local document.');
   }
 
-  const dataLocal: Ref<Rop<ClientSettings>> = makeReactive(handleLocal);
+  const dataLocal: Ref<Rop<LocalDocument>> = makeReactive(handleLocal);
 
-  if (currentHash !== undefined) ClientSettingsProcessHash(dataLocal.value, currentHash);
+  if (currentHash !== undefined) LocalDocumentProcessHash(dataLocal.value, currentHash);
 
   const repoShared = new A.Repo({
     network: [new MessageChannelNetworkAdapter(repoSharedMessageChannel.port1)],
@@ -225,14 +199,14 @@ async function LoadApp(): Promise<App> {
     storage: new IndexedDBStorageAdapter(),
   });
 
-  let handleShared: A.DocHandle<DocData>;
+  let handleShared: A.DocHandle<SharedDocument>;
 
   if (A.isValidDocumentId(dataLocal.value.documentIdShared)) {
-    handleShared = await repoShared.find<DocData>(dataLocal.value.documentIdShared);
+    handleShared = await repoShared.find<SharedDocument>(dataLocal.value.documentIdShared);
   } else {
     const pinCatalog = PinCatalogDefault();
     const pinCalendar = PinCalendarNew();
-    handleShared = repoShared.create<DocData>({ pinCatalog, pinCalendar });
+    handleShared = repoShared.create<SharedDocument>({ pinCatalog, pinCalendar });
     dataLocal.value[changeSubtree]((dataLocal) => {
       dataLocal.documentIdShared = handleShared.documentId;
     });

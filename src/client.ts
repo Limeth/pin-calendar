@@ -32,25 +32,18 @@ const LocalStorageDataSchema = Type.Object({
 
 export type LocalStorageData = Static<typeof LocalStorageDataSchema>;
 
-const ClientSettingsSchema = Type.Object({
-  documentIdShared: Type.Optional(Type.String()),
-  localPeer: LocalPeerSchema,
-  /// A map with PeerJS peer ID's as keys.
-  remotePeers: Type.Record(Type.String({ format: 'uuid' }), RemotePeerSchema),
-});
-
 export function LocalStorageDataSave(self: LocalStorageData) {
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(self));
 }
 
 export function LocalStorageDataLoadOrDefault(): LocalStorageData {
-  let clientSettings = LocalStorageDataLoad();
+  let localStorageData = LocalStorageDataLoad();
 
-  if (clientSettings !== undefined) return clientSettings;
+  if (localStorageData !== undefined) return localStorageData;
 
-  clientSettings = LocalStorageDataDefault();
-  LocalStorageDataSave(clientSettings);
-  return clientSettings;
+  localStorageData = LocalStorageDataDefault();
+  LocalStorageDataSave(localStorageData);
+  return localStorageData;
 }
 
 function LocalStorageDataLoad(): LocalStorageData | undefined {
@@ -72,10 +65,17 @@ function LocalStorageDataDefault(): LocalStorageData {
   return {};
 }
 
-/// TODO: Automerge sync via BroadcastChannelNetworkAdapter only
-export type ClientSettings = Static<typeof ClientSettingsSchema>;
+const LocalDocumentSchema = Type.Object({
+  documentIdShared: Type.Optional(Type.String()),
+  localPeer: LocalPeerSchema,
+  /// A map with PeerJS peer ID's as keys.
+  remotePeers: Type.Record(Type.String({ format: 'uuid' }), RemotePeerSchema),
+});
 
-export function ClientSettingsDefault(): ClientSettings {
+/// TODO: Automerge sync via BroadcastChannelNetworkAdapter only
+export type LocalDocument = Static<typeof LocalDocumentSchema>;
+
+export function LocalDocumentDefault(): LocalDocument {
   return {
     localPeer: {
       deviceName: 'New device',
@@ -85,7 +85,7 @@ export function ClientSettingsDefault(): ClientSettings {
   };
 }
 
-export function ClientSettingsAddPeer(self: Rop<ClientSettings>, peer: LocalPeer): boolean {
+export function LocalDocumentAddPeer(self: Rop<LocalDocument>, peer: LocalPeer): boolean {
   const peerAlreadyAdded =
     self.localPeer.peerJsPeerId === peer.peerJsPeerId || peer.peerJsPeerId in self.remotePeers;
 
@@ -93,8 +93,8 @@ export function ClientSettingsAddPeer(self: Rop<ClientSettings>, peer: LocalPeer
     console.log(`Not adding peer ${peer.peerJsPeerId}, because this peer is already known.`);
     return false;
   } else {
-    self[changeSubtree]((clientSettings) => {
-      clientSettings.remotePeers[peer.peerJsPeerId] = {
+    self[changeSubtree]((localDocument) => {
+      localDocument.remotePeers[peer.peerJsPeerId] = {
         deviceName: peer.deviceName,
       };
     });
@@ -103,20 +103,20 @@ export function ClientSettingsAddPeer(self: Rop<ClientSettings>, peer: LocalPeer
   }
 }
 
-export function ClientSettingsProcessHash(self: Rop<ClientSettings>, hash: Hash) {
+export function LocalDocumentProcessHash(self: Rop<LocalDocument>, hash: Hash) {
   if (self.documentIdShared !== undefined && self.documentIdShared !== hash.documentId) {
     console.warn(
       `Document ID mismatch (current: ${self.documentIdShared}, requested: ${hash.documentId})`,
     );
   } else {
     if (self.documentIdShared === undefined) {
-      self[changeSubtree]((clientSettings) => {
-        clientSettings.documentIdShared = hash.documentId;
+      self[changeSubtree]((localDocument) => {
+        localDocument.documentIdShared = hash.documentId;
       });
       console.log(`Document ID set to ${self.documentIdShared}`);
     }
 
-    ClientSettingsAddPeer(self, {
+    LocalDocumentAddPeer(self, {
       peerJsPeerId: hash.peerJsPeerId,
       deviceName: '', // TODO
     });

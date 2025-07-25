@@ -3,10 +3,10 @@ import { DocHandle, isValidDocumentId, Repo, type DocumentId } from '@automerge/
 import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
 import * as uuid from 'uuid';
 import { WebRtcNetworkAdapter } from '@/webrtc';
-import { ClientSettingsDefault, type ClientSettings } from '@/client';
+import { LocalDocumentDefault, type LocalDocument } from '@/client';
 import { ref, toRef, type Ref } from 'vue';
 import { makeReactive, type Rop } from 'automerge-diy-vue-hooks';
-import { EphemeralDataDefault, MessagePortWrapper, type EphemeralData } from '@/account';
+import { EphemeralDocumentDefault, MessagePortWrapper, type EphemeralDocument } from '@/account';
 
 export type ToSharedRepoMessageInit = {
   type: 'init';
@@ -92,24 +92,24 @@ async function onMessage(
     new MessageChannelNetworkAdapter(message.repoSharedPort, { useWeakRef: true }),
   );
 
-  let docHandleEphemeral: DocHandle<EphemeralData>;
+  let docHandleEphemeral: DocHandle<EphemeralDocument>;
 
   if (isValidDocumentId(message.documentIdEphemeral)) {
-    docHandleEphemeral = await repoEphemeral.find<EphemeralData>(message.documentIdEphemeral);
+    docHandleEphemeral = await repoEphemeral.find<EphemeralDocument>(message.documentIdEphemeral);
   } else {
-    docHandleEphemeral = repoEphemeral.create<EphemeralData>(EphemeralDataDefault());
+    docHandleEphemeral = repoEphemeral.create<EphemeralDocument>(EphemeralDocumentDefault());
   }
 
-  const docDataEphemeral = makeReactive(docHandleEphemeral) as Ref<Rop<EphemeralData>>;
-  let docHandleLocal: DocHandle<ClientSettings>;
+  const docDataEphemeral = makeReactive(docHandleEphemeral) as Ref<Rop<EphemeralDocument>>;
+  let docHandleLocal: DocHandle<LocalDocument>;
 
   if (isValidDocumentId(message.documentIdLocal)) {
-    docHandleLocal = await repoLocal.find<ClientSettings>(message.documentIdLocal);
+    docHandleLocal = await repoLocal.find<LocalDocument>(message.documentIdLocal);
   } else {
-    docHandleLocal = repoLocal.create<ClientSettings>(ClientSettingsDefault());
+    docHandleLocal = repoLocal.create<LocalDocument>(LocalDocumentDefault());
   }
 
-  const docDataLocal = makeReactive(docHandleLocal) as Ref<Rop<ClientSettings>>;
+  const docDataLocal = makeReactive(docHandleLocal) as Ref<Rop<LocalDocument>>;
 
   if (initialize) {
     repoShared.networkSubsystem.addNetworkAdapter(
