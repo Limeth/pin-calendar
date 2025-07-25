@@ -31,6 +31,11 @@ export class MessagePortWrapper<MessageSend, MessageRecv> {
     });
   }
 
+  /// Start listening to incoming messages.
+  start() {
+    this.port.start();
+  }
+
   postMessage(message: MessageSend, transfer?: Transferable[]) {
     console.log('post', {
       message,
@@ -57,9 +62,11 @@ export class MessagePortWrapper<MessageSend, MessageRecv> {
     this.port.addEventListener('message', wrapper.outerHandler);
   }
 
+  /// Implies start().
   onceAsync(): Promise<MessageRecv> {
     return new Promise((resolve) => {
       this.once(resolve);
+      this.start();
     });
   }
 }
@@ -113,14 +120,14 @@ export type SharedDocument = {
 };
 
 export type DocumentWrapper<T> = {
-  data: Ref<Rop<T>>,
-  handle: A.DocHandle<T>,
+  data: Ref<Rop<T>>;
+  handle: A.DocHandle<T>;
 };
 
 export type App = {
-  readonly docEphemeral: DocumentWrapper<EphemeralDocument>,
-  readonly docLocal: DocumentWrapper<LocalDocument>,
-  readonly docShared: DocumentWrapper<SharedDocument>,
+  readonly docEphemeral: DocumentWrapper<EphemeralDocument>;
+  readonly docLocal: DocumentWrapper<LocalDocument>;
+  readonly docShared: DocumentWrapper<SharedDocument>;
 };
 
 async function LoadApp(): Promise<App> {
@@ -162,6 +169,9 @@ async function LoadApp(): Promise<App> {
 
   const readyMsg = await sharedRepoWorker.onceAsync();
 
+  localStorageData.value.documentIdEphemeral = readyMsg.documentIdEphemeral;
+  localStorageData.value.documentIdLocal = readyMsg.documentIdLocal;
+
   const repoEphemeral = new A.Repo({
     network: [new MessageChannelNetworkAdapter(repoEphemeralMessageChannel.port1)],
   });
@@ -184,8 +194,8 @@ async function LoadApp(): Promise<App> {
 
   let handleLocal: A.DocHandle<LocalDocument>;
 
-  if (A.isValidDocumentId(readyMsg.documentIdLocal)) {
-    handleLocal = await repoLocal.find<LocalDocument>(readyMsg.documentIdLocal);
+  if (A.isValidDocumentId(localStorageData.value.documentIdLocal)) {
+    handleLocal = await repoLocal.find<LocalDocument>(localStorageData.value.documentIdLocal);
   } else {
     throw new Error('Failed to open the local document.');
   }
@@ -235,7 +245,7 @@ async function LoadApp(): Promise<App> {
     docShared: {
       data: makeReactive(handleShared),
       handle: handleShared,
-    }
+    },
   };
 }
 

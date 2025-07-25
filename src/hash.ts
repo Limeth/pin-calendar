@@ -17,7 +17,7 @@ export function decodeHash(hash: string): Hash | undefined {
 
   for (const segments of hash.split('&')) {
     const [key, value] = segments.split('=', 2);
-    object[decodeURIComponent(key)] = decodeURIComponent(value);
+    if (value !== undefined) object[decodeURIComponent(key)] = decodeURIComponent(value);
   }
 
   try {
