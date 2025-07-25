@@ -112,12 +112,12 @@ async function onMessage(
   const docDataLocal = makeReactive(docHandleLocal) as Ref<Rop<LocalDocument>>;
 
   if (initialize) {
-    repoShared.networkSubsystem.addNetworkAdapter(
-      new WebRtcNetworkAdapter({
-        clientSettings: docDataLocal,
-        connectedPeers: toRef(docDataEphemeral.value.connectedPeers),
-      }),
-    );
+    // repoShared.networkSubsystem.addNetworkAdapter(
+    //   new WebRtcNetworkAdapter({
+    //     clientSettings: docDataLocal,
+    //     connectedPeers: toRef(docDataEphemeral.value.connectedPeers),
+    //   }),
+    // );
   }
 
   port.postMessage({

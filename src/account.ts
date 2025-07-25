@@ -112,14 +112,15 @@ export type SharedDocument = {
   pinCalendar: PinCalendar;
 };
 
+export type DocumentWrapper<T> = {
+  data: Ref<Rop<T>>,
+  handle: A.DocHandle<T>,
+};
+
 export type App = {
-  // TODO: Deduplicate entries
-  readonly ephemeralDocData: Ref<Rop<EphemeralDocument>>;
-  readonly ephemeralDocHandle: A.DocHandle<EphemeralDocument>;
-  readonly localDocData: Ref<Rop<LocalDocument>>;
-  readonly localDocHandle: A.DocHandle<LocalDocument>;
-  readonly docData: Ref<Rop<SharedDocument>>;
-  readonly docHandle: A.DocHandle<SharedDocument>;
+  readonly docEphemeral: DocumentWrapper<EphemeralDocument>,
+  readonly docLocal: DocumentWrapper<LocalDocument>,
+  readonly docShared: DocumentWrapper<SharedDocument>,
 };
 
 async function LoadApp(): Promise<App> {
@@ -223,12 +224,18 @@ async function LoadApp(): Promise<App> {
   }
 
   return {
-    ephemeralDocData: dataEphemeral,
-    ephemeralDocHandle: handleEphemeral,
-    localDocData: dataLocal,
-    localDocHandle: handleLocal,
-    docData: makeReactive(handleShared),
-    docHandle: handleShared,
+    docEphemeral: {
+      data: dataEphemeral,
+      handle: handleEphemeral,
+    },
+    docLocal: {
+      data: dataLocal,
+      handle: handleLocal,
+    },
+    docShared: {
+      data: makeReactive(handleShared),
+      handle: handleShared,
+    }
   };
 }
 

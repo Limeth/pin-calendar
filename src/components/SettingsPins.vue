@@ -52,7 +52,7 @@ const emojiRegexPattern = emojiRegex();
 const app = defineModel<App>();
 
 function getPinCatalog(): Ref<Rop<PinCatalog>> {
-  return toRef(app.value!.docData.value, 'pinCatalog');
+  return toRef(app.value!.docShared.data.value, 'pinCatalog');
 }
 
 const editingPinCategory = computed(() => {

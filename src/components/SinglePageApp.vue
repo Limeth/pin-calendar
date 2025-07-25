@@ -17,11 +17,11 @@ import type { RemotePeer } from '@/client';
 const app: ShallowRef<App> = await accountStore.value.GetApp();
 const isDrawerOpen = ref(false);
 const connected = computed(() => {
-  return Object.keys(app.value.ephemeralDocData.value.connectedPeers).length;
+  return Object.keys(app.value.docEphemeral.data.value.connectedPeers).length;
 });
 const peers = computed(() => {
-  const remotePeers = app.value.localDocData.value.remotePeers;
-  const connectedPeers = app.value.ephemeralDocData.value.connectedPeers;
+  const remotePeers = app.value.docLocal.data.value.remotePeers;
+  const connectedPeers = app.value.docEphemeral.data.value.connectedPeers;
   const result = [];
 
   for (const [peerJsPeerId, remotePeer] of Object.entries(remotePeers)) {
@@ -54,7 +54,7 @@ const peers = computed(() => {
   return result;
 });
 
-console.log('pinCalendar', app.value!.docData.value!.pinCalendar);
+console.log('pinCalendar', app.value!.docShared.data.value!.pinCalendar);
 
 // const account = await accountStore.value.GetAccount();
 

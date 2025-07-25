@@ -26,7 +26,7 @@ type DayListDay = {
 };
 
 const app = defineModel<App>();
-const docData = toRef(app.value!, 'docData');
+const docData = toRef(app.value!.docShared, 'data');
 
 function getPinCalendar() {
   return toRef(docData.value!, 'pinCalendar');
@@ -136,7 +136,7 @@ watch(daySelected, () => {
   console.log('daySelected changed. pinDay=', pinDay.value);
 });
 
-app.value!.docHandle.on('change', () => {
+app.value!.docShared.handle.on('change', () => {
   if (daySelected.value !== null)
     pinDay.value = PinCalendarGetDayRef(getPinCalendar(), daySelected.value.date);
 

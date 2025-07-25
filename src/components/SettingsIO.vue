@@ -75,7 +75,7 @@ type ImportCalendar = {
 type Import = ImportPins | ImportCalendar;
 
 const app = defineModel<App>();
-const docData = toRef(app.value!, 'docData');
+const docData = toRef(app.value!.docShared, 'data');
 
 function getPinCalendar() {
   return toRef(docData.value!, 'pinCalendar');
