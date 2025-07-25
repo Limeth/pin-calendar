@@ -38,10 +38,10 @@ class SharedRepo {
   repoEphemeral: Repo;
   repoLocal: Repo;
   repoShared: Repo;
-  initialized?: {
+  initialized?: Promise<{
     docEphemeral: DocumentWrapper<EphemeralDocument>;
     docLocal: DocumentWrapper<LocalDocument>;
-  };
+  }>;
 
   constructor() {
     this.repoEphemeral = new Repo({
@@ -63,12 +63,15 @@ class SharedRepo {
     });
   }
 
-  // TODO/FIXME: Prevent this function from being executed twice concurrently (it's async).
-  async initialize(
-    message: ToSharedRepoMessageInit,
-  ): Promise<NonNullable<typeof this.initialized>> {
+  initialize(message: ToSharedRepoMessageInit): NonNullable<typeof this.initialized> {
     if (this.initialized !== undefined) return this.initialized;
 
+    this.initialized = this.initializeInner(message);
+    return this.initialized;
+  }
+
+  // To ensure this method is invoked exactly once, invoke `initialize()` instead.
+  async initializeInner(message: ToSharedRepoMessageInit): NonNullable<typeof this.initialized> {
     const docHandleEphemeral: DocHandle<EphemeralDocument> =
       this.repoEphemeral.create<EphemeralDocument>(EphemeralDocumentDefault());
     const docDataEphemeral = makeReactive(docHandleEphemeral) as Ref<Rop<EphemeralDocument>>;
@@ -90,7 +93,7 @@ class SharedRepo {
     //   }),
     // );
 
-    this.initialized = {
+    return {
       docEphemeral: {
         handle: docHandleEphemeral,
         data: docDataEphemeral,
@@ -100,8 +103,6 @@ class SharedRepo {
         data: docDataLocal,
       },
     };
-
-    return this.initialized;
   }
 }
 
