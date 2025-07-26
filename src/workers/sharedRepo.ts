@@ -15,6 +15,7 @@ import {
 
 export type ToSharedRepoMessageInit = {
   type: 'init';
+  // TODO: The ID is always generated on the shared worker. Remove it from here and from LocalStorageData.
   documentIdEphemeral: DocumentId | undefined;
   documentIdLocal: DocumentId;
   repoEphemeralPort: MessagePort;
@@ -53,18 +54,18 @@ type TabMessagePort = MessagePortWrapper<FromSharedRepoMessage, ToSharedRepoMess
 declare const self: SharedWorkerGlobalScope;
 
 type Tab = {
-  port: WeakRef<TabMessagePort>,
+  port: TabMessagePort,
   adapterEphemeral: MessageChannelNetworkAdapter,
   adapterLocal: MessageChannelNetworkAdapter,
   adapterShared: MessageChannelNetworkAdapter,
+  timedOut: boolean,
 }
 
 class Initialized {
   docEphemeral: DocumentWrapper<EphemeralDocument>;
   docLocal: DocumentWrapper<LocalDocument>;
   tabs: Tab[] = [];
-  /// The WebRTC tab is identified by its port.
-  webRtcTab?: WeakRef<TabMessagePort>;
+  webRtcTab?: Tab;
 
   constructor(
     options: {
@@ -76,16 +77,17 @@ class Initialized {
     this.docLocal = options.docLocal;
   }
 
-  cleanupClosedTabs() {
-    for (let i = this.tabs.length - 1; i >= 0; i--) {
-      const tab = this.tabs[i];
-      const port = tab.port.deref();
-      if (port === undefined) {
-        this.tabs.splice(i, 1);
-        console.warn("Cleaning up closed tab.", tab);
-      }
-    }
-  }
+  // TODO: Ports would have to be weak-referenced.
+  // cleanupClosedTabs() {
+  //   for (let i = this.tabs.length - 1; i >= 0; i--) {
+  //     const tab = this.tabs[i];
+  //     const port = tab.port.deref();
+  //     if (port === undefined) {
+  //       this.tabs.splice(i, 1);
+  //       console.warn("Cleaning up closed tab.", tab);
+  //     }
+  //   }
+  // }
 }
 
 class SharedRepo {
@@ -148,44 +150,45 @@ class SharedRepo {
           if (initialized.webRtcTab === undefined)
             return false;
 
-          const webRtcTab = initialized.webRtcTab.deref();
-
-          if (webRtcTab === undefined) {
-            console.warn("WebRTC tab closed.");
-            return false;
-          }
-
           const alivePromise = Promise.any([
-            webRtcTab.onceAsync((message) => message.type === 'webrtc-pollalive-acq').then(() => true),
+            initialized.webRtcTab.port.onceAsync((message) => message.type === 'webrtc-pollalive-acq').then(() => true),
             new Promise(r => setTimeout(r, POLL_TIMEOUT_MS)).then(() => false),
           ]);
 
-          webRtcTab.postMessage({ type: 'webrtc-pollalive' })
+          initialized.webRtcTab.port.postMessage({ type: 'webrtc-pollalive' })
 
           if (await alivePromise)
             return true;
 
           console.warn("WebRTC pollalive timed out.");
-          webRtcTab.postMessage({ type: 'webrtc-stop' });
+          initialized.webRtcTab.port.postMessage({ type: 'webrtc-stop' });
+          initialized.webRtcTab.timedOut = true;
           return false;
         })();
 
         if (!webRtcRunning) {
           initialized.webRtcTab = undefined;
 
-          initialized.cleanupClosedTabs();
-
           if (initialized.tabs.length > 0) {
-            const tabIndex = Math.floor(Math.random() * initialized.tabs.length)
-            const tab = initialized.tabs[tabIndex];
-            const port = tab.port.deref();
+            let responsiveTabs = initialized.tabs.filter((tab) => !tab.timedOut);
 
-            if (port !== undefined) {
-              initialized.webRtcTab = tab.port;
-              port.postMessage({
-                type: 'webrtc-start',
-              })
+            // Reset timed out status of all tabs in hopes of finding a responsive tab among them.
+            if (responsiveTabs.length === 0) {
+              for (const tab of initialized.tabs)
+                tab.timedOut = false;
+
+              responsiveTabs = initialized.tabs;
             }
+
+            const tabIndex = Math.floor(Math.random() * responsiveTabs.length)
+            const tab = responsiveTabs[tabIndex];
+            initialized.webRtcTab = tab;
+            tab.port.postMessage({
+              type: 'webrtc-start',
+            })
+          } else {
+            initialized.webRtcTab = undefined;
+            console.warn("No tabs to host a WebRTC client in available.")
           }
         }
 
@@ -220,7 +223,7 @@ class SharedRepo {
     this.repoLocal.networkSubsystem.addNetworkAdapter(adapterLocal);
     this.repoShared.networkSubsystem.addNetworkAdapter(adapterShared);
 
-    initialized.tabs.push({ port: new WeakRef(port), adapterEphemeral, adapterLocal, adapterShared, })
+    initialized.tabs.push({ port, adapterEphemeral, adapterLocal, adapterShared, timedOut: false, })
   }
 }
 

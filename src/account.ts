@@ -191,6 +191,7 @@ async function LoadApp(): Promise<App> {
             });
 
             app.value.docShared.repo.networkSubsystem.addNetworkAdapter(webrtc)
+            console.log("WebRTC Network Adapter registered.");
           })();
           break;
         }
@@ -198,13 +199,11 @@ async function LoadApp(): Promise<App> {
         {
           (async () => {
             const app = await accountStore.value.GetApp();
-            while (true) {
-              const webrtc = app.value.docShared.repo.networkSubsystem.adapters.find((adapter) => SYMBOL_IS_WEBRTC_NETWORK_ADAPTER in adapter) as undefined | WebRtcNetworkAdapter;
-
-              if (webrtc !== undefined)
-                app.value.docShared.repo.networkSubsystem.removeNetworkAdapter(webrtc);
-              else
-                break;
+            const adapters = app.value.docShared.repo.networkSubsystem.adapters.filter((adapter) => SYMBOL_IS_WEBRTC_NETWORK_ADAPTER in adapter);
+            if (adapters.length > 0) {
+              for (const adapter of adapters)
+                app.value.docShared.repo.networkSubsystem.removeNetworkAdapter(adapter);
+              console.log("WebRTC Network Adapter(s) unregistered.");
             }
           })();
           break;
