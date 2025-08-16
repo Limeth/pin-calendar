@@ -5,7 +5,7 @@ import {
   type PeerMetadata,
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
-import { ref, type DeepReadonly, type Ref } from 'vue';
+import { type Ref } from 'vue';
 import { LocalDocumentAddPeer, type LocalDocument } from './client';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { ConnectedPeers } from './account';
@@ -13,6 +13,7 @@ import type { ConnectedPeers } from './account';
 export type WebRtcNetworkAdapterOptions = {
   clientSettings: Ref<Rop<LocalDocument>>;
   connectedPeers: Ref<Rop<ConnectedPeers>>;
+  attemptToWaitForAnyPeerDurationMilliseconds: undefined | number;
 };
 
 export type ConnectedPeer = {
@@ -63,6 +64,10 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   connect(peerId: PeerId, peerMetadata?: PeerMetadata): void {
+    console.log(
+      `WebRtcNetworkAdapter::connect(peerId = ${peerId}, peerMetadata = ${peerMetadata})`,
+    );
+
     this.peerId = peerId;
     this.peerMetadata = peerMetadata;
 
@@ -80,7 +85,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       console.error('Unhandled peer error: ', error);
     });
 
-    this.peer.on('open', (id) => {
+    this.peer.on('open', async (id) => {
       // Invoked when a connection to the signaling server is established.
       this.peerJsPeerId = id;
 
@@ -99,6 +104,18 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
         dataConection.once('open', () => {
           this.onOutboundConnectionOpened(dataConection);
         });
+      }
+
+      if (
+        Object.keys(this.options.clientSettings.value.remotePeers).length > 0 &&
+        this.options.attemptToWaitForAnyPeerDurationMilliseconds !== undefined
+      ) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, this.options.attemptToWaitForAnyPeerDurationMilliseconds),
+        );
+        this.setReady();
+      } else {
+        this.setReady();
       }
     });
 
@@ -163,8 +180,6 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       console.error(`Data connection error: ${error}`);
     });
 
-    const firstConnection = Object.keys(this.options.connectedPeers).length === 0;
-
     console.log(`Adding opened peer peerJsPeerId:${connectedPeer.dataConnection.peer}`);
     LocalDocumentAddPeer(this.options.clientSettings.value, {
       peerJsPeerId: connectedPeer.dataConnection.peer,
@@ -178,14 +193,15 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       peerId: connectedPeer.connectMetadata.automergePeerId as PeerId,
       peerMetadata: connectedPeer.connectMetadata.automergePeerMetadata,
     });
-
-    if (firstConnection) this.setReady();
+    this.setReady();
   }
 
   setReady() {
-    console.log('WebRTC Network Adapter set to ready.');
-    this.ready = true;
-    this.readyResolver();
+    if (!this.ready) {
+      console.log('WebRTC Network Adapter set to ready.');
+      this.ready = true;
+      this.readyResolver();
+    }
   }
 
   onIncomingMessage(peer: ConnectedPeer, data: unknown) {
@@ -213,6 +229,8 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   disconnect(): void {
+    console.log('WebRtcNetworkAdapter::disconnect()');
+
     this.options.connectedPeers.value[changeSubtree]((connectedPeers) => {
       for (const peerJsPeerId of Object.keys(connectedPeers)) delete connectedPeers[peerJsPeerId];
     });
@@ -228,6 +246,8 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   send(message: Message): void {
+    console.log(`WebRtcNetworkAdapter::send(message = ${message})`);
+
     for (const [peerJsPeerId, dataConnection] of Object.entries(this.dataConnections)) {
       const packet: Packet = {
         message,

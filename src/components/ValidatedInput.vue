@@ -1,6 +1,6 @@
 <script setup lang="ts" generic="T, P extends Property & keyof T">
 import type { Doc } from '@automerge/automerge-repo';
-import { updateText } from '@automerge/automerge/next';
+import { updateText } from '@automerge/automerge';
 import { changeSubtree, type Property, type Ro, type Rop } from 'automerge-diy-vue-hooks';
 import { ref, type Ref } from 'vue';
 import feather from 'feather-icons';

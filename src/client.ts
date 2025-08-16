@@ -1,5 +1,4 @@
-import type { PeerId } from '@automerge/automerge-repo';
-import { FormatRegistry, Type, type Static, type TObject } from '@sinclair/typebox';
+import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import * as uuid from 'uuid';
 import type { Hash } from './hash';
@@ -104,18 +103,11 @@ export function LocalDocumentAddPeer(self: Rop<LocalDocument>, peer: LocalPeer):
 }
 
 export function LocalDocumentProcessHash(self: Rop<LocalDocument>, hash: Hash) {
-  if (self.documentIdShared !== undefined && self.documentIdShared !== hash.documentId) {
+  if (self.documentIdShared !== undefined || self.documentIdShared !== hash.documentId) {
     console.warn(
       `Document ID mismatch (current: ${self.documentIdShared}, requested: ${hash.documentId})`,
     );
   } else {
-    if (self.documentIdShared === undefined) {
-      self[changeSubtree]((localDocument) => {
-        localDocument.documentIdShared = hash.documentId;
-      });
-      console.log(`Document ID set to ${self.documentIdShared}`);
-    }
-
     LocalDocumentAddPeer(self, {
       peerJsPeerId: hash.peerJsPeerId,
       deviceName: '', // TODO
