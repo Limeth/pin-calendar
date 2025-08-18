@@ -16,68 +16,15 @@ import {
 } from './client';
 import { decodeHash, encodeHash } from './hash';
 import {
+  MessagePortWrapper,
   type FromSharedRepoMessage,
   type FromSharedRepoMessageReadyLocal,
   type FromSharedRepoMessageReadyShared,
   type ToSharedRepoMessage,
-} from './workers/sharedRepo';
+} from './workerMessages';
 import { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-messagechannel';
 
 import SharedRepoWorker from './workers/sharedRepo?sharedworker';
-
-export class MessagePortWrapper<MessageSend, MessageRecv> {
-  port: MessagePort;
-
-  constructor(port: MessagePort) {
-    this.port = port;
-    this.port.addEventListener('message', (event) => {
-      console.log('message', event.data);
-    });
-  }
-
-  /// Start listening to incoming messages.
-  start() {
-    this.port.start();
-  }
-
-  postMessage(message: MessageSend, transfer?: Transferable[]) {
-    console.log('post', {
-      message,
-      transfer,
-    });
-    this.port.postMessage(message, { transfer });
-  }
-
-  on(messageHandler: (message: MessageRecv) => void) {
-    this.port.addEventListener('message', (event) => {
-      messageHandler(event.data as MessageRecv);
-    });
-  }
-
-  once(messageHandler: (message: MessageRecv) => boolean) {
-    const wrapper: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      outerHandler?: (this: MessagePort, ev: MessagePortEventMap['message']) => any;
-    } = {};
-    wrapper.outerHandler = (event: MessageEvent) => {
-      if (messageHandler(event.data as MessageRecv))
-        this.port.removeEventListener('message', wrapper.outerHandler!);
-    };
-    this.port.addEventListener('message', wrapper.outerHandler);
-  }
-
-  /// Implies start().
-  onceAsync(filter: (message: MessageRecv) => boolean = () => true): Promise<MessageRecv> {
-    return new Promise((resolve) => {
-      this.once((message) => {
-        const accepted = filter(message);
-        if (accepted) resolve(message);
-        return accepted;
-      });
-      this.start();
-    });
-  }
-}
 
 export type ConnectedPeers = {
   [peerJsPeerId: string]: ConnectMetadata;
@@ -88,12 +35,6 @@ export type EphemeralDocument = {
     [peerJsPeerId: string]: ConnectMetadata;
   };
 };
-
-export function EphemeralDocumentDefault(): EphemeralDocument {
-  return {
-    connectedPeers: {},
-  };
-}
 
 export type LocalStorageDataStore = {
   ref?: Promise<Ref<LocalStorageData>>;
@@ -130,10 +71,6 @@ export type SharedDocument = {
   pinCatalog: PinCatalog;
   pinCalendar: PinCalendar;
 };
-
-export function SharedDocumentDefault() {
-  return { pinCatalog: PinCatalogDefault(), pinCalendar: PinCalendarNew() };
-}
 
 export type DocumentWrapper<T> = {
   repo: A.Repo;
@@ -234,6 +171,7 @@ async function LoadApp(): Promise<App> {
   const readyShared = sharedRepoWorker.onceAsync(
     (msg) => msg.type === 'ready-shared',
   ) as Promise<FromSharedRepoMessageReadyShared>;
+  sharedRepoWorker.start(); // Start processing received messages.
 
   sharedRepoWorker.postMessage(
     {

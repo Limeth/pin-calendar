@@ -17,6 +17,10 @@ export default defineConfig({
   root: 'src',
   base: '/pin-calendar/',
   plugins: [vue(), vueDevTools(), wasm(), topLevelAwait(), tailwindcss()],
+  worker: {
+    format: 'es', // TODO: I don't think this should be necessary, we might want to use the default.
+    plugins: () => [wasm()],
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

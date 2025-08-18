@@ -1,84 +1,59 @@
-import { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-messagechannel';
-import { DocHandle, isValidDocumentId, Repo, type DocumentId } from '@automerge/automerge-repo';
-import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
+import type { DocHandle, DocumentId, Repo } from '@automerge/automerge-repo';
 import * as uuid from 'uuid';
 import { LocalDocumentAddPeer, LocalDocumentDefault, type LocalDocument } from '@/client';
 import { type Ref } from 'vue';
-import { changeSubtree, makeReactive, type Rop } from 'automerge-diy-vue-hooks';
+import type { Rop } from 'automerge-diy-vue-hooks';
+import type { DocumentWrapper, EphemeralDocument, SharedDocument } from '@/account';
 import {
-  EphemeralDocumentDefault,
   MessagePortWrapper,
-  SharedDocumentDefault,
-  type DocumentWrapper,
-  type EphemeralDocument,
-  type SharedDocument,
-} from '@/account';
-import type { Hash } from '@/hash';
-
-export type ToSharedRepoMessageInit = {
-  type: 'init';
-  // TODO: The ID is always generated on the shared worker. Remove it from here and from LocalStorageData.
-  documentIdEphemeral: DocumentId | undefined;
-  documentIdLocal: DocumentId;
-  hash: Hash | undefined;
-  repoEphemeralPort: MessagePort;
-  repoLocalPort: MessagePort;
-  repoSharedPort: MessagePort;
-};
-
-export type ToSharedRepoMessageWebRtcStartSuccess = {
-  type: 'webrtc-start-success';
-};
-
-export type ToSharedRepoMessageWebRtcStopSuccess = {
-  type: 'webrtc-stop-success';
-};
-
-export type ToSharedRepoMessageWebRtcPollAliveAcq = {
-  type: 'webrtc-pollalive-acq';
-};
-
-export type ToSharedRepoMessage =
-  | ToSharedRepoMessageInit
-  | ToSharedRepoMessageWebRtcStartSuccess
-  | ToSharedRepoMessageWebRtcStopSuccess
-  | ToSharedRepoMessageWebRtcPollAliveAcq;
-
-/// Sent when the ephemeral and local documents are ready to be found.
-export type FromSharedRepoMessageReadyLocal = {
-  type: 'ready-local';
-  documentIdEphemeral: DocumentId;
-  documentIdLocal: DocumentId;
-};
-
-/// Sent when the shared documents are ready to be found.
-export type FromSharedRepoMessageReadyShared = {
-  type: 'ready-shared';
-};
-
-export type FromSharedRepoMessageWebRtcStart = {
-  type: 'webrtc-start';
-  documentSharedAvailableLocallyDuringInitialization: boolean;
-};
-
-export type FromSharedRepoMessageWebRtcStop = {
-  type: 'webrtc-stop';
-};
-
-export type FromSharedRepoMessageWebRtcPollAlive = {
-  type: 'webrtc-pollalive';
-};
-
-export type FromSharedRepoMessage =
-  | FromSharedRepoMessageReadyLocal
-  | FromSharedRepoMessageReadyShared
-  | FromSharedRepoMessageWebRtcStart
-  | FromSharedRepoMessageWebRtcStop
-  | FromSharedRepoMessageWebRtcPollAlive;
-
-type TabMessagePort = MessagePortWrapper<FromSharedRepoMessage, ToSharedRepoMessage>;
+  type FromSharedRepoMessage,
+  type ToSharedRepoMessage,
+  type ToSharedRepoMessageInit,
+} from '@/workerMessages';
+import { PinCalendarNew, PinCatalogDefault } from '@/pins';
+import type { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-messagechannel';
+import { changeSubtree, makeReactive } from 'automerge-diy-vue-hooks';
 
 declare const self: SharedWorkerGlobalScope;
+
+// Any dependencies that require async import must be explicitly imported asynchronously via the `await` keyword.
+// If a regular import were to be used, the Chrome browser would implicitly `await` on the dependencies,
+// which prevents `self.onconnect` to be set up soon enough.
+// https://github.com/Menci/vite-plugin-wasm/issues/37
+const wasmDependencies = (async () => {
+  const { DocHandle, isValidDocumentId, Repo } = await import('@automerge/automerge-repo');
+  const { IndexedDBStorageAdapter } = await import('@automerge/automerge-repo-storage-indexeddb');
+  const { MessageChannelNetworkAdapter } = await import(
+    '@automerge/automerge-repo-network-messagechannel'
+  );
+  return {
+    DocHandle,
+    isValidDocumentId,
+    Repo,
+    IndexedDBStorageAdapter,
+    MessageChannelNetworkAdapter,
+  };
+})();
+
+const firstConnectDebugTimeout = setTimeout(() => {
+  console.warn(`
+    No incoming connection detected after this shared worker was created.
+    This may be caused by a WASM dependency being implicitly asynchronously imported.
+    See \`wasmDependencies\` for more info.
+  `);
+}, 1000);
+
+export function EphemeralDocumentDefault(): EphemeralDocument {
+  return {
+    connectedPeers: {},
+  };
+}
+
+export function SharedDocumentDefault() {
+  return { pinCatalog: PinCatalogDefault(), pinCalendar: PinCalendarNew() };
+}
+
+type TabMessagePort = MessagePortWrapper<FromSharedRepoMessage, ToSharedRepoMessage>;
 
 type Tab = {
   port: TabMessagePort;
@@ -126,20 +101,20 @@ class SharedRepo {
   repoShared: Repo;
   initialized?: Promise<Initialized>;
 
-  constructor() {
-    this.repoEphemeral = new Repo({
+  constructor(wasmDeps: Awaited<typeof wasmDependencies>) {
+    this.repoEphemeral = new wasmDeps.Repo({
       network: [],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       peerId: ('repo-ephemeral:' + uuid.v7()) as any,
     });
-    this.repoLocal = new Repo({
-      storage: new IndexedDBStorageAdapter(),
+    this.repoLocal = new wasmDeps.Repo({
+      storage: new wasmDeps.IndexedDBStorageAdapter(),
       network: [],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       peerId: ('repo-local:' + uuid.v7()) as any,
     });
-    this.repoShared = new Repo({
-      storage: new IndexedDBStorageAdapter(),
+    this.repoShared = new wasmDeps.Repo({
+      storage: new wasmDeps.IndexedDBStorageAdapter(),
       network: [],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       peerId: ('repo-shared:' + uuid.v7()) as any,
@@ -160,7 +135,7 @@ class SharedRepo {
     const docDataEphemeral = makeReactive(docHandleEphemeral) as Ref<Rop<EphemeralDocument>>;
     let docHandleLocal: DocHandle<LocalDocument>;
 
-    if (isValidDocumentId(message.documentIdLocal)) {
+    if ((await wasmDependencies).isValidDocumentId(message.documentIdLocal)) {
       docHandleLocal = await this.repoLocal.find<LocalDocument>(message.documentIdLocal);
     } else {
       docHandleLocal = this.repoLocal.create<LocalDocument>(LocalDocumentDefault());
@@ -296,15 +271,24 @@ class SharedRepo {
 
     // be careful to not accidentally create a strong reference to port
     // that will prevent dead ports from being garbage collected
-    const adapterEphemeral = new MessageChannelNetworkAdapter(message.repoEphemeralPort, {
-      useWeakRef: true,
-    });
-    const adapterLocal = new MessageChannelNetworkAdapter(message.repoLocalPort, {
-      useWeakRef: true,
-    });
-    const adapterShared = new MessageChannelNetworkAdapter(message.repoSharedPort, {
-      useWeakRef: true,
-    });
+    const adapterEphemeral = new (await wasmDependencies).MessageChannelNetworkAdapter(
+      message.repoEphemeralPort,
+      {
+        useWeakRef: true,
+      },
+    );
+    const adapterLocal = new (await wasmDependencies).MessageChannelNetworkAdapter(
+      message.repoLocalPort,
+      {
+        useWeakRef: true,
+      },
+    );
+    const adapterShared = new (await wasmDependencies).MessageChannelNetworkAdapter(
+      message.repoSharedPort,
+      {
+        useWeakRef: true,
+      },
+    );
 
     this.repoEphemeral.networkSubsystem.addNetworkAdapter(adapterEphemeral);
     this.repoLocal.networkSubsystem.addNetworkAdapter(adapterLocal);
@@ -320,11 +304,12 @@ class SharedRepo {
 // even if the event arrives first.
 // Ideally Chrome would fix this upstream but this isn't a terrible hack.
 const repoPromise = (async () => {
-  return new SharedRepo();
+  return new SharedRepo(await wasmDependencies);
 })();
 
 self.onconnect = (eventConnect: MessageEvent) => {
   console.log('connect', eventConnect);
+  clearTimeout(firstConnectDebugTimeout);
 
   const port = new MessagePortWrapper<FromSharedRepoMessage, ToSharedRepoMessage>(
     eventConnect.ports[0],
