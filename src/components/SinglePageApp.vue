@@ -8,6 +8,9 @@ import { accountStore, type App } from '../account';
 import type { Repo } from '@automerge/automerge-repo';
 import type { Rop } from 'automerge-diy-vue-hooks';
 import type { RemotePeer } from '@/client';
+import QRCode from 'qrcode';
+import { computedAsync } from '@vueuse/core';
+import { encodeHash } from '@/hash';
 
 // const app: Ref<App> = ref({
 //   pinCatalog: PinCatalog.loadFromLocalStorageOrDefault(),
@@ -52,6 +55,20 @@ const peers = computed(() => {
       });
 
   return result;
+});
+const inviteUrl = computed(() => {
+  const inviteUrl = URL.parse(window.location.href)!;
+  inviteUrl.hash = encodeHash({
+    action: 'addPeer',
+    documentId: app.value.docLocal.data.value.documentIdShared!,
+    peerJsPeerId: app.value.docLocal.data.value.localPeer.peerJsPeerId,
+  });
+  return inviteUrl.href;
+});
+const inviteQr = computedAsync(async () => {
+  return await QRCode.toDataURL(inviteUrl.value, {
+    scale: 1,
+  });
 });
 
 console.log('pinCalendar', app.value!.docShared.data.value!.pinCalendar);
@@ -161,6 +178,24 @@ function setPage(newPage: Page) {
             </li>
           </template>
         </ul>
+        <div class="text-2xl mb-4 text-center">Add a Device</div>
+        <label class="w-full flex gap-2">
+          <div class="label">
+            <span class="label-text">Invite Link</span>
+          </div>
+          <input
+            type="text"
+            :value="inviteUrl"
+            readonly
+            class="input flex-1"
+            @focus="(event) => (event.target! as HTMLInputElement).select()"
+          />
+        </label>
+        <img
+          :src="inviteQr"
+          class="place-self-center scale-400"
+          style="image-rendering: pixelated; transform-origin: 50% top"
+        />
       </div>
     </div>
   </div>
