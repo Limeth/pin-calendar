@@ -136,7 +136,7 @@ function setPage(newPage: Page) {
     <div class="drawer-side w-full z-10">
       <label for="spa-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
       <div
-        class="bg-base-200 text-base-content min-h-full w-80 p-4 shadow-[0_0_4rem_0px_rgba(0,0,0,0.3)] custom-drawer"
+        class="bg-base-200 text-base-content min-h-full w-80 p-4 shadow-[0_0_4rem_0px_rgba(0,0,0,0.3)] custom-drawer flex flex-col items-center"
       >
         <div class="text-2xl mb-4 text-center">Known Devices</div>
         <ul class="flex flex-col w-full">
@@ -193,7 +193,7 @@ function setPage(newPage: Page) {
         </label>
         <img
           :src="inviteQr"
-          class="place-self-center scale-400"
+          class="scale-400 mt-2"
           style="image-rendering: pixelated; transform-origin: 50% top"
         />
       </div>
