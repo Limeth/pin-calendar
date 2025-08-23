@@ -1,6 +1,11 @@
 import type { DocHandle, DocumentId, Repo } from '@automerge/automerge-repo';
 import * as uuid from 'uuid';
-import { LocalDocumentAddPeer, LocalDocumentDefault, type LocalDocument } from '@/client';
+import {
+  LocalDocumentAddPeer,
+  LocalDocumentDefault,
+  type CalendarId,
+  type LocalDocument,
+} from '@/client';
 import { type Ref } from 'vue';
 import type { Rop } from 'automerge-diy-vue-hooks';
 import type { DocumentWrapper, EphemeralDocument, SharedDocument } from '@/account';
@@ -53,7 +58,9 @@ export function SharedDocumentDefault() {
   return { pinCatalog: PinCatalogDefault(), pinCalendar: PinCalendarNew() };
 }
 
-type TabMessagePort = MessagePortWrapper<FromSharedRepoMessage, ToSharedRepoMessage>;
+type TabMessagePort = MessagePortWrapper<FromSharedRepoMessage, ToSharedRepoMessage> & {
+  calendarId?: undefined | CalendarId;
+};
 
 type Tab = {
   port: TabMessagePort;
@@ -95,13 +102,16 @@ class Initialized {
   // }
 }
 
+/// There's a separate SharedRepo for each distinct calendar.
 class SharedRepo {
+  calendarId: CalendarId;
   repoEphemeral: Repo;
   repoLocal: Repo;
   repoShared: Repo;
   initialized?: Promise<Initialized>;
 
-  constructor(wasmDeps: Awaited<typeof wasmDependencies>) {
+  constructor(wasmDeps: Awaited<typeof wasmDependencies>, calendarId: CalendarId) {
+    this.calendarId = calendarId;
     this.repoEphemeral = new wasmDeps.Repo({
       network: [],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -143,30 +153,30 @@ class SharedRepo {
 
     const docDataLocal = makeReactive(docHandleLocal) as Ref<Rop<LocalDocument>>;
 
-    if (message.hash !== undefined && message.hash.action === 'addPeer') {
+    if (message.hashArgs?.action === 'addPeer') {
       let suggestedDocumentIdUsed;
 
       if (docDataLocal.value.documentIdShared === undefined) {
-        console.log(`Using suggested shared document ID: ${message.hash.documentId}`);
+        console.log(`Using suggested shared document ID: ${message.hashArgs.documentId}`);
         docDataLocal.value[changeSubtree]((local) => {
-          local.documentIdShared = message.hash?.documentId;
+          local.documentIdShared = message.hashArgs?.documentId;
         });
         suggestedDocumentIdUsed = true;
-      } else if (message.hash.documentId === docDataLocal.value.documentIdShared) {
+      } else if (message.hashArgs.documentId === docDataLocal.value.documentIdShared) {
         console.log(
           `Suggested shared document ID matches the stored shared document ID: ${docDataLocal.value.documentIdShared}`,
         );
         suggestedDocumentIdUsed = true;
       } else {
         console.log(
-          `A shared document ID was suggested (${message.hash.documentId}), but was ignored, because an existing stored shared document ID was found: ${docDataLocal.value.documentIdShared}`,
+          `A shared document ID was suggested (${message.hashArgs.documentId}), but was ignored, because an existing stored shared document ID was found: ${docDataLocal.value.documentIdShared}`,
         );
         suggestedDocumentIdUsed = false;
       }
 
       if (suggestedDocumentIdUsed)
         LocalDocumentAddPeer(docDataLocal.value, {
-          peerJsPeerId: message.hash.peerJsPeerId,
+          peerJsPeerId: message.hashArgs.peerJsPeerId,
           deviceName: '', // TODO
         });
     }
@@ -196,7 +206,7 @@ class SharedRepo {
     (async () => {
       const POLL_INTERVAL_MS = 1000;
       const POLL_TIMEOUT_MS = 4000;
-      const repo = await repoPromise;
+      const repo = await GetSharedRepo(this.calendarId);
       const initialized = await repo.initialized!;
 
       while (true) {
@@ -298,14 +308,19 @@ class SharedRepo {
   }
 }
 
-// Because automerge is a WASM module and loads asynchronously,
-// a bug in Chrome causes the 'connect' event to fire before the
-// module is loaded. This promise lets us block until the module loads
-// even if the event arrives first.
-// Ideally Chrome would fix this upstream but this isn't a terrible hack.
-const repoPromise = (async () => {
-  return new SharedRepo(await wasmDependencies);
-})();
+const sharedRepoByCalendarId: {
+  [calendarId: CalendarId]: Promise<SharedRepo>;
+} = {};
+
+async function GetSharedRepo(calendarId: CalendarId): Promise<SharedRepo> {
+  if (calendarId in sharedRepoByCalendarId) return sharedRepoByCalendarId[calendarId];
+
+  sharedRepoByCalendarId[calendarId] = (async (): Promise<SharedRepo> => {
+    return new SharedRepo(await wasmDependencies, calendarId);
+  })();
+
+  return sharedRepoByCalendarId[calendarId];
+}
 
 self.onconnect = (eventConnect: MessageEvent) => {
   console.log('connect', eventConnect);
@@ -325,7 +340,8 @@ self.onconnect = (eventConnect: MessageEvent) => {
 async function onMessage(message: ToSharedRepoMessage, port: TabMessagePort) {
   switch (message.type) {
     case 'init': {
-      const repo = await repoPromise;
+      port.calendarId = message.calendarId;
+      const repo = await GetSharedRepo(port.calendarId);
       const initialized = await repo.initialize(message);
 
       repo.addTab(message, port);
@@ -341,7 +357,7 @@ async function onMessage(message: ToSharedRepoMessage, port: TabMessagePort) {
     }
     case 'webrtc-start-success': {
       // Notify all tabs that WebRTC is ready.
-      const repo = await repoPromise;
+      const repo = await GetSharedRepo(port.calendarId!);
       const initialized = await repo.initialized!;
       initialized.webRtcStarted = true;
 

@@ -1,5 +1,5 @@
 import { ref, shallowRef, toRef, watch, type Ref, type ShallowRef } from 'vue';
-import { type PinCalendar, PinCalendarNew, type PinCatalog, PinCatalogDefault } from './pins';
+import { type PinCalendar, type PinCatalog } from './pins';
 import * as A from '@automerge/automerge-repo';
 import { makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 import {
@@ -13,8 +13,9 @@ import {
   LocalStorageDataSave,
   LocalStorageDataLoadOrDefault,
   LocalDocumentProcessHash,
+  type CalendarId,
 } from './client';
-import { decodeHash, encodeHash } from './hash';
+import { encodeHash, type HashArgs } from './hash';
 import {
   MessagePortWrapper,
   type FromSharedRepoMessage,
@@ -84,7 +85,7 @@ export type App = {
   readonly docShared: DocumentWrapper<SharedDocument>;
 };
 
-async function LoadApp(): Promise<App> {
+async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App> {
   // const account = await AccountLoadOrNew();
   // const roomName = await AccountGetPinCatalogRoom(account);
   // const roomPassword = await AccountGetRoomPassword(account);
@@ -98,9 +99,11 @@ async function LoadApp(): Promise<App> {
   })();
 
   const localStorageData = await localStorageDataStore.value.GetData();
-  const currentUrl = URL.parse(window.location.href) ?? undefined;
-  const currentHash = currentUrl !== undefined ? decodeHash(currentUrl.hash) : undefined;
 
+  if (!(calendarId in localStorageData.value.calendars))
+    localStorageData.value.calendars[calendarId] = {};
+
+  const calendarData = localStorageData.value.calendars[calendarId];
   const repoEphemeralMessageChannel = new MessageChannel();
   const repoLocalMessageChannel = new MessageChannel();
   const repoSharedMessageChannel = new MessageChannel();
@@ -176,9 +179,10 @@ async function LoadApp(): Promise<App> {
   sharedRepoWorker.postMessage(
     {
       type: 'init',
-      documentIdEphemeral: localStorageData.value.documentIdEphemeral as A.DocumentId,
-      documentIdLocal: localStorageData.value.documentIdLocal as A.DocumentId,
-      hash: currentHash,
+      calendarId,
+      documentIdEphemeral: calendarData.documentIdEphemeral as A.DocumentId,
+      documentIdLocal: calendarData.documentIdLocal as A.DocumentId,
+      hashArgs,
       repoEphemeralPort: repoEphemeralMessageChannel.port2,
       repoLocalPort: repoLocalMessageChannel.port2,
       repoSharedPort: repoSharedMessageChannel.port2,
@@ -193,8 +197,8 @@ async function LoadApp(): Promise<App> {
   /// Wait for the emphemeral and local documents to become available.
   const msgReadyLocal = await readyLocal;
 
-  localStorageData.value.documentIdEphemeral = msgReadyLocal.documentIdEphemeral;
-  localStorageData.value.documentIdLocal = msgReadyLocal.documentIdLocal;
+  calendarData.documentIdEphemeral = msgReadyLocal.documentIdEphemeral;
+  calendarData.documentIdLocal = msgReadyLocal.documentIdLocal;
 
   const repoEphemeral = new A.Repo({
     network: [new MessageChannelNetworkAdapter(repoEphemeralMessageChannel.port1)],
@@ -202,13 +206,11 @@ async function LoadApp(): Promise<App> {
 
   let handleEphemeral: A.DocHandle<EphemeralDocument>;
 
-  if (A.isValidDocumentId(localStorageData.value.documentIdEphemeral)) {
-    handleEphemeral = await repoEphemeral.find<EphemeralDocument>(
-      localStorageData.value.documentIdEphemeral,
-    );
+  if (A.isValidDocumentId(calendarData.documentIdEphemeral)) {
+    handleEphemeral = await repoEphemeral.find<EphemeralDocument>(calendarData.documentIdEphemeral);
   } else {
     throw new Error(
-      `Failed to open the ephemeral document with ID: ${localStorageData.value.documentIdEphemeral}`,
+      `Failed to open the ephemeral document with ID: ${calendarData.documentIdEphemeral}`,
     );
   }
 
@@ -219,19 +221,17 @@ async function LoadApp(): Promise<App> {
 
   let handleLocal: A.DocHandle<LocalDocument>;
 
-  if (A.isValidDocumentId(localStorageData.value.documentIdLocal)) {
-    handleLocal = await repoLocal.find<LocalDocument>(localStorageData.value.documentIdLocal);
+  if (A.isValidDocumentId(calendarData.documentIdLocal)) {
+    handleLocal = await repoLocal.find<LocalDocument>(calendarData.documentIdLocal);
   } else {
-    throw new Error(
-      `Failed to open the local document with ID: ${localStorageData.value.documentIdLocal}`,
-    );
+    throw new Error(`Failed to open the local document with ID: ${calendarData.documentIdLocal}`);
   }
 
   const dataLocal: Ref<Rop<LocalDocument>> = makeReactive(handleLocal);
 
   console.log('dataLocal: ', dataLocal.value);
 
-  if (currentHash !== undefined) LocalDocumentProcessHash(dataLocal.value, currentHash);
+  LocalDocumentProcessHash(dataLocal.value, hashArgs);
 
   const repoShared = new A.Repo({
     network: [new MessageChannelNetworkAdapter(repoSharedMessageChannel.port1)],
@@ -264,12 +264,16 @@ async function LoadApp(): Promise<App> {
     );
   }
 
+  const currentUrl = URL.parse(window.location.href) ?? undefined;
   if (currentUrl !== undefined) {
     const inviteUrl = new URL(currentUrl);
     inviteUrl.hash = encodeHash({
-      action: 'addPeer',
-      documentId: dataLocal.value.documentIdShared!, // TODO: This assertion shouldn't be necessary
-      peerJsPeerId: dataLocal.value.localPeer.peerJsPeerId,
+      path: undefined,
+      args: {
+        action: 'addPeer',
+        documentId: dataLocal.value.documentIdShared!, // TODO: This assertion shouldn't be necessary
+        peerJsPeerId: dataLocal.value.localPeer.peerJsPeerId,
+      },
     });
     console.log(`Peer invitation URL: ${inviteUrl.href}`);
   }
@@ -294,19 +298,23 @@ async function LoadApp(): Promise<App> {
 }
 
 export type AppStore = {
-  ref?: Promise<ShallowRef<App>>;
+  refMap: {
+    [calendarId: CalendarId]: Promise<ShallowRef<App>>;
+  };
 
-  GetApp(): Promise<ShallowRef<App>>;
+  GetApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<ShallowRef<App>>;
 };
 
 export const accountStore: ShallowRef<AppStore> = shallowRef<AppStore>({
-  GetApp(): Promise<ShallowRef<App>> {
-    if (this.ref !== undefined) return this.ref;
+  refMap: {},
 
-    this.ref = (async () => {
-      return shallowRef(await LoadApp());
+  GetApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<ShallowRef<App>> {
+    if (calendarId in this.refMap) return this.refMap[calendarId];
+
+    this.refMap[calendarId] = (async () => {
+      return shallowRef(await LoadApp(calendarId, hashArgs));
     })();
 
-    return this.ref;
+    return this.refMap[calendarId];
   },
 });

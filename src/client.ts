@@ -1,7 +1,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import * as uuid from 'uuid';
-import type { Hash } from './hash';
+import type { HashArgs } from './hash';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 
 const LOCAL_STORAGE_KEY = 'pinCalendar';
@@ -23,10 +23,19 @@ const LocalPeerSchema = Type.Composite([
 
 export type LocalPeer = Static<typeof LocalPeerSchema>;
 
+export const CalendarIdSchema = Type.String({ format: 'uuid' });
+
+export type CalendarId = Static<typeof CalendarIdSchema>;
+
 // TODO: Versioning
 const LocalStorageDataSchema = Type.Object({
-  documentIdEphemeral: Type.Optional(Type.String()),
-  documentIdLocal: Type.Optional(Type.String()),
+  calendars: Type.Record(
+    CalendarIdSchema,
+    Type.Object({
+      documentIdEphemeral: Type.Optional(Type.String()),
+      documentIdLocal: Type.Optional(Type.String()),
+    }),
+  ),
 });
 
 export type LocalStorageData = Static<typeof LocalStorageDataSchema>;
@@ -61,7 +70,9 @@ function LocalStorageDataLoad(): LocalStorageData | undefined {
 }
 
 function LocalStorageDataDefault(): LocalStorageData {
-  return {};
+  return {
+    calendars: {},
+  };
 }
 
 const LocalDocumentSchema = Type.Object({
@@ -102,15 +113,17 @@ export function LocalDocumentAddPeer(self: Rop<LocalDocument>, peer: LocalPeer):
   }
 }
 
-export function LocalDocumentProcessHash(self: Rop<LocalDocument>, hash: Hash) {
-  if (self.documentIdShared !== undefined || self.documentIdShared !== hash.documentId) {
-    console.warn(
-      `Document ID mismatch (current: ${self.documentIdShared}, requested: ${hash.documentId})`,
-    );
-  } else {
-    LocalDocumentAddPeer(self, {
-      peerJsPeerId: hash.peerJsPeerId,
-      deviceName: '', // TODO
-    });
+export function LocalDocumentProcessHash(self: Rop<LocalDocument>, hashArgs: HashArgs) {
+  if (hashArgs?.action === 'addPeer') {
+    if (self.documentIdShared !== undefined || self.documentIdShared !== hashArgs.documentId) {
+      console.warn(
+        `Document ID mismatch (current: ${self.documentIdShared}, requested: ${hashArgs.documentId})`,
+      );
+    } else {
+      LocalDocumentAddPeer(self, {
+        peerJsPeerId: hashArgs.peerJsPeerId,
+        deviceName: '', // TODO
+      });
+    }
   }
 }

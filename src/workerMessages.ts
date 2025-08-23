@@ -1,12 +1,14 @@
 import type { DocumentId } from '@automerge/automerge-repo';
-import type { Hash } from './hash';
+import type { HashArgs } from './hash';
+import type { CalendarId } from './client';
 
 export type ToSharedRepoMessageInit = {
   type: 'init';
+  calendarId: CalendarId;
   // TODO: The ID is always generated on the shared worker. Remove it from here and from LocalStorageData.
   documentIdEphemeral: DocumentId | undefined;
   documentIdLocal: DocumentId;
-  hash: Hash | undefined;
+  hashArgs: HashArgs;
   repoEphemeralPort: MessagePort;
   repoLocalPort: MessagePort;
   repoSharedPort: MessagePort;

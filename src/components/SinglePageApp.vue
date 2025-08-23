@@ -1,23 +1,42 @@
 <script setup lang="ts">
-import { computed, ref, watch, type ShallowRef } from 'vue';
+import { computed, ref, type ShallowRef } from 'vue';
 import Calendar from './Calendar.vue';
 import Milestones from './Milestones.vue';
 import Settings from './Settings.vue';
 import feather from 'feather-icons';
 import { accountStore, type App } from '../account';
-import type { Repo } from '@automerge/automerge-repo';
-import type { Rop } from 'automerge-diy-vue-hooks';
-import type { RemotePeer } from '@/client';
 import QRCode from 'qrcode';
 import { computedAsync } from '@vueuse/core';
-import { encodeHash } from '@/hash';
+import { decodeHash, encodeHash } from '@/hash';
+import * as uuid from 'uuid';
 
 // const app: Ref<App> = ref({
 //   pinCatalog: PinCatalog.loadFromLocalStorageOrDefault(),
 //   pinCalendar: PinCalendar.loadFromLocalStorageOrDefault(),
 // });
 
-const app: ShallowRef<App> = await accountStore.value.GetApp();
+const currentUrl = URL.parse(window.location.href) ?? undefined;
+const currentHash = decodeHash(currentUrl?.hash ?? '');
+
+// Initialize calendar ID if no ID was given.
+if (currentHash.path?.document.id === undefined) {
+  currentHash.path = {
+    document: {
+      id: uuid.v7(),
+    },
+  };
+}
+
+// Remove args from the URL.
+window.location.hash = encodeHash({
+  path: currentHash?.path ?? [],
+  args: undefined,
+});
+
+const app: ShallowRef<App> = await accountStore.value.GetApp(
+  currentHash.path.document.id,
+  currentHash?.args,
+);
 const isDrawerOpen = ref(false);
 const connected = computed(() => {
   return Object.keys(app.value.docEphemeral.data.value.connectedPeers).length;
@@ -59,9 +78,12 @@ const peers = computed(() => {
 const inviteUrl = computed(() => {
   const inviteUrl = URL.parse(window.location.href)!;
   inviteUrl.hash = encodeHash({
-    action: 'addPeer',
-    documentId: app.value.docLocal.data.value.documentIdShared!,
-    peerJsPeerId: app.value.docLocal.data.value.localPeer.peerJsPeerId,
+    path: undefined,
+    args: {
+      action: 'addPeer',
+      documentId: app.value.docLocal.data.value.documentIdShared!,
+      peerJsPeerId: app.value.docLocal.data.value.localPeer.peerJsPeerId,
+    },
   });
   return inviteUrl.href;
 });
