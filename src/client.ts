@@ -29,6 +29,7 @@ export type CalendarId = Static<typeof CalendarIdSchema>;
 
 // TODO: Versioning
 const LocalStorageDataSchema = Type.Object({
+  leastRecentlyUsedCalendar: Type.Optional(CalendarIdSchema),
   calendars: Type.Record(
     CalendarIdSchema,
     Type.Object({

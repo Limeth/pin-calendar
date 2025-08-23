@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { App } from '../account';
+import { localStorageDataStore, type App } from '../account';
 import * as feather from 'feather-icons';
 import { ref, toRef } from 'vue';
 import type { Ref } from 'vue';
@@ -242,6 +242,23 @@ function onClickCalendarClear() {
   getSettingsIoModal().showModal();
 }
 
+function onClickCalendarDelete() {
+  modalData.value = {
+    kind: 'simple',
+    title: 'Delete Calendar From This Device',
+    message:
+      'Are you sure you want to delete this calendar from this device? This action cannot be undone.',
+    buttonConfirm: 'Delete Calendar From This Device',
+    actionConfirm: async () => {
+      const localStorageData = await localStorageDataStore.value.GetData();
+
+      // TODO: Implement proper deletion of all calendar data. This is just superficial.
+      delete localStorageData.value.calendars[app.value!.calendarId];
+    },
+  };
+  getSettingsIoModal().showModal();
+}
+
 function onClickImportPinsConfirm(importPins: ImportPins) {
   getPinCatalog().value![changeSubtree]((pinCatalog) => {
     if (importPins.overwrite) {
@@ -315,12 +332,22 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
                 <span class="font-semibold"
                   >Found {{ modalData.import.conflicts.pinCategories.length }} conflicting
                   categories</span
-                >: {{ Array.from(modalData.import.conflicts.pinCategories).join(', ') }}.
+                >:
+                {{
+                  // TODO: This is incomprehensible to humans, display the original and new titles instead
+                  Array.from(
+                    modalData.import.conflicts.pinCategories.map((pinCategory) => pinCategory.key),
+                  ).join(', ')
+                }}.
               </p>
               <p v-if="modalData.import.conflicts.pins.length > 0">
                 <span class="font-semibold"
                   >Found {{ modalData.import.conflicts.pins.length }} conflicting pins</span
-                >: {{ Array.from(modalData.import.conflicts.pins).join(', ') }}.
+                >:
+                {{
+                  // TODO: This is incomprehensible to humans, display the original and new titles instead
+                  Array.from(modalData.import.conflicts.pins.map((pin) => pin.key)).join(', ')
+                }}.
               </p>
             </div>
             <div>
@@ -436,6 +463,12 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
         <button @click="onClickCalendarClear" class="btn max-sm:btn-square btn-error flex-1">
           <div v-html="feather.icons['trash-2'].toSvg()" />
           <div>Clear</div>
+        </button>
+      </div>
+      <div class="flex flex-row gap-2">
+        <button @click="onClickCalendarDelete" class="btn btn-error flex-1">
+          <div v-html="feather.icons['trash-2'].toSvg()" />
+          <div>Delete calendar from this device only</div>
         </button>
       </div>
     </div>
