@@ -80,6 +80,7 @@ export type DocumentWrapper<T> = {
 };
 
 export type App = {
+  readonly calendarId: CalendarId;
   readonly docEphemeral: DocumentWrapper<EphemeralDocument>;
   readonly docLocal: DocumentWrapper<LocalDocument>;
   readonly docShared: DocumentWrapper<SharedDocument>;
@@ -128,7 +129,6 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
       case 'webrtc-start': {
         (async () => {
           const dataReadyLocal = await promiseDataReadyLocal;
-          console.log(`message:`, message);
           const webrtc = new WebRtcNetworkAdapter({
             clientSettings: dataReadyLocal.docLocal.data,
             connectedPeers: toRef(dataReadyLocal.docEphemeral.data.value.connectedPeers),
@@ -279,6 +279,7 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
   }
 
   return {
+    calendarId,
     docEphemeral: {
       repo: repoEphemeral,
       data: dataEphemeral,

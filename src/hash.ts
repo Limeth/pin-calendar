@@ -16,10 +16,10 @@ export type HashArgs = Static<typeof HashArgsSchema>;
 export type HashPath =
   | undefined
   | {
-      document: {
-        id: string;
-      };
+    calendar: {
+      id: string;
     };
+  };
 
 export type Hash = {
   path: HashPath;
@@ -33,7 +33,7 @@ export function decodeHashPath(path: string): HashPath {
 
   if (uuid.validate(segments[0])) {
     return {
-      document: {
+      calendar: {
         id: segments[0],
       },
     };
@@ -45,7 +45,7 @@ export function decodeHashPath(path: string): HashPath {
 export function encodeHashPath(path: HashPath): string {
   if (path === undefined) return '';
 
-  return path.document.id;
+  return path.calendar.id;
 }
 
 export function decodeHash(hash: string): Hash {
@@ -84,7 +84,7 @@ export function encodeHash(hash: Hash): string {
       argsString += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(value);
 
     // Replace the first & with #
-    result = '?' + argsString.slice(1);
+    result += '?' + argsString.slice(1);
   }
 
   return result.length > 0 ? '#' + result : '';

@@ -70,7 +70,7 @@ export class MessagePortWrapper<MessageSend, MessageRecv> {
   constructor(port: MessagePort) {
     this.port = port;
     this.port.addEventListener('message', (event) => {
-      console.log('message', event.data);
+      console.debug('message', event.data);
     });
   }
 
@@ -80,7 +80,7 @@ export class MessagePortWrapper<MessageSend, MessageRecv> {
   }
 
   postMessage(message: MessageSend, transfer?: Transferable[]) {
-    console.log('post', {
+    console.debug('post', {
       message,
       transfer,
     });
