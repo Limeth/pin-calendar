@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import * as feather from 'feather-icons';
-import { ref, watch, type ShallowRef, toRef, shallowRef } from 'vue';
+import { ref, watch, type ShallowRef, shallowRef, computed, reactive } from 'vue';
 import type { Ref } from 'vue';
 import {
   type PinDay,
@@ -26,20 +26,9 @@ type DayListDay = {
 };
 
 const app = defineModel<App>();
-const docData = toRef(app.value!.docShared, 'data');
-
-function getPinCalendar() {
-  return toRef(docData.value!, 'pinCalendar');
-}
-
-function getPinCatalog() {
-  return toRef(docData.value!, 'pinCatalog');
-}
-
-//   const { pinCatalog, pinCalendar } = defineProps<{
-//     pinCatalog: PinCatalog,
-//     pinCalendar: PinCalendar,
-//   }>();
+const docData = computed(() => reactive(app.value!.docShared.data.value));
+const pinCalendar = computed(() => reactive(docData.value!.pinCalendar));
+const pinCatalog = computed(() => reactive(docData.value!.pinCatalog));
 
 const dateNow = Temporal.Now.plainDateISO();
 const yearMonth = ref({
@@ -124,8 +113,8 @@ watch(
 
 watch(daySelected, () => {
   if (daySelected.value !== null) {
-    if (PinCalendarPrepareDay(getPinCalendar().value, daySelected.value.date)) {
-      pinDay.value = PinCalendarGetDayRef(getPinCalendar(), daySelected.value.date);
+    if (PinCalendarPrepareDay(pinCalendar.value, daySelected.value.date)) {
+      pinDay.value = PinCalendarGetDayRef(pinCalendar, daySelected.value.date);
     } else {
       // pinDay already updated via the document change handler below, triggered by `PinCalendarPrepareDay`.
     }
@@ -138,9 +127,7 @@ watch(daySelected, () => {
 
 app.value!.docShared.handle.on('change', () => {
   if (daySelected.value !== null)
-    pinDay.value = PinCalendarGetDayRef(getPinCalendar(), daySelected.value.date);
-
-  // getCurrentInstance()?.proxy?.$forceUpdate();
+    pinDay.value = PinCalendarGetDayRef(pinCalendar, daySelected.value.date);
 });
 </script>
 
@@ -211,11 +198,7 @@ app.value!.docShared.handle.on('change', () => {
                 </div>
                 <div class="flex flex-wrap gap-1 justify-start">
                   <template
-                    v-for="pin of PinCalendarGetPinsOnDay(
-                      getPinCalendar().value,
-                      getPinCatalog().value,
-                      day.date,
-                    )"
+                    v-for="pin of PinCalendarGetPinsOnDay(pinCalendar, pinCatalog, day.date)"
                     :key="pin.id"
                   >
                     <PinIcon :pin="pin" />
@@ -250,14 +233,14 @@ app.value!.docShared.handle.on('change', () => {
           <div class="collapse-content">
             <ul class="flex flex-col gap-2">
               <li
-                v-for="rootCategory of PinCatalogGetRootCategories(getPinCatalog().value)"
+                v-for="rootCategory of PinCatalogGetRootCategories(pinCatalog)"
                 :key="rootCategory.id.key"
               >
                 <CalendarPinCategory
                   v-if="!rootCategory.value.archived"
                   @event="onCalendarPinCategoryEvent"
                   :depth="0"
-                  :pin-catalog="getPinCatalog().value"
+                  :pin-catalog="pinCatalog"
                   :pin-category="rootCategory"
                   :pin-day="pinDay.value"
                 />

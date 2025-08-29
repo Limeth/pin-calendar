@@ -300,22 +300,30 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
 
 export type AppStore = {
   refMap: {
-    [calendarId: CalendarId]: Promise<ShallowRef<App>>;
+    [calendarId: CalendarId]: Promise<App>;
   };
 
-  GetApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<ShallowRef<App>>;
+  GetApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>;
+  GetAppOptional(calendarId: CalendarId | undefined, hashArgs: HashArgs): Promise<App | undefined>;
 };
 
 export const accountStore: ShallowRef<AppStore> = shallowRef<AppStore>({
   refMap: {},
 
-  GetApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<ShallowRef<App>> {
+  GetApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App> {
     if (calendarId in this.refMap) return this.refMap[calendarId];
 
     this.refMap[calendarId] = (async () => {
-      return shallowRef(await LoadApp(calendarId, hashArgs));
+      return await LoadApp(calendarId, hashArgs);
     })();
 
     return this.refMap[calendarId];
+  },
+
+  async GetAppOptional(
+    calendarId: CalendarId | undefined,
+    hashArgs: HashArgs,
+  ): Promise<App | undefined> {
+    if (calendarId !== undefined) return await this.GetApp(calendarId, hashArgs);
   },
 });

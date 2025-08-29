@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { localStorageDataStore, type App } from '../account';
 import * as feather from 'feather-icons';
-import { ref, toRef } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import type { Ref } from 'vue';
 import {
   type PinCalendar,
@@ -75,15 +75,9 @@ type ImportCalendar = {
 type Import = ImportPins | ImportCalendar;
 
 const app = defineModel<App>();
-const docData = toRef(app.value!.docShared, 'data');
-
-function getPinCalendar() {
-  return toRef(docData.value!, 'pinCalendar');
-}
-
-function getPinCatalog() {
-  return toRef(docData.value!, 'pinCatalog');
-}
+const docData = computed(() => reactive(app.value!.docShared.data.value));
+const pinCalendar = computed(() => reactive(docData.value!.pinCalendar));
+const pinCatalog = computed(() => reactive(docData.value!.pinCatalog));
 
 const modalData: Ref<ModalData | undefined> = ref(undefined);
 
@@ -134,7 +128,7 @@ function triggerUpload(upload: Upload) {
 function onClickPinsExport() {
   triggerDownload({
     fileName: 'pin-catalog.json',
-    content: new Blob([PinCatalogSerialize(getPinCatalog().value)], { type: 'application/json' }),
+    content: new Blob([PinCatalogSerialize(pinCatalog.value)], { type: 'application/json' }),
   });
 }
 
@@ -148,7 +142,7 @@ function onClickPinsImport() {
       if (loadedPinCatalog === null) return;
 
       const conflictingPinIdKeys = new Set(Object.keys(loadedPinCatalog.pins)).intersection(
-        new Set(Object.keys(getPinCatalog().value.pins)),
+        new Set(Object.keys(pinCatalog.value.pins)),
       );
       const conflictingPinIds: PinId[] = [];
 
@@ -157,7 +151,7 @@ function onClickPinsImport() {
 
       const conflictingPinCategoryIdKeys = new Set(
         Object.keys(loadedPinCatalog.pinCategories),
-      ).intersection(new Set(Object.keys(getPinCatalog().value.pinCategories)));
+      ).intersection(new Set(Object.keys(pinCatalog.value.pinCategories)));
       const conflictingPinCategoryIds: PinCategoryId[] = [];
 
       for (const conflictingIdKey of conflictingPinCategoryIdKeys)
@@ -189,7 +183,7 @@ function onClickPinsClear() {
       'Are you sure you want to delete all pin definitions from the pin catalog? This action cannot be undone.',
     buttonConfirm: 'Delete All Pins',
     actionConfirm: () => {
-      getPinCatalog().value[changeSubtree]((pinCatalog) => {
+      pinCatalog.value[changeSubtree]((pinCatalog) => {
         PinCatalogClear(pinCatalog);
       });
     },
@@ -200,7 +194,7 @@ function onClickPinsClear() {
 function onClickCalendarExport() {
   triggerDownload({
     fileName: 'calendar.json',
-    content: new Blob([PinCalendarSerialize(getPinCalendar().value)], { type: 'application/json' }),
+    content: new Blob([PinCalendarSerialize(pinCalendar.value)], { type: 'application/json' }),
   });
 }
 
@@ -234,7 +228,7 @@ function onClickCalendarClear() {
       'Are you sure you want to clear all pins from the calendar? This action cannot be undone.',
     buttonConfirm: 'Clear Calendar',
     actionConfirm: () => {
-      getPinCalendar().value![changeSubtree]((pinCalendar) => {
+      pinCalendar.value![changeSubtree]((pinCalendar) => {
         PinCalendarClear(pinCalendar);
       });
     },
@@ -260,7 +254,7 @@ function onClickCalendarDelete() {
 }
 
 function onClickImportPinsConfirm(importPins: ImportPins) {
-  getPinCatalog().value![changeSubtree]((pinCatalog) => {
+  pinCatalog.value![changeSubtree]((pinCatalog) => {
     if (importPins.overwrite) {
       // Remove conflicting elements
       for (const pinCategoryId of importPins.conflicts.pinCategories)
@@ -291,7 +285,7 @@ function onClickImportPinsConfirm(importPins: ImportPins) {
 }
 
 function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
-  getPinCalendar().value![changeSubtree]((pinCalendar) => {
+  pinCalendar.value![changeSubtree]((pinCalendar) => {
     PinCalendarCombine(pinCalendar, importCalendar.calendar);
   });
 }

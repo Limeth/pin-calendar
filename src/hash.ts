@@ -16,10 +16,10 @@ export type HashArgs = Static<typeof HashArgsSchema>;
 export type HashPath =
   | undefined
   | {
-    calendar: {
-      id: string;
+      calendar: {
+        id: string;
+      };
     };
-  };
 
 export type Hash = {
   path: HashPath;

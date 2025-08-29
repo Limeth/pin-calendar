@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch, type Ref, type ShallowRef } from 'vue';
+import { computed, ref, watch, type Ref } from 'vue';
 import Calendar from './Calendar.vue';
 import Milestones from './Milestones.vue';
 import Settings from './Settings.vue';
 import feather from 'feather-icons';
-import { accountStore, localStorageDataStore, type App } from '../account';
+import { accountStore, localStorageDataStore } from '../account';
 import QRCode from 'qrcode';
 import { asyncComputed, computedAsync } from '@vueuse/core';
 import { decodeHash, encodeHash, type Hash } from '@/hash';
@@ -69,33 +69,37 @@ currentHash.value.args = undefined;
 
 openCalendar(currentHash.value.path.calendar.id);
 
-const calendar = computed(() => {
-  const calendarId = currentHash.value.path?.calendar.id;
-
-  if (calendarId !== undefined && calendarId in localStorageData.value.calendars) {
-    return { calendarId, ...localStorageData.value.calendars[calendarId] };
-  }
-
-  return undefined;
-});
-const app = asyncComputed(async () => {
-  if (calendar.value?.calendarId !== undefined)
-    return await accountStore.value.GetApp(
+const appIsBeingLoaded = ref(true);
+const appAsync = asyncComputed(
+  async () => {
+    const app = await accountStore.value.GetAppOptional(
       currentHash.value.path!.calendar.id,
       currentHash.value?.args,
     );
-});
+    // To debug the loading indicator when switching between calendars, uncomment this:
+    // await new Promise(() => { /* Never resolve */ });
+    return app;
+  },
+  undefined,
+  {
+    evaluating: appIsBeingLoaded,
+  },
+);
+// This property exists so that the app has the value `undefined`
+// when switching from a loaded calendar to a not-yet-loaded calendar.
+const app = computed(() => (appIsBeingLoaded.value ? undefined : appAsync.value));
+
 const isDrawerOpen = ref(false);
 const drawerContent: Ref<undefined | 'calendars' | 'peers'> = ref(undefined);
 const connected = computed(() => {
   if (app.value === undefined) return 0;
-  return Object.keys(app.value.value.docEphemeral.data.value.connectedPeers).length;
+  return Object.keys(app.value.docEphemeral.data.value.connectedPeers).length;
 });
 const peers = computed(() => {
   if (app.value === undefined) return [];
 
-  const remotePeers = app.value.value.docLocal.data.value.remotePeers;
-  const connectedPeers = app.value.value.docEphemeral.data.value.connectedPeers;
+  const remotePeers = app.value.docLocal.data.value.remotePeers;
+  const connectedPeers = app.value.docEphemeral.data.value.connectedPeers;
   const result = [];
 
   for (const [peerJsPeerId, remotePeer] of Object.entries(remotePeers)) {
@@ -142,8 +146,8 @@ const inviteUrl = computed(() => {
         : undefined,
     args: {
       action: 'addPeer',
-      documentId: app.value.value.docLocal.data.value.documentIdShared!,
-      peerJsPeerId: app.value.value.docLocal.data.value.localPeer.peerJsPeerId,
+      documentId: app.value.docLocal.data.value.documentIdShared!,
+      peerJsPeerId: app.value.docLocal.data.value.localPeer.peerJsPeerId,
     },
   });
   return inviteUrl.href;
@@ -155,10 +159,6 @@ const inviteQr = computedAsync(async () => {
     scale: 1,
   });
 });
-
-console.log('pinCalendar', app.value?.value?.docShared.data.value!.pinCalendar);
-
-// const account = await accountStore.value.GetAccount();
 
 enum Page {
   CALENDAR,
@@ -183,13 +183,25 @@ function createNewCalendar() {
   <div class="drawer">
     <input id="spa-drawer" type="checkbox" class="drawer-toggle" v-model="isDrawerOpen" />
     <div class="drawer-content">
-      <div class="pb-16">
-        <!-- Padding equal to the bottom navigation height -->
-        <template v-if="app !== undefined">
-          <Calendar v-if="currentPage === Page.CALENDAR" v-model="app.value" />
-          <Milestones v-if="currentPage === Page.MILESTONES" v-model="app.value" />
-          <Settings v-if="currentPage === Page.SETTINGS" v-model="app.value" />
-        </template>
+      <div class="pb-16" v-if="app !== undefined">
+        <Calendar v-if="currentPage === Page.CALENDAR" v-model="app" />
+        <Milestones v-if="currentPage === Page.MILESTONES" v-model="app" />
+        <Settings v-if="currentPage === Page.SETTINGS" v-model="app" />
+      </div>
+      <div
+        v-else
+        class="flex flex-col items-center justify-center"
+        style="height: calc(100svh - var(--spacing) * 16); /* Full height excluding the menu bar */"
+      >
+        <div class="flex flex-col gap-2 items-center">
+          <template v-if="appIsBeingLoaded">
+            <span class="loading loading-bars loading-xl"></span>
+            <h1>Loading calendar, please wait.</h1>
+          </template>
+          <template v-else>
+            <h1>Please select a calendar to display, in the bottom left menu.</h1>
+          </template>
+        </div>
       </div>
       <div class="dock gap-2">
         <button

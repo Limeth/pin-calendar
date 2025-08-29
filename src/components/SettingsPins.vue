@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { App } from '../account';
 import * as feather from 'feather-icons';
-import { ref, watch, toRef, computed, toRaw } from 'vue';
+import { ref, watch, computed, toRaw, reactive } from 'vue';
 import type { Ref } from 'vue';
 import {
   PinCatalogCreateAndAddPinToCategory,
@@ -50,21 +50,19 @@ type Editing = EditingPin | EditingPinCategory;
 const emojiRegexPattern = emojiRegex();
 
 const app = defineModel<App>();
-
-function getPinCatalog(): Ref<Rop<PinCatalog>> {
-  return toRef(app.value!.docShared.data.value, 'pinCatalog');
-}
+const docData = computed(() => reactive(app.value!.docShared.data.value));
+const pinCatalog = computed(() => reactive(docData.value!.pinCatalog));
 
 const editingPinCategory = computed(() => {
   if (editing.value !== undefined && editing.value.kind == 'category')
-    return PinCatalogGetPinCategoryById(getPinCatalog().value, editing.value.elementId);
+    return PinCatalogGetPinCategoryById(pinCatalog.value, editing.value.elementId);
 
   return null;
 });
 
 const editingPin = computed(() => {
   if (editing.value !== undefined && editing.value.kind == 'pin')
-    return PinCatalogGetPinById(getPinCatalog().value, editing.value.elementId);
+    return PinCatalogGetPinById(pinCatalog.value, editing.value.elementId);
 
   return null;
 });
@@ -80,8 +78,8 @@ function editPinCategory(
   if (editing.value?.elementId.isEqualDynamic(pinCategoryId)) {
     editing.value = undefined;
   } else {
-    // const parentId = getPinCatalog().value.pinCategories[pinCategory.id].parentId;
-    // const parent = parentId !== undefined ? getPinCatalog().value.pinCategories[parentId].pinCategory : undefined;
+    // const parentId = pinCatalog.value.pinCategories[pinCategory.id].parentId;
+    // const parent = parentId !== undefined ? pinCatalog.value.pinCategories[parentId].pinCategory : undefined;
     editing.value = {
       kind: 'category',
       elementId: pinCategoryId,
@@ -96,7 +94,7 @@ function editPin(pinId: PinId, pin: Rop<PinDescriptor> | undefined) {
   } else {
     editing.value = {
       kind: 'pin',
-      // parent: getPinCatalog().value.pinCategories[getPinCatalog().value.pins[pin.id].categoryId].pinCategory,
+      // parent: pinCatalog.value.pinCategories[pinCatalog.value.pins[pin.id].categoryId].pinCategory,
       elementId: pinId,
       original: pin !== undefined ? structuredClone(toRaw(pin)) : undefined,
     };
@@ -114,7 +112,7 @@ function onClickEditPin(pin: PinTypeOf<Rop<PinCatalog>>) {
 function onClickAddPinCategory(parent: PinCategoryTypeOf<Rop<PinCatalog>> | undefined) {
   let id: PinCategoryId | undefined;
 
-  getPinCatalog().value[changeSubtree]((pinCatalog) => {
+  pinCatalog.value[changeSubtree]((pinCatalog) => {
     const pinCategory = PinCatalogCreateAndAddSubcategoryToCategory(
       pinCatalog,
       parent?.id ?? null,
@@ -134,7 +132,7 @@ function onClickAddPinCategory(parent: PinCategoryTypeOf<Rop<PinCatalog>> | unde
 function onClickAddPin(parent: PinCategoryTypeOf<Rop<PinCatalog>>) {
   let id: PinId | undefined;
 
-  getPinCatalog().value[changeSubtree]((pinCatalog) => {
+  pinCatalog.value[changeSubtree]((pinCatalog) => {
     // prettier-ignore
     const DEFAULT_EMOJIS = [
       '🎀', '🎗️', '🥼', '🦺', '👔', '👟', '💎', '🎵', '📖', '📒', '📓', '🔖', '🏷️', '✏️', '🖊️', '💼', '💸', '💳', '🧶', '🪚', '🧪', '🔭', '🛏️', '♻️', '🧭', '🏕️', '🏖️', '🚲', '🛹', '🛼', '⚽', '⚾', '🥎', '🏀', '🏐', '🏈', '🏉', '🎾', '🥏', '🎳', '🏏', '🏑', '🏒', '🥍', '🏓', '🏸', '🥊', '🥋', '🥅', '⛳', '⛸️', '🎣', '🤿', '🎿', '🛷', '🥌', '🎯', '🏹', '🪀', '🪁', '🪄', '🎮', '🕹️', '🎲', '🧩', '♟️', '🃏', '🀄', '🎴', '🎭', '🖼️', '🎨', '🍳', '🥘', '🍲', '🥗', '🍱', '🍜', '🍻', '🥂', '🍽️', '☀️', '🌙', '⭐', '🌈', '⚡', '❄️', '🔥', '💧', '✍️', '💅', '💪', '🧠', '🐈', '🐕', '🐱', '🐶', '🐰', '🐾', '🐹', '🐇', '🐈‍⬛', '🦎', '🦔', '🐠', '🐦',
@@ -182,13 +180,13 @@ function onClickEditClose() {
 }
 
 function onClickDeletePinCategory(pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>) {
-  getPinCatalog().value[changeSubtree]((pinCatalog) => {
+  pinCatalog.value[changeSubtree]((pinCatalog) => {
     PinCatalogRemovePinCategory(pinCatalog, pinCategory.id);
   });
 }
 
 function onClickDeletePin(pin: Pin) {
-  getPinCatalog().value[changeSubtree]((pinCatalog) => {
+  pinCatalog.value[changeSubtree]((pinCatalog) => {
     PinCatalogRemovePin(pinCatalog, pin.id);
   });
 }
@@ -246,7 +244,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
           <li
             v-for="rootCategory of R.filter(
               (rootCategory) => !rootCategory.value.archived,
-              PinCatalogGetRootCategories(getPinCatalog().value),
+              PinCatalogGetRootCategories(pinCatalog),
             )"
             :key="rootCategory.id.key"
             class="flex flex-row items-center w-full gap-1"
@@ -254,7 +252,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
             <SettingsPinCategory
               @event="onSettingsPinCategoryEvent"
               :depth="0"
-              :pin-catalog="getPinCatalog().value"
+              :pin-catalog="pinCatalog"
               :pin-category="rootCategory"
             />
           </li>
@@ -262,7 +260,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
             v-if="
               R.any(
                 (pinCategory) => !!pinCategory.value.archived,
-                PinCatalogGetRootCategories(getPinCatalog().value),
+                PinCatalogGetRootCategories(pinCatalog),
               )
             "
             class="collapse collapse-arrow"
@@ -276,7 +274,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <li
                 v-for="rootCategory of R.filter(
                   (rootCategory) => !!rootCategory.value.archived,
-                  PinCatalogGetRootCategories(getPinCatalog().value),
+                  PinCatalogGetRootCategories(pinCatalog),
                 )"
                 :key="rootCategory.id.key"
                 class="flex flex-row items-center w-full gap-1"
@@ -284,7 +282,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                 <SettingsPinCategory
                   @event="onSettingsPinCategoryEvent"
                   :depth="0"
-                  :pin-catalog="getPinCatalog().value"
+                  :pin-catalog="pinCatalog"
                   :pin-category="rootCategory"
                 />
               </li>
