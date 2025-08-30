@@ -5,13 +5,13 @@ import {
   type PeerMetadata,
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
-import { type Ref } from 'vue';
+import { toRef, watch, type Ref } from 'vue';
 import { LocalDocumentAddPeer, type LocalDocument } from './client';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { ConnectedPeers } from './account';
 
 export type WebRtcNetworkAdapterOptions = {
-  clientSettings: Ref<Rop<LocalDocument>>;
+  docLocal: Ref<Rop<LocalDocument>>;
   connectedPeers: Ref<Rop<ConnectedPeers>>;
   attemptToWaitForAnyPeerDurationMilliseconds: undefined | number;
 };
@@ -61,6 +61,25 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     this.readyResolver = readyResolver!;
     this.dataConnections = {};
     this.sessionCounter = 0;
+
+    // Disconnect from peers that are removed by the user.
+    // TODO: Doesn't work. Currently, we just reload the page.
+    // watch(toRef(this.options.docLocal.value.remotePeers), (valueNew, valueOld) => {
+    //   const removedPeers = Object.keys(valueOld).filter((peerJsPeerId) => !(peerJsPeerId in valueNew));
+    //   console.log("RemotePeers changed:");
+    //   console.log(valueNew);
+    //   console.log(valueOld);
+    //   console.log(removedPeers)
+
+    //   for (const removedPeer of removedPeers) {
+    //     const dataConnection = this.dataConnections[removedPeer];
+
+    //     if (dataConnection !== undefined) {
+    //       console.log(`Disconnecting from removed peer: ${removedPeer}`);
+    //       dataConnection.close();
+    //     }
+    //   }
+    // }, { deep: true });
   }
 
   connect(peerId: PeerId, peerMetadata?: PeerMetadata): void {
@@ -71,7 +90,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     this.peerId = peerId;
     this.peerMetadata = peerMetadata;
 
-    this.peer = new Peer(this.options.clientSettings.value.localPeer.peerJsPeerId, {
+    this.peer = new Peer(this.options.docLocal.value.localPeer.peerJsPeerId, {
       debug: 3,
       secure: true,
     });
@@ -91,7 +110,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
       // TODO
       for (const remotePeerPeerJsPeerId of Object.keys(
-        this.options.clientSettings.value.remotePeers,
+        this.options.docLocal.value.remotePeers,
       )) {
         const connectMetadata: ConnectMetadata = {
           automergePeerId: peerId,
@@ -107,7 +126,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       }
 
       if (
-        Object.keys(this.options.clientSettings.value.remotePeers).length > 0 &&
+        Object.keys(this.options.docLocal.value.remotePeers).length > 0 &&
         this.options.attemptToWaitForAnyPeerDurationMilliseconds !== undefined
       ) {
         await new Promise((resolve) =>
@@ -181,7 +200,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
 
     console.log(`Adding opened peer peerJsPeerId:${connectedPeer.dataConnection.peer}`);
-    LocalDocumentAddPeer(this.options.clientSettings.value, {
+    LocalDocumentAddPeer(this.options.docLocal.value, {
       peerJsPeerId: connectedPeer.dataConnection.peer,
       deviceName: '', // TODO
     });

@@ -130,7 +130,7 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
         (async () => {
           const dataReadyLocal = await promiseDataReadyLocal;
           const webrtc = new WebRtcNetworkAdapter({
-            clientSettings: dataReadyLocal.docLocal.data,
+            docLocal: dataReadyLocal.docLocal.data,
             connectedPeers: toRef(dataReadyLocal.docEphemeral.data.value.connectedPeers),
             attemptToWaitForAnyPeerDurationMilliseconds:
               message.documentSharedAvailableLocallyDuringInitialization ? undefined : 1000,

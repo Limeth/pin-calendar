@@ -10,6 +10,7 @@ import { asyncComputed, computedAsync } from '@vueuse/core';
 import { decodeHash, encodeHash, type Hash } from '@/hash';
 import * as uuid from 'uuid';
 import type { CalendarId } from '@/client';
+import { changeSubtree } from 'automerge-diy-vue-hooks';
 
 // const app: Ref<App> = ref({
 //   pinCatalog: PinCatalog.loadFromLocalStorageOrDefault(),
@@ -180,6 +181,19 @@ function createNewCalendar() {
   const calendarId = uuid.v7();
   localStorageData.value.calendars[calendarId] = {};
 }
+
+function forgetPeer(peerJsPeerId: string) {
+  if (app.value === undefined) return;
+
+  app.value.docLocal.data.value.remotePeers[changeSubtree]((remotePeers) => {
+    delete remotePeers[peerJsPeerId];
+  });
+
+  console.log(app.value.docLocal.data.value.remotePeers);
+  // TODO/FIXME: We reload the page to get rid of stray connections.
+  // Ideally, we would just close the WebRTC connections instead.
+  location.reload();
+}
 </script>
 
 <template>
@@ -305,13 +319,12 @@ function createNewCalendar() {
                   </div>
                 </div>
                 <div class="flex flex-col gap-1 items-stretch">
-                  <button class="btn btn-sm btn-neutral max-sm:btn-square">
+                  <button
+                    class="btn btn-sm btn-neutral max-sm:btn-square"
+                    @click="forgetPeer(peer.peerJsPeerId)"
+                  >
                     <div v-html="feather.icons['trash-2'].toSvg()" />
                     <div class="max-sm:hidden">Forget</div>
-                  </button>
-                  <button class="btn btn-sm max-sm:btn-square btn-error">
-                    <div v-html="feather.icons['slash'].toSvg()" />
-                    <div class="max-sm:hidden">Block</div>
                   </button>
                 </div>
               </li>
