@@ -5,7 +5,7 @@ import {
   type PeerMetadata,
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
-import { toRef, watch, type Ref } from 'vue';
+import { type Ref } from 'vue';
 import { LocalDocumentAddPeer, type LocalDocument } from './client';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { ConnectedPeers } from './account';
@@ -109,9 +109,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       this.peerJsPeerId = id;
 
       // TODO
-      for (const remotePeerPeerJsPeerId of Object.keys(
-        this.options.docLocal.value.remotePeers,
-      )) {
+      for (const remotePeerPeerJsPeerId of Object.keys(this.options.docLocal.value.remotePeers)) {
         const connectMetadata: ConnectMetadata = {
           automergePeerId: peerId,
           automergePeerMetadata: peerMetadata ?? {},
