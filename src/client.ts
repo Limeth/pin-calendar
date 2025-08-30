@@ -116,7 +116,7 @@ export function LocalDocumentAddPeer(self: Rop<LocalDocument>, peer: LocalPeer):
 
 export function LocalDocumentProcessHash(self: Rop<LocalDocument>, hashArgs: HashArgs) {
   if (hashArgs?.action === 'addPeer') {
-    if (self.documentIdShared !== undefined || self.documentIdShared !== hashArgs.documentId) {
+    if (self.documentIdShared !== undefined && self.documentIdShared !== hashArgs.documentId) {
       console.warn(
         `Document ID mismatch (current: ${self.documentIdShared}, requested: ${hashArgs.documentId})`,
       );

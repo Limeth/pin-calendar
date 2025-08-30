@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, type Ref } from 'vue';
+import { computed, ref, toRaw, watch, type Ref } from 'vue';
 import Calendar from './Calendar.vue';
 import Milestones from './Milestones.vue';
 import Settings from './Settings.vue';
@@ -50,6 +50,8 @@ if (Object.keys(localStorageData.value.calendars).length === 0) {
         Object.keys(localStorageData.value.calendars)[0],
     },
   };
+  // Reset args to make sure no operation is performed on implicitly selected calendar.
+  currentHash.value.args = undefined;
 }
 
 function openCalendar(calendarId: CalendarId) {
@@ -65,6 +67,7 @@ function openCalendar(calendarId: CalendarId) {
 }
 
 // Remove args from the URL.
+const originalHashArgs = structuredClone(toRaw(currentHash.value.args));
 currentHash.value.args = undefined;
 
 openCalendar(currentHash.value.path.calendar.id);
@@ -74,7 +77,7 @@ const appAsync = asyncComputed(
   async () => {
     const app = await accountStore.value.GetAppOptional(
       currentHash.value.path!.calendar.id,
-      currentHash.value?.args,
+      originalHashArgs,
     );
     // To debug the loading indicator when switching between calendars, uncomment this:
     // await new Promise(() => { /* Never resolve */ });
