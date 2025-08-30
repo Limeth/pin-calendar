@@ -18,6 +18,7 @@ import CalendarPinCategory from './CalendarPinCategory.vue';
 import type { CalendarPinCategoryEvent } from './CalendarPinCategory.vue';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { App } from '../account';
+import PinCard from './PinCard.vue';
 
 type DayListDay = {
   date: Temporal.PlainDate;
@@ -201,7 +202,12 @@ app.value!.docShared.handle.on('change', () => {
                     v-for="pin of PinCalendarGetPinsOnDay(pinCalendar, pinCatalog, day.date)"
                     :key="pin.id"
                   >
-                    <PinIcon :pin="pin" />
+                    <div class="tooltip">
+                      <div class="tooltip-content p-2">
+                        <PinCard :pin="pin" />
+                      </div>
+                      <PinIcon :pin="pin" />
+                    </div>
                   </template>
                 </div>
               </div>
