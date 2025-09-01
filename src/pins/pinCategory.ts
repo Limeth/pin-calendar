@@ -1,35 +1,20 @@
-import { Temporal } from '@js-temporal/polyfill';
-import { changeSubtree, type Ro, type Rop } from 'automerge-diy-vue-hooks';
-import { toRef, type Ref } from 'vue';
-import * as uuid from 'uuid';
-import { FormatRegistry, Type, type Static, type TObject } from '@sinclair/typebox';
+import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
-// import * as Y from 'yjs';
-
-FormatRegistry.Set('uuid', (value) => uuid.validate(value));
-FormatRegistry.Set('date', (value) => {
-  try {
-    Temporal.PlainDate.from(value);
-    return true;
-  } catch {
-    return false;
-  }
-});
-
-// const LOCAL_STORAGE_KEY_PIN_CATALOG = 'pin_catalog';
-// const LOCAL_STORAGE_KEY_PIN_CALENDAR = 'pin_calendar';
-
-type MaybeRop<T> = T | Rop<T>;
-type MaybeRo<T> = T | Ro<T>;
-
-const LocalStorageSerializableSchema = Type.Object({
-  version: Type.Integer(),
-});
-
-export type LocalStorageSerializable = Static<typeof LocalStorageSerializableSchema>;
-
-// ID's are stringified UUIDv7
-type Uuid = string;
+import {
+  ArchivableSchema,
+  generateId,
+  IdKeySchema,
+  idSetAdd,
+  idSetRemove,
+  keyToId,
+  LocalStorageSerializableSchema,
+  RegistryId,
+  Variant,
+  type IdKey,
+  type MaybeRo,
+  type MaybeRop,
+  type Registered,
+} from './util';
 
 export const PIN_ID_SYMBOL: unique symbol = Symbol.for('pinId');
 export const PIN_CATEGORY_ID_SYMBOL: unique symbol = Symbol.for('pinCategoryId');
@@ -59,58 +44,7 @@ const IconSchema = Variant(
   }),
 );
 
-type Literal<T, PrimitiveType> = T extends PrimitiveType
-  ? PrimitiveType extends T
-    ? never
-    : T
-  : never;
-function Variant<D, T extends TObject>(discriminantField: Literal<D, string>, object: T) {
-  // TODO: Check that discriminantField doesn't interfere with the variants.
-  return Type.Composite([
-    Type.Mapped(Type.Literal(discriminantField), () => Type.KeyOf(object)),
-    object,
-  ]);
-}
-
 export type Icon = Static<typeof IconSchema>;
-
-const ArchivableSchema = Type.Object({
-  archived: Type.Optional(Type.Boolean()),
-});
-
-export type Archiveable = Static<typeof ArchivableSchema>;
-
-export class RegistryId<S extends symbol> {
-  readonly idSymbol: S;
-  readonly key: Uuid;
-
-  constructor(idSymbol: S, key: Uuid) {
-    this.idSymbol = idSymbol;
-    this.key = key;
-  }
-
-  isEqualStatic(rhs: RegistryId<S>): boolean {
-    return this.key === rhs.key;
-  }
-
-  isEqualDynamic<S2 extends symbol>(rhs: RegistryId<S2>): boolean {
-    return this.key === rhs.key && (this.idSymbol as symbol) === (rhs.idSymbol as symbol);
-  }
-}
-
-// TODO: Assert that IdKey is the same type?
-function IdKeySchema<_ extends { key: unknown }>() {
-  return Type.String({
-    format: 'uuid',
-  });
-}
-
-export type IdKey<I extends { key: unknown }> = I['key'];
-
-export type Registered<I, T> = {
-  id: I;
-  value: T;
-};
 
 const PinCategoryDescriptorSchema = Type.Intersect([
   ArchivableSchema,
@@ -139,14 +73,6 @@ const PinDescriptorSchema = Type.Intersect([
 export type PinDescriptor = Static<typeof PinDescriptorSchema>;
 
 export type Pin = Registered<PinId, PinDescriptor>;
-
-export function keyToId<S extends symbol>(key: IdKey<RegistryId<S>>, idSymbol: S): RegistryId<S> {
-  return new RegistryId(idSymbol, key);
-}
-
-function generateId<S extends symbol>(idSymbol: S): RegistryId<S> {
-  return keyToId(uuid.v7(), idSymbol);
-}
 
 export function generatePinId(): PinId {
   return generateId(PIN_ID_SYMBOL);
@@ -222,31 +148,6 @@ export function PinCatalogGetPinCategoryById<T extends MaybeRop<PinCatalog>>(
     id: pinCategoryId,
     value: pinCategoryDescriptor,
   } as PinCategoryTypeOf<T>;
-}
-
-function idSetAdd<S extends symbol>(idSet: IdKey<RegistryId<S>>[], id: RegistryId<S>): boolean {
-  const existingIndex = idSet.findIndex((currentId) => currentId === id.key);
-
-  if (existingIndex !== -1) {
-    // Pin is already present.
-    return false;
-  } else {
-    idSet.push(id.key);
-    return true;
-  }
-}
-
-function idSetRemove<S extends symbol>(idSet: IdKey<RegistryId<S>>[], id: RegistryId<S>): boolean {
-  let removed = false;
-
-  while (true) {
-    const existingIndex = idSet.findIndex((currentId) => currentId === id.key);
-
-    if (existingIndex === -1) return removed;
-
-    idSet.splice(existingIndex, 1);
-    removed = true;
-  }
 }
 
 function PinCategoryAddPinById(self: PinCategory, pinId: PinId): boolean {
@@ -627,236 +528,4 @@ export function PinCatalogFromJsonValue(json: unknown): PinCatalog | null {
 
 export function PinCatalogDeserialize(serialized: string): PinCatalog | null {
   return PinCatalogFromJsonValue(JSON.parse(serialized));
-}
-
-export type PinnedPin = {
-  count: number; // TODO: Allow more than 1
-};
-
-export type PinDayPins = {
-  [pinId: IdKey<PinId>]: PinnedPin;
-};
-
-const PinDaySchema = Type.Object({
-  pins: Type.Array(IdKeySchema<PinId>()),
-});
-
-export type PinDay = Static<typeof PinDaySchema>;
-
-function PinDayNew(): PinDay {
-  return {
-    pins: [],
-  };
-}
-
-function PinDayHasPinById(self: PinDay | Ro<PinDay>, pinId: PinId): boolean {
-  return self.pins.includes(pinId.key);
-}
-
-export function PinDayHasPin(self: PinDay | Ro<PinDay>, pin: Pin): boolean {
-  return PinDayHasPinById(self, pin.id);
-}
-
-function PinDayAddPinById(self: PinDay, pinId: PinId): boolean {
-  if (PinDayHasPinById(self, pinId)) return false;
-  else {
-    self.pins.push(pinId.key);
-    return true;
-  }
-}
-
-export function PinDayAddPin(self: PinDay, pin: Pin): boolean {
-  return PinDayAddPinById(self, pin.id);
-}
-
-function PinDayRemovePinById(self: PinDay, pinId: PinId): boolean {
-  let removed = false;
-
-  while (true) {
-    const index = self.pins.findIndex((currentPinId) => currentPinId === pinId.key);
-
-    if (index === -1) break;
-
-    self.pins.splice(index, 1);
-    removed = true;
-  }
-
-  return removed;
-}
-
-export function PinDayRemovePin(self: PinDay, pin: Pin): boolean {
-  return PinDayRemovePinById(self, pin.id);
-}
-
-export function PinDaySetPinPresence(self: PinDay, pin: Pin, presence: boolean): boolean {
-  if (presence) return PinDayAddPin(self, pin);
-  else return PinDayRemovePin(self, pin);
-}
-
-export function PinDayTogglePin(self: PinDay, pin: Pin): boolean {
-  const newValue = !PinDayHasPin(self, pin);
-  PinDaySetPinPresence(self, pin, newValue);
-  return newValue;
-}
-
-export function PinDayIsEmpty(self: PinDay): boolean {
-  return self.pins.length === 0;
-}
-
-const PinCalendarDaysSchema = Type.Record(
-  Type.String({
-    format: 'date',
-  }),
-  PinDaySchema,
-);
-
-export type PinCalendarDays = Static<typeof PinCalendarDaysSchema>;
-
-const PinCalendarSchema = Type.Intersect([
-  LocalStorageSerializableSchema,
-  Type.Object({
-    days: PinCalendarDaysSchema,
-  }),
-]);
-
-export type PinCalendar = Static<typeof PinCalendarSchema>;
-
-export function PinCalendarNew(): PinCalendar {
-  return {
-    version: 1,
-    days: {},
-  };
-}
-
-export function PinCalendarClear(self: PinCalendar) {
-  self.days = {};
-}
-
-function PinCalendarGetDayRefByKey(
-  self: Ref<Rop<PinCalendar>>,
-  key: string,
-): Ref<Rop<PinDay>> | null {
-  if (key in self.value.days) return toRef(self.value.days, key);
-  else return null;
-}
-
-function PinCalendarGetDayByKey<P extends MaybeRop<PinCalendar>>(
-  self: P,
-  key: string,
-): P['days'][string] | null {
-  return (self.days[key] as P['days'][string] | undefined) ?? null;
-}
-
-function PinCalendarGetOrDefaultDayByKey(self: PinCalendar, key: string): PinDay {
-  if (key in self.days) return self.days[key];
-  else {
-    const day = PinDayNew();
-    self.days[key] = day;
-    return day;
-  }
-}
-
-function PinCalendarPrepareDayByKey(self: Rop<PinCalendar>, key: string): boolean {
-  if (!(key in self.days)) {
-    self[changeSubtree]((pinCalendar: PinCalendar) => {
-      pinCalendar.days[key] = PinDayNew();
-    });
-    return false;
-  } else return true;
-}
-
-export function PinCalendarGetDayRef(
-  self: Ref<Rop<PinCalendar>>,
-  day: Temporal.PlainDate,
-): Ref<Rop<PinDay>> | null {
-  return PinCalendarGetDayRefByKey(self, PinCalendarDayToKey(day));
-}
-
-export function PinCalendarGetDay<P extends MaybeRop<PinCalendar>>(
-  self: P,
-  day: Temporal.PlainDate,
-): P['days'][string] | null {
-  return PinCalendarGetDayByKey(self, PinCalendarDayToKey(day));
-}
-
-/// Returns `true` if the day was already prepared. Otherwise, the document must be updated.
-export function PinCalendarPrepareDay(self: Rop<PinCalendar>, day: Temporal.PlainDate): boolean {
-  return PinCalendarPrepareDayByKey(self, PinCalendarDayToKey(day));
-}
-
-export function PinCalendarGetPinsOnDay(
-  self: Rop<PinCalendar>,
-  catalog: Rop<PinCatalog>,
-  day: Temporal.PlainDate,
-): Set<Pin> {
-  const result: Set<Pin> = new Set();
-  const pinDay = PinCalendarGetDay(self, day);
-
-  if (pinDay !== null) {
-    for (const pinIdKey of pinDay.pins) {
-      const pin = catalog.pins[pinIdKey];
-
-      if (pin !== undefined) {
-        result.add({
-          id: keyToId(pinIdKey, PIN_ID_SYMBOL),
-          value: pin,
-        });
-      }
-    }
-  }
-
-  return result;
-}
-
-function PinCalendarAsJsonValue(self: MaybeRo<PinCalendar>): object {
-  return self;
-}
-
-export function PinCalendarSerialize(self: MaybeRo<PinCalendar>): string {
-  return JSON.stringify(PinCalendarAsJsonValue(self));
-}
-
-// function PinCalendarSaveToLocalStorage(self: Y.Map<PinCalendar>, ) {
-//     localStorage.setItem(LOCAL_STORAGE_KEY_PIN_CALENDAR, this.serialize());
-// }
-
-function PinCalendarFromJsonValue(json: unknown): PinCalendar | null {
-  if (typeof json !== 'object' || json === null) return null;
-
-  if (!('version' in json)) {
-    console.error('No version found.');
-    return null;
-  }
-
-  if (typeof json.version !== 'number' || json.version > PinCalendarNew().version) {
-    console.error('Unsupported calendar version: ' + json.version);
-    return null;
-  }
-
-  try {
-    return Value.Parse(PinCalendarSchema, json);
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
-}
-
-export function PinCalendarDayToKey(day: Temporal.PlainDate): string {
-  return day.toString();
-}
-
-export function PinCalendarKeyToDay(key: string): Temporal.PlainDate {
-  return Temporal.PlainDate.from(key);
-}
-
-export function PinCalendarCombine(target: PinCalendar, source: PinCalendar) {
-  for (const [key, loadedDay] of Object.entries(source.days)) {
-    const day = PinCalendarGetOrDefaultDayByKey(target, key);
-
-    for (const pinIdKey of loadedDay.pins) PinDayAddPinById(day, keyToId(pinIdKey, PIN_ID_SYMBOL));
-  }
-}
-
-export function PinCalendarDeserialize(serialized: string): PinCalendar | null {
-  return PinCalendarFromJsonValue(JSON.parse(serialized));
 }

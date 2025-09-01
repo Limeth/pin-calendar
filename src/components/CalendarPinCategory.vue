@@ -2,16 +2,16 @@
 import * as feather from 'feather-icons';
 import { ref } from 'vue';
 import {
-  type PinDay,
   type Pin,
   PinCatalogGetPinsInCategory,
   type PinCatalog,
   PinCatalogGetSubcategoriesInCategory,
   type PinCategoryTypeOf,
-} from '../pins';
+} from '../pins/pinCategory';
 import * as R from 'ramda';
 import CalendarPinButton from './CalendarPinButton.vue';
 import type { Rop } from 'automerge-diy-vue-hooks';
+import type { PinDay } from '@/pins/pinCalendarDay';
 
 const { depth, pinCategory, pinDay } = defineProps<{
   depth: number;

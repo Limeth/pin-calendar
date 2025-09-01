@@ -2,16 +2,7 @@
 import * as feather from 'feather-icons';
 import { ref, watch, type ShallowRef, shallowRef, computed, reactive } from 'vue';
 import type { Ref } from 'vue';
-import {
-  type PinDay,
-  type Pin,
-  PinCalendarGetPinsOnDay,
-  PinDayTogglePin,
-  PinCalendarPrepareDay,
-  PinCalendarGetDayRef,
-  PinCalendarDayToKey,
-  PinCatalogGetRootCategories,
-} from '../pins';
+import { type Pin, PinCatalogGetRootCategories } from '../pins/pinCategory';
 import { Temporal } from '@js-temporal/polyfill';
 import PinIcon from './PinIcon.vue';
 import CalendarPinCategory from './CalendarPinCategory.vue';
@@ -19,6 +10,13 @@ import type { CalendarPinCategoryEvent } from './CalendarPinCategory.vue';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { App } from '../app';
 import PinCard from './PinCard.vue';
+import { PinDayTogglePin, type PinDay } from '@/pins/pinCalendarDay';
+import {
+  PinCalendarDayToKey,
+  PinCalendarGetDayRef,
+  PinCalendarGetPinsOnDay,
+  PinCalendarPrepareDay,
+} from '@/pins/pinCalendar';
 
 type DayListDay = {
   date: Temporal.PlainDate;

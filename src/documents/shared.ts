@@ -1,4 +1,5 @@
-import { PinCalendarNew, PinCatalogDefault, type PinCalendar, type PinCatalog } from '@/pins';
+import { PinCalendarNew, type PinCalendar } from '@/pins/pinCalendar';
+import { PinCatalogDefault, type PinCatalog } from '@/pins/pinCategory';
 
 export type SharedDocument = {
   // account: Account,

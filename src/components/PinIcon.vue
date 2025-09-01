@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type Pin } from '../pins';
+import { type Pin } from '../pins/pinCategory';
 
 const { pin } = defineProps<{
   pin: Pin;

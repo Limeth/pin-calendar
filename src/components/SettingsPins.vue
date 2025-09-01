@@ -19,7 +19,7 @@ import {
   type PinDescriptor,
   type PinId,
   type PinTypeOf,
-} from '../pins';
+} from '../pins/pinCategory';
 import emojiRegex from 'emoji-regex';
 import SettingsPinCategory, { type SettingsPinCategoryEvent } from './SettingsPinCategory.vue';
 import * as R from 'ramda';
