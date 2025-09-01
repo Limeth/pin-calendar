@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { App } from '../account';
+import type { App } from '../app';
 import SettingsPins from './SettingsPins.vue';
 import SettingsIO from './SettingsIO.vue';
 

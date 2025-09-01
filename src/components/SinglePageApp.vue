@@ -4,13 +4,14 @@ import Calendar from './Calendar.vue';
 import Milestones from './Milestones.vue';
 import Settings from './Settings.vue';
 import feather from 'feather-icons';
-import { accountStore, localStorageDataStore } from '../account';
+import { accountStore } from '../app';
 import QRCode from 'qrcode';
 import { asyncComputed, computedAsync } from '@vueuse/core';
 import { decodeHash, encodeHash, type Hash } from '@/hash';
 import * as uuid from 'uuid';
-import type { CalendarId } from '@/client';
+import type { CalendarId } from '@/documents/local';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
+import { localStorageDataStore } from '@/localStorageData';
 
 // const app: Ref<App> = ref({
 //   pinCatalog: PinCatalog.loadFromLocalStorageOrDefault(),

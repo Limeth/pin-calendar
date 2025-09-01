@@ -1,10 +1,7 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { Value } from '@sinclair/typebox/value';
 import * as uuid from 'uuid';
-import type { HashArgs } from './hash';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
-
-const LOCAL_STORAGE_KEY = 'pinCalendar';
+import type { HashArgs } from '@/hash';
 
 const RemotePeerSchema = Type.Object({
   deviceName: Type.String(),
@@ -27,55 +24,6 @@ export const CalendarIdSchema = Type.String({ format: 'uuid' });
 
 export type CalendarId = Static<typeof CalendarIdSchema>;
 
-// TODO: Versioning
-const LocalStorageDataSchema = Type.Object({
-  leastRecentlyUsedCalendar: Type.Optional(CalendarIdSchema),
-  calendars: Type.Record(
-    CalendarIdSchema,
-    Type.Object({
-      documentIdEphemeral: Type.Optional(Type.String()),
-      documentIdLocal: Type.Optional(Type.String()),
-    }),
-  ),
-});
-
-export type LocalStorageData = Static<typeof LocalStorageDataSchema>;
-
-export function LocalStorageDataSave(self: LocalStorageData) {
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(self));
-}
-
-export function LocalStorageDataLoadOrDefault(): LocalStorageData {
-  let localStorageData = LocalStorageDataLoad();
-
-  if (localStorageData !== undefined) return localStorageData;
-
-  localStorageData = LocalStorageDataDefault();
-  LocalStorageDataSave(localStorageData);
-  return localStorageData;
-}
-
-function LocalStorageDataLoad(): LocalStorageData | undefined {
-  const string = localStorage.getItem(LOCAL_STORAGE_KEY);
-
-  if (string === null) return undefined;
-
-  const json = JSON.parse(string);
-
-  try {
-    return Value.Parse(LocalStorageDataSchema, json);
-  } catch (error) {
-    console.error(error);
-    return undefined;
-  }
-}
-
-function LocalStorageDataDefault(): LocalStorageData {
-  return {
-    calendars: {},
-  };
-}
-
 const LocalDocumentSchema = Type.Object({
   documentIdShared: Type.Optional(Type.String()),
   localPeer: LocalPeerSchema,
@@ -83,7 +31,6 @@ const LocalDocumentSchema = Type.Object({
   remotePeers: Type.Record(Type.String({ format: 'uuid' }), RemotePeerSchema),
 });
 
-/// TODO: Automerge sync via BroadcastChannelNetworkAdapter only
 export type LocalDocument = Static<typeof LocalDocumentSchema>;
 
 export function LocalDocumentDefault(): LocalDocument {

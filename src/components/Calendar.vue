@@ -17,7 +17,7 @@ import PinIcon from './PinIcon.vue';
 import CalendarPinCategory from './CalendarPinCategory.vue';
 import type { CalendarPinCategoryEvent } from './CalendarPinCategory.vue';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
-import type { App } from '../account';
+import type { App } from '../app';
 import PinCard from './PinCard.vue';
 
 type DayListDay = {

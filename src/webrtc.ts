@@ -6,9 +6,9 @@ import {
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
 import { type Ref } from 'vue';
-import { LocalDocumentAddPeer, type LocalDocument } from './client';
+import { LocalDocumentAddPeer, type LocalDocument } from './documents/local';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
-import type { ConnectedPeers } from './account';
+import type { ConnectedPeers } from './documents/ephemeral';
 
 export type WebRtcNetworkAdapterOptions = {
   docLocal: Ref<Rop<LocalDocument>>;

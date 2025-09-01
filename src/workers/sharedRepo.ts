@@ -5,19 +5,20 @@ import {
   LocalDocumentDefault,
   type CalendarId,
   type LocalDocument,
-} from '@/client';
+} from '@/documents/local';
 import { type Ref } from 'vue';
 import type { Rop } from 'automerge-diy-vue-hooks';
-import type { DocumentWrapper, EphemeralDocument, SharedDocument } from '@/account';
 import {
   MessagePortWrapper,
   type FromSharedRepoMessage,
   type ToSharedRepoMessage,
   type ToSharedRepoMessageInit,
 } from '@/workerMessages';
-import { PinCalendarNew, PinCatalogDefault } from '@/pins';
 import type { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-messagechannel';
 import { changeSubtree, makeReactive } from 'automerge-diy-vue-hooks';
+import { SharedDocumentDefault, type SharedDocument } from '@/documents/shared';
+import type { EphemeralDocument } from '@/documents/ephemeral';
+import type { DocumentWrapper } from '@/documents/wrapper';
 
 declare const self: SharedWorkerGlobalScope;
 
@@ -52,10 +53,6 @@ export function EphemeralDocumentDefault(): EphemeralDocument {
   return {
     connectedPeers: {},
   };
-}
-
-export function SharedDocumentDefault() {
-  return { pinCatalog: PinCatalogDefault(), pinCalendar: PinCalendarNew() };
 }
 
 type TabMessagePort = MessagePortWrapper<FromSharedRepoMessage, ToSharedRepoMessage> & {

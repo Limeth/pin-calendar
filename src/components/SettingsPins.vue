@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { App } from '../account';
+import type { App } from '../app';
 import * as feather from 'feather-icons';
 import { ref, watch, computed, toRaw, reactive } from 'vue';
 import type { Ref } from 'vue';

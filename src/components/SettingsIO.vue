@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { localStorageDataStore, type App } from '../account';
+import { type App } from '../app';
 import * as feather from 'feather-icons';
 import { computed, reactive, ref } from 'vue';
 import type { Ref } from 'vue';
@@ -26,6 +26,7 @@ import {
   PinCatalogAddPin,
 } from '../pins';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
+import { localStorageDataStore } from '@/localStorageData';
 // import { Temporal } from '@js-temporal/polyfill';
 // import * as emojiSearch from 'node-emoji';
 // import * as emojiGroups from 'unicode-emoji-json/data-by-group.json';

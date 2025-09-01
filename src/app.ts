@@ -1,20 +1,8 @@
-import { ref, shallowRef, toRef, watch, type Ref, type ShallowRef } from 'vue';
-import { type PinCalendar, type PinCatalog } from './pins';
+import { shallowRef, toRef, type Ref, type ShallowRef } from 'vue';
 import * as A from '@automerge/automerge-repo';
 import { makeReactive, type Rop } from 'automerge-diy-vue-hooks';
-import {
-  SYMBOL_IS_WEBRTC_NETWORK_ADAPTER,
-  WebRtcNetworkAdapter,
-  type ConnectMetadata,
-} from './webrtc';
-import {
-  type LocalDocument,
-  type LocalStorageData,
-  LocalStorageDataSave,
-  LocalStorageDataLoadOrDefault,
-  LocalDocumentProcessHash,
-  type CalendarId,
-} from './client';
+import { SYMBOL_IS_WEBRTC_NETWORK_ADAPTER, WebRtcNetworkAdapter } from './webrtc';
+import { type LocalDocument, LocalDocumentProcessHash, type CalendarId } from './documents/local';
 import { encodeHash, type HashArgs } from './hash';
 import {
   MessagePortWrapper,
@@ -24,60 +12,11 @@ import {
   type ToSharedRepoMessage,
 } from './workerMessages';
 import { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-messagechannel';
-
 import SharedRepoWorker from './workers/sharedRepo?sharedworker';
-
-export type ConnectedPeers = {
-  [peerJsPeerId: string]: ConnectMetadata;
-};
-
-export type EphemeralDocument = {
-  connectedPeers: {
-    [peerJsPeerId: string]: ConnectMetadata;
-  };
-};
-
-export type LocalStorageDataStore = {
-  ref?: Promise<Ref<LocalStorageData>>;
-
-  GetData(): Promise<Ref<LocalStorageData>>;
-};
-
-export const localStorageDataStore: ShallowRef<LocalStorageDataStore> =
-  shallowRef<LocalStorageDataStore>({
-    GetData(): Promise<Ref<LocalStorageData>> {
-      if (this.ref !== undefined) return this.ref;
-
-      this.ref = (async () => {
-        const innerRef = ref(LocalStorageDataLoadOrDefault());
-
-        // Automatically update stored value.
-        watch(
-          innerRef,
-          (localStorageData) => {
-            LocalStorageDataSave(localStorageData);
-          },
-          { deep: true },
-        );
-
-        return innerRef;
-      })();
-
-      return this.ref;
-    },
-  });
-
-export type SharedDocument = {
-  // account: Account,
-  pinCatalog: PinCatalog;
-  pinCalendar: PinCalendar;
-};
-
-export type DocumentWrapper<T> = {
-  repo: A.Repo;
-  data: Ref<Rop<T>>;
-  handle: A.DocHandle<T>;
-};
+import { type SharedDocument } from './documents/shared';
+import type { EphemeralDocument } from './documents/ephemeral';
+import { localStorageDataStore } from './localStorageData';
+import type { DocumentWrapper } from './documents/wrapper';
 
 export type App = {
   readonly calendarId: CalendarId;
