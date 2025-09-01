@@ -1,24 +1,32 @@
+// Import only types from automerge here. See `wasmDependencies` for more info.
 import type { DocHandle, DocumentId, Repo } from '@automerge/automerge-repo';
+import type { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-messagechannel';
+import type { Rop } from 'automerge-diy-vue-hooks';
 import * as uuid from 'uuid';
 import {
+  LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT,
   LocalDocumentAddPeer,
   LocalDocumentDefault,
+  LocalDocumentGetCurrentVersion,
   type CalendarId,
   type LocalDocument,
 } from '@/documents/local';
-import { type Ref } from 'vue';
-import type { Rop } from 'automerge-diy-vue-hooks';
+import { computed, type Ref } from 'vue';
 import {
   MessagePortWrapper,
   type FromSharedRepoMessage,
   type ToSharedRepoMessage,
   type ToSharedRepoMessageInit,
 } from '@/workerMessages';
-import type { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-messagechannel';
 import { changeSubtree, makeReactive } from 'automerge-diy-vue-hooks';
-import { SharedDocumentDefault, type SharedDocument } from '@/documents/shared';
+import {
+  SHARED_DOCUMENT_SCHEMA_VERSION_CURRENT,
+  SharedDocumentDefault,
+  type SharedDocument,
+} from '@/documents/shared';
 import type { EphemeralDocument } from '@/documents/ephemeral';
-import type { DocumentWrapper } from '@/documents/wrapper';
+import type { DocumentWrapper, VersionedDocumentWrapper } from '@/documents/wrapper';
+import { makeVersioned, type Versioned } from '@/versioned';
 
 declare const self: SharedWorkerGlobalScope;
 
@@ -69,7 +77,7 @@ type Tab = {
 
 class Initialized {
   docEphemeral: DocumentWrapper<EphemeralDocument>;
-  docLocal: DocumentWrapper<LocalDocument>;
+  docLocal: VersionedDocumentWrapper<LocalDocument>;
   documentSharedAvailableLocallyDuringInitialization: boolean;
   tabs: Tab[] = [];
   webRtcTab?: Tab;
@@ -77,7 +85,7 @@ class Initialized {
 
   constructor(options: {
     docEphemeral: DocumentWrapper<EphemeralDocument>;
-    docLocal: DocumentWrapper<LocalDocument>;
+    docLocal: VersionedDocumentWrapper<LocalDocument>;
     documentSharedAvailableLocally: boolean;
   }) {
     this.docEphemeral = options.docEphemeral;
@@ -140,15 +148,20 @@ class SharedRepo {
     const docHandleEphemeral: DocHandle<EphemeralDocument> =
       this.repoEphemeral.create<EphemeralDocument>(EphemeralDocumentDefault());
     const docDataEphemeral = makeReactive(docHandleEphemeral) as Ref<Rop<EphemeralDocument>>;
-    let docHandleLocal: DocHandle<LocalDocument>;
+    let docHandleLocal: DocHandle<Versioned<LocalDocument>>;
 
     if ((await wasmDependencies).isValidDocumentId(message.documentIdLocal)) {
-      docHandleLocal = await this.repoLocal.find<LocalDocument>(message.documentIdLocal);
+      docHandleLocal = await this.repoLocal.find<Versioned<LocalDocument>>(message.documentIdLocal);
     } else {
-      docHandleLocal = this.repoLocal.create<LocalDocument>(LocalDocumentDefault());
+      docHandleLocal = this.repoLocal.create<Versioned<LocalDocument>>(
+        makeVersioned(LocalDocumentDefault(), LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT),
+      );
     }
 
-    const docDataLocal = makeReactive(docHandleLocal) as Ref<Rop<LocalDocument>>;
+    const docDataLocalVersioned: Ref<Rop<Versioned<LocalDocument>>> = makeReactive(docHandleLocal);
+    const docDataLocal = computed(() =>
+      LocalDocumentGetCurrentVersion(docDataLocalVersioned.value),
+    );
 
     if (message.hashArgs?.action === 'addPeer') {
       let suggestedDocumentIdUsed;
@@ -181,7 +194,9 @@ class SharedRepo {
     let documentSharedAvailableLocally;
 
     if (docDataLocal.value.documentIdShared === undefined) {
-      const docHandleShared = this.repoShared.create<SharedDocument>(SharedDocumentDefault());
+      const docHandleShared = this.repoShared.create<Versioned<SharedDocument>>(
+        makeVersioned(SharedDocumentDefault(), SHARED_DOCUMENT_SCHEMA_VERSION_CURRENT),
+      );
       docDataLocal.value[changeSubtree]((local) => {
         local.documentIdShared = docHandleShared.documentId;
       });
@@ -267,6 +282,7 @@ class SharedRepo {
       docLocal: {
         repo: this.repoLocal,
         handle: docHandleLocal,
+        versionedData: docDataLocalVersioned,
         data: docDataLocal,
       },
       documentSharedAvailableLocally,

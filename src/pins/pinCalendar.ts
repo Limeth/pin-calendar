@@ -1,11 +1,14 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { PIN_ID_SYMBOL, type Pin, type PinCatalog } from './pinCategory';
-import { keyToId, LocalStorageSerializableSchema, type MaybeRo, type MaybeRop } from './util';
+import { keyToId, type MaybeRo, type MaybeRop } from './util';
 import { toRef, type Ref } from 'vue';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import { Temporal } from '@js-temporal/polyfill';
 import { Value } from '@sinclair/typebox/value';
 import { PinDayAddPinById, PinDayNew, PinDaySchema, type PinDay } from './pinCalendarDay';
+import { getCurrentVersion, makeVersioned, Versioned } from '@/versioned';
+
+const PIN_CALENDAR_SCHEMA_VERSION_CURRENT = 1;
 
 const PinCalendarDaysSchema = Type.Record(
   Type.String({
@@ -16,18 +19,14 @@ const PinCalendarDaysSchema = Type.Record(
 
 export type PinCalendarDays = Static<typeof PinCalendarDaysSchema>;
 
-const PinCalendarSchema = Type.Intersect([
-  LocalStorageSerializableSchema,
-  Type.Object({
-    days: PinCalendarDaysSchema,
-  }),
-]);
+const PinCalendarSchema = Type.Object({
+  days: PinCalendarDaysSchema,
+});
 
 export type PinCalendar = Static<typeof PinCalendarSchema>;
 
 export function PinCalendarNew(): PinCalendar {
   return {
-    version: 1,
     days: {},
   };
 }
@@ -113,7 +112,7 @@ export function PinCalendarGetPinsOnDay(
 }
 
 function PinCalendarAsJsonValue(self: MaybeRo<PinCalendar>): object {
-  return self;
+  return makeVersioned(self, PIN_CALENDAR_SCHEMA_VERSION_CURRENT);
 }
 
 export function PinCalendarSerialize(self: MaybeRo<PinCalendar>): string {
@@ -125,24 +124,26 @@ export function PinCalendarSerialize(self: MaybeRo<PinCalendar>): string {
 // }
 
 function PinCalendarFromJsonValue(json: unknown): PinCalendar | null {
-  if (typeof json !== 'object' || json === null) return null;
-
-  if (!('version' in json)) {
-    console.error('No version found.');
-    return null;
-  }
-
-  if (typeof json.version !== 'number' || json.version > PinCalendarNew().version) {
-    console.error('Unsupported calendar version: ' + json.version);
-    return null;
-  }
+  let versioned;
 
   try {
-    return Value.Parse(PinCalendarSchema, json);
+    versioned = Value.Parse(Versioned(PinCalendarSchema), json);
   } catch (error) {
     console.error(error);
     return null;
   }
+
+  const currentVersion = getCurrentVersion(
+    versioned,
+    PIN_CALENDAR_SCHEMA_VERSION_CURRENT,
+    PinCalendarNew,
+  );
+
+  if (currentVersion.type === 'current') return currentVersion.current;
+  else if (currentVersion.type === 'unsupported')
+    console.error(`Unsupported calendar version: ${currentVersion.version}`);
+
+  return null;
 }
 
 export function PinCalendarDayToKey(day: Temporal.PlainDate): string {

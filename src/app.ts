@@ -1,8 +1,13 @@
-import { shallowRef, toRef, type Ref, type ShallowRef } from 'vue';
+import { computed, shallowRef, toRef, type Ref, type ShallowRef } from 'vue';
 import * as A from '@automerge/automerge-repo';
 import { makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 import { SYMBOL_IS_WEBRTC_NETWORK_ADAPTER, WebRtcNetworkAdapter } from './webrtc';
-import { type LocalDocument, LocalDocumentProcessHash, type CalendarId } from './documents/local';
+import {
+  type LocalDocument,
+  LocalDocumentProcessHash,
+  type CalendarId,
+  LocalDocumentGetCurrentVersion,
+} from './documents/local';
 import { encodeHash, type HashArgs } from './hash';
 import {
   MessagePortWrapper,
@@ -13,16 +18,17 @@ import {
 } from './workerMessages';
 import { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-messagechannel';
 import SharedRepoWorker from './workers/sharedRepo?sharedworker';
-import { type SharedDocument } from './documents/shared';
+import { SharedDocumentGetCurrentVersion, type SharedDocument } from './documents/shared';
 import type { EphemeralDocument } from './documents/ephemeral';
 import { localStorageDataStore } from './localStorageData';
-import type { DocumentWrapper } from './documents/wrapper';
+import type { DocumentWrapper, VersionedDocumentWrapper } from './documents/wrapper';
+import type { Versioned } from './versioned';
 
 export type App = {
   readonly calendarId: CalendarId;
   readonly docEphemeral: DocumentWrapper<EphemeralDocument>;
-  readonly docLocal: DocumentWrapper<LocalDocument>;
-  readonly docShared: DocumentWrapper<SharedDocument>;
+  readonly docLocal: VersionedDocumentWrapper<LocalDocument>;
+  readonly docShared: VersionedDocumentWrapper<SharedDocument>;
 };
 
 async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App> {
@@ -50,7 +56,7 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
 
   type DataReadyLocal = {
     readonly docEphemeral: DocumentWrapper<EphemeralDocument>;
-    readonly docLocal: DocumentWrapper<LocalDocument>;
+    readonly docLocal: VersionedDocumentWrapper<LocalDocument>;
     readonly repoShared: A.Repo;
   };
 
@@ -158,15 +164,19 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
     network: [new MessageChannelNetworkAdapter(repoLocalMessageChannel.port1)],
   });
 
-  let handleLocal: A.DocHandle<LocalDocument>;
+  let handleLocal: A.DocHandle<Versioned<LocalDocument>>;
 
   if (A.isValidDocumentId(calendarData.documentIdLocal)) {
-    handleLocal = await repoLocal.find<LocalDocument>(calendarData.documentIdLocal);
+    handleLocal = await repoLocal.find<Versioned<LocalDocument>>(calendarData.documentIdLocal);
   } else {
     throw new Error(`Failed to open the local document with ID: ${calendarData.documentIdLocal}`);
   }
 
-  const dataLocal: Ref<Rop<LocalDocument>> = makeReactive(handleLocal);
+  const dataLocalVersioned: Ref<Rop<Versioned<LocalDocument>>> = makeReactive(handleLocal);
+  // TODO/FIXME: This `computed` seems problematic because it might cause the entire app to be re-drawn,
+  // but using `toRef` instead would break the reactivity, for some reason.
+  // This affects `dataShared` and `docDataLocal` in `sharedRepo.ts`, too.
+  const dataLocal = computed(() => LocalDocumentGetCurrentVersion(dataLocalVersioned.value));
 
   console.log('dataLocal: ', dataLocal.value);
 
@@ -184,6 +194,7 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
     },
     docLocal: {
       repo: repoLocal,
+      versionedData: dataLocalVersioned,
       data: dataLocal,
       handle: handleLocal,
     },
@@ -193,15 +204,20 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
   /// Wait for the shared document to become available.
   await readyShared;
 
-  let handleShared: A.DocHandle<SharedDocument>;
+  let handleShared: A.DocHandle<Versioned<SharedDocument>>;
 
   if (A.isValidDocumentId(dataLocal.value.documentIdShared)) {
-    handleShared = await repoShared.find<SharedDocument>(dataLocal.value.documentIdShared);
+    handleShared = await repoShared.find<Versioned<SharedDocument>>(
+      dataLocal.value.documentIdShared,
+    );
   } else {
     throw new Error(
       `Failed to open the shared document with ID: ${dataLocal.value.documentIdShared}`,
     );
   }
+
+  const dataSharedVersioned: Ref<Rop<Versioned<SharedDocument>>> = makeReactive(handleShared);
+  const dataShared = computed(() => SharedDocumentGetCurrentVersion(dataSharedVersioned.value));
 
   const currentUrl = URL.parse(window.location.href) ?? undefined;
   if (currentUrl !== undefined) {
@@ -226,12 +242,14 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
     },
     docLocal: {
       repo: repoLocal,
+      versionedData: dataLocalVersioned,
       data: dataLocal,
       handle: handleLocal,
     },
     docShared: {
       repo: repoShared,
-      data: makeReactive(handleShared),
+      versionedData: dataSharedVersioned,
+      data: dataShared,
       handle: handleShared,
     },
   };

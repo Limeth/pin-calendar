@@ -2,6 +2,9 @@ import { Type, type Static } from '@sinclair/typebox';
 import * as uuid from 'uuid';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { HashArgs } from '@/hash';
+import { getCurrentVersionRop, type Versioned } from '@/versioned';
+
+export const LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT = 1;
 
 const RemotePeerSchema = Type.Object({
   deviceName: Type.String(),
@@ -32,6 +35,24 @@ const LocalDocumentSchema = Type.Object({
 });
 
 export type LocalDocument = Static<typeof LocalDocumentSchema>;
+
+export function LocalDocumentGetCurrentVersion(
+  versioned: Rop<Versioned<LocalDocument>>,
+): Rop<LocalDocument> {
+  const result = getCurrentVersionRop(
+    versioned,
+    LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT,
+    LocalDocumentDefault,
+  );
+
+  if (result.type === 'current') return result.current;
+
+  // TODO: This should be handled gracefully.
+  if (result.type === 'unsupported')
+    throw new Error(`Unsupported local document schema version: ${result.version}`);
+
+  throw new Error(`No local document found.`);
+}
 
 export function LocalDocumentDefault(): LocalDocument {
   return {

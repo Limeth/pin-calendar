@@ -1,5 +1,6 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
+import { getCurrentVersion, makeVersioned, Versioned } from '@/versioned';
 import {
   ArchivableSchema,
   generateId,
@@ -7,7 +8,6 @@ import {
   idSetAdd,
   idSetRemove,
   keyToId,
-  LocalStorageSerializableSchema,
   RegistryId,
   Variant,
   type IdKey,
@@ -92,21 +92,19 @@ export type PinCategoryTypeOf<
   T extends { pinCategories: { [id: IdKey<PinCategoryId>]: unknown } },
 > = Registered<PinCategoryId, T['pinCategories'][IdKey<PinCategoryId>]>;
 
-const PinCatalogSchema = Type.Composite([
-  LocalStorageSerializableSchema,
-  Type.Object({
-    pins: Type.Record(IdKeySchema<PinId>(), PinDescriptorSchema),
-    pinCategories: Type.Record(IdKeySchema<PinCategoryId>(), PinCategoryDescriptorSchema),
-    /// Any elements that should be removed from all peers are added to this array.
-    removed: Type.Array(Type.Union([IdKeySchema<PinId>(), IdKeySchema<PinCategoryId>()])),
-  }),
-]);
+const PIN_CATALOG_SCHEMA_VERSION_CURRENT = 1;
+
+const PinCatalogSchema = Type.Object({
+  pins: Type.Record(IdKeySchema<PinId>(), PinDescriptorSchema),
+  pinCategories: Type.Record(IdKeySchema<PinCategoryId>(), PinCategoryDescriptorSchema),
+  /// Any elements that should be removed from all peers are added to this array.
+  removed: Type.Array(Type.Union([IdKeySchema<PinId>(), IdKeySchema<PinCategoryId>()])),
+});
 
 export type PinCatalog = Static<typeof PinCatalogSchema>;
 
 export function PinCatalogNew(): PinCatalog {
   return {
-    version: 1,
     pins: {},
     pinCategories: {},
     removed: [],
@@ -371,7 +369,7 @@ export function PinCatalogGetRootCategories<T extends MaybeRop<PinCatalog>>(
 }
 
 export function PinCatalogAsJsonValue(self: MaybeRo<PinCatalog>): object {
-  return self;
+  return makeVersioned(self, PIN_CATALOG_SCHEMA_VERSION_CURRENT);
 }
 
 export function PinCatalogSerialize(self: MaybeRo<PinCatalog>): string {
@@ -506,24 +504,25 @@ export function PinCatalogDefault(): PinCatalog {
 }
 
 export function PinCatalogFromJsonValue(json: unknown): PinCatalog | null {
-  if (typeof json !== 'object' || json === null) return null;
-
-  if (!('version' in json)) {
-    console.error('No version found.');
-    return null;
-  }
-
-  if (typeof json.version !== 'number' || json.version > PinCatalogNew().version) {
-    console.error('Unsupported catalog version: ' + json.version);
-    return null;
-  }
+  let versioned;
 
   try {
-    return Value.Parse(PinCatalogSchema, json);
+    versioned = Value.Parse(Versioned(PinCatalogSchema), json);
   } catch (error) {
     console.error(error);
     return null;
   }
+
+  const currentVersion = getCurrentVersion(
+    versioned,
+    PIN_CATALOG_SCHEMA_VERSION_CURRENT,
+    PinCatalogDefault,
+  );
+
+  if (currentVersion.type === 'current') return currentVersion.current;
+  else if (currentVersion.type === 'unsupported')
+    console.error(`Unsupported catalog version: ${currentVersion.version}`);
+  return null;
 }
 
 export function PinCatalogDeserialize(serialized: string): PinCatalog | null {
