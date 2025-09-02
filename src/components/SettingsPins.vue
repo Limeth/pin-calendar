@@ -153,7 +153,7 @@ function onClickAddPin(parent: PinCategoryTypeOf<Rop<PinCatalog>>) {
       icon: {
         type: 'emoji',
         emoji: {
-          emoji: DEFAULT_EMOJIS[Math.floor(Math.random() * DEFAULT_EMOJIS.length)],
+          emoji: DEFAULT_EMOJIS[Math.floor(Math.random() * DEFAULT_EMOJIS.length)]!,
           scale: 1,
         },
         image: {

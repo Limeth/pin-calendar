@@ -256,7 +256,7 @@ class SharedRepo {
             }
 
             const tabIndex = Math.floor(Math.random() * responsiveTabs.length);
-            const tab = responsiveTabs[tabIndex];
+            const tab = responsiveTabs[tabIndex]!;
             initialized.webRtcTab = tab;
             tab.port.postMessage({
               type: 'webrtc-start',
@@ -326,7 +326,7 @@ const sharedRepoByCalendarId: {
 } = {};
 
 async function GetSharedRepo(calendarId: CalendarId): Promise<SharedRepo> {
-  if (calendarId in sharedRepoByCalendarId) return sharedRepoByCalendarId[calendarId];
+  if (calendarId in sharedRepoByCalendarId) return sharedRepoByCalendarId[calendarId]!;
 
   sharedRepoByCalendarId[calendarId] = (async (): Promise<SharedRepo> => {
     return new SharedRepo(await wasmDependencies, calendarId);
@@ -337,6 +337,9 @@ async function GetSharedRepo(calendarId: CalendarId): Promise<SharedRepo> {
 
 self.onconnect = (eventConnect: MessageEvent) => {
   console.log('connect', eventConnect);
+
+  if (eventConnect.ports[0] === undefined) return;
+
   clearTimeout(firstConnectDebugTimeout);
 
   const port = new MessagePortWrapper<FromSharedRepoMessage, ToSharedRepoMessage>(

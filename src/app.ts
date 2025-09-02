@@ -20,7 +20,7 @@ import { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-
 import SharedRepoWorker from './workers/sharedRepo?sharedworker';
 import { SharedDocumentGetCurrentVersion, type SharedDocument } from './documents/shared';
 import type { EphemeralDocument } from './documents/ephemeral';
-import { localStorageDataStore } from './localStorageData';
+import { localStorageDataStore, type LocalStorageDataCalendar } from './localStorageData';
 import type { DocumentWrapper, VersionedDocumentWrapper } from './documents/wrapper';
 import type { Versioned } from './versioned';
 
@@ -45,11 +45,15 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
   })();
 
   const localStorageData = await localStorageDataStore.value.GetData();
+  let calendarData: LocalStorageDataCalendar;
 
-  if (!(calendarId in localStorageData.value.calendars))
+  if (calendarId in localStorageData.value.calendars)
+    calendarData = localStorageData.value.calendars[calendarId]!;
+  else {
     localStorageData.value.calendars[calendarId] = {};
+    calendarData = localStorageData.value.calendars[calendarId];
+  }
 
-  const calendarData = localStorageData.value.calendars[calendarId];
   const repoEphemeralMessageChannel = new MessageChannel();
   const repoLocalMessageChannel = new MessageChannel();
   const repoSharedMessageChannel = new MessageChannel();
@@ -268,7 +272,7 @@ export const accountStore: ShallowRef<AppStore> = shallowRef<AppStore>({
   refMap: {},
 
   GetApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App> {
-    if (calendarId in this.refMap) return this.refMap[calendarId];
+    if (calendarId in this.refMap) return this.refMap[calendarId]!;
 
     this.refMap[calendarId] = (async () => {
       return await LoadApp(calendarId, hashArgs);

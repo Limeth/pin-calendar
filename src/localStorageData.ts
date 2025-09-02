@@ -8,15 +8,16 @@ const LOCAL_STORAGE_KEY = 'pinCalendar';
 const LOCAL_STORAGE_KEY_BACKUP = 'pinCalendarBackup';
 const LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT = 1;
 
+const LocalStorageDataCalendarSchema = Type.Object({
+  documentIdEphemeral: Type.Optional(Type.String()),
+  documentIdLocal: Type.Optional(Type.String()),
+});
+
+export type LocalStorageDataCalendar = Static<typeof LocalStorageDataCalendarSchema>;
+
 const LocalStorageDataSchema = Type.Object({
   leastRecentlyUsedCalendar: Type.Optional(CalendarIdSchema),
-  calendars: Type.Record(
-    CalendarIdSchema,
-    Type.Object({
-      documentIdEphemeral: Type.Optional(Type.String()),
-      documentIdLocal: Type.Optional(Type.String()),
-    }),
-  ),
+  calendars: Type.Record(CalendarIdSchema, LocalStorageDataCalendarSchema),
 });
 
 export type LocalStorageData = Static<typeof LocalStorageDataSchema>;

@@ -34,7 +34,7 @@ export function decodeHashPath(path: string): HashPath {
   if (uuid.validate(segments[0])) {
     return {
       calendar: {
-        id: segments[0],
+        id: segments[0]!,
       },
     };
   }
@@ -59,10 +59,11 @@ export function decodeHash(hash: string): Hash {
   if (args !== undefined)
     for (const segments of args.split('&')) {
       const [key, value] = segments.split('=', 2);
-      if (value !== undefined) object[decodeURIComponent(key)] = decodeURIComponent(value);
+      if (key != undefined && value !== undefined)
+        object[decodeURIComponent(key)] = decodeURIComponent(value);
     }
 
-  const decodedPath = decodeHashPath(path);
+  const decodedPath = decodeHashPath(path ?? '');
 
   try {
     return {

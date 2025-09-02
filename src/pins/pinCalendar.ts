@@ -51,7 +51,7 @@ function PinCalendarGetDayByKey<P extends MaybeRop<PinCalendar>>(
 }
 
 function PinCalendarGetOrDefaultDayByKey(self: PinCalendar, key: string): PinDay {
-  if (key in self.days) return self.days[key];
+  if (key in self.days) return self.days[key]!;
   else {
     const day = PinDayNew();
     self.days[key] = day;

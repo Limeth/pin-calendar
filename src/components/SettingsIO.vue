@@ -123,7 +123,7 @@ function triggerUpload(upload: Upload) {
 
       upload.onSuccess(contents);
     };
-    reader.readAsText(element.files[0]);
+    if (element.files[0]) reader.readAsText(element.files[0]);
   };
   element.click();
 }

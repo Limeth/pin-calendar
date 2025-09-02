@@ -32,28 +32,29 @@ watch(
 );
 
 // Initialize calendar ID if no ID was given.
-if (Object.keys(localStorageData.value.calendars).length === 0) {
-  // If no calendars exist, create one.
-  currentHash.value.path = {
-    calendar: {
-      id: currentHash.value.path?.calendar.id ?? uuid.v7(),
-    },
-  };
-  localStorageData.value.calendars[currentHash.value.path.calendar.id] = {};
-} else if (
-  currentHash.value.path?.calendar.id === undefined ||
-  !(currentHash.value.path.calendar.id in localStorageData.value.calendars)
-) {
-  currentHash.value.path = {
-    calendar: {
-      // Open the least recently used calendar.
-      id:
-        localStorageData.value.leastRecentlyUsedCalendar ??
-        Object.keys(localStorageData.value.calendars)[0],
-    },
-  };
-  // Reset args to make sure no operation is performed on implicitly selected calendar.
-  currentHash.value.args = undefined;
+{
+  const calendarIds = Object.keys(localStorageData.value.calendars);
+  if (calendarIds.length === 0) {
+    // If no calendars exist, create one.
+    currentHash.value.path = {
+      calendar: {
+        id: currentHash.value.path?.calendar.id ?? uuid.v7(),
+      },
+    };
+    localStorageData.value.calendars[currentHash.value.path.calendar.id] = {};
+  } else if (
+    currentHash.value.path?.calendar.id === undefined ||
+    !(currentHash.value.path.calendar.id in localStorageData.value.calendars)
+  ) {
+    currentHash.value.path = {
+      calendar: {
+        // Open the least recently used calendar.
+        id: localStorageData.value.leastRecentlyUsedCalendar ?? calendarIds[0]!,
+      },
+    };
+    // Reset args to make sure no operation is performed on implicitly selected calendar.
+    currentHash.value.args = undefined;
+  }
 }
 
 function openCalendar(calendarId: CalendarId) {
