@@ -21,6 +21,7 @@ import { localStorageDataStore } from '@/localStorageData';
 const localStorageData = await localStorageDataStore.value.GetData();
 const currentUrl = URL.parse(window.location.href) ?? undefined;
 const currentHash: Ref<Hash> = ref(decodeHash(currentUrl?.hash ?? ''));
+const originalHashArgs = structuredClone(toRaw(currentHash.value.args));
 
 // Automatically update the URL's hash when `currentHash` is altered.
 watch(
@@ -31,29 +32,40 @@ watch(
   { deep: true },
 );
 
-// Initialize calendar ID if no ID was given.
 {
-  const calendarIds = Object.keys(localStorageData.value.calendars);
-  if (calendarIds.length === 0) {
-    // If no calendars exist, create one.
-    currentHash.value.path = {
-      calendar: {
-        id: currentHash.value.path?.calendar.id ?? uuid.v7(),
-      },
-    };
-    localStorageData.value.calendars[currentHash.value.path.calendar.id] = {};
-  } else if (
-    currentHash.value.path?.calendar.id === undefined ||
-    !(currentHash.value.path.calendar.id in localStorageData.value.calendars)
+  if (
+    currentHash.value.args?.action === 'addPeer' &&
+    currentHash.value.path?.calendar.id !== undefined
   ) {
-    currentHash.value.path = {
-      calendar: {
-        // Open the least recently used calendar.
-        id: localStorageData.value.leastRecentlyUsedCalendar ?? calendarIds[0]!,
-      },
-    };
-    // Reset args to make sure no operation is performed on implicitly selected calendar.
-    currentHash.value.args = undefined;
+    // Initialize a calendar to be added.
+    // TODO: This should probably be only performed if the authorization with the originating peer was successful.
+    if (!(currentHash.value.path.calendar.id in localStorageData.value.calendars))
+      localStorageData.value.calendars[currentHash.value.path.calendar.id] = {};
+  } else {
+    const calendarIds = Object.keys(localStorageData.value.calendars);
+
+    if (calendarIds.length === 0) {
+      // If no calendars exist, create one.
+      currentHash.value.path = {
+        calendar: {
+          id: currentHash.value.path?.calendar.id ?? uuid.v7(),
+        },
+      };
+      localStorageData.value.calendars[currentHash.value.path.calendar.id] = {};
+    } else if (
+      currentHash.value.path?.calendar.id === undefined ||
+      !(currentHash.value.path.calendar.id in localStorageData.value.calendars)
+    ) {
+      // Otherwise, if no ID was given, choose one of the calendars to display.
+      currentHash.value.path = {
+        calendar: {
+          // Open the least recently used calendar.
+          id: localStorageData.value.leastRecentlyUsedCalendar ?? calendarIds[0]!,
+        },
+      };
+      // Reset args to make sure no operation is performed on implicitly selected calendar.
+      currentHash.value.args = undefined;
+    }
   }
 }
 
@@ -70,7 +82,6 @@ function openCalendar(calendarId: CalendarId) {
 }
 
 // Remove args from the URL.
-const originalHashArgs = structuredClone(toRaw(currentHash.value.args));
 currentHash.value.args = undefined;
 
 openCalendar(currentHash.value.path.calendar.id);
@@ -191,7 +202,6 @@ function forgetPeer(peerJsPeerId: string) {
     delete remotePeers[peerJsPeerId];
   });
 
-  console.log(app.value.docLocal.data.value.remotePeers);
   // TODO/FIXME: We reload the page to get rid of stray connections.
   // Ideally, we would just close the WebRTC connections instead.
   location.reload();

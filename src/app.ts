@@ -81,8 +81,14 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
           const webrtc = new WebRtcNetworkAdapter({
             docLocal: dataReadyLocal.docLocal.data,
             connectedPeers: toRef(dataReadyLocal.docEphemeral.data.value.connectedPeers),
-            attemptToWaitForAnyPeerDurationMilliseconds:
-              message.documentSharedAvailableLocallyDuringInitialization ? undefined : 1000,
+            attemptToWaitForDocumentAvailability:
+              message.documentSharedAvailableLocallyDuringInitialization
+                ? undefined
+                : {
+                    timeoutMilliseconds: 10_000,
+                    documentId: dataReadyLocal.docLocal.data.value.documentIdShared as A.DocumentId,
+                    repo: dataReadyLocal.repoShared,
+                  },
           });
 
           dataReadyLocal.repoShared.networkSubsystem.addNetworkAdapter(webrtc);
@@ -227,10 +233,14 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
   if (currentUrl !== undefined) {
     const inviteUrl = new URL(currentUrl);
     inviteUrl.hash = encodeHash({
-      path: undefined,
+      path: {
+        calendar: {
+          id: calendarId,
+        },
+      },
       args: {
         action: 'addPeer',
-        documentId: dataLocal.value.documentIdShared!, // TODO: This assertion shouldn't be necessary
+        documentId: dataLocal.value.documentIdShared,
         peerJsPeerId: dataLocal.value.localPeer.peerJsPeerId,
       },
     });

@@ -1,5 +1,7 @@
 import {
   NetworkAdapter,
+  Repo,
+  type DocumentId,
   type Message,
   type PeerId,
   type PeerMetadata,
@@ -13,7 +15,13 @@ import type { ConnectedPeers } from './documents/ephemeral';
 export type WebRtcNetworkAdapterOptions = {
   docLocal: Ref<Rop<LocalDocument>>;
   connectedPeers: Ref<Rop<ConnectedPeers>>;
-  attemptToWaitForAnyPeerDurationMilliseconds: undefined | number;
+  attemptToWaitForDocumentAvailability:
+    | undefined
+    | {
+        timeoutMilliseconds: number;
+        documentId: DocumentId;
+        repo: Repo;
+      };
 };
 
 export type ConnectedPeer = {
@@ -125,12 +133,25 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
       if (
         Object.keys(this.options.docLocal.value.remotePeers).length > 0 &&
-        this.options.attemptToWaitForAnyPeerDurationMilliseconds !== undefined
+        this.options.attemptToWaitForDocumentAvailability !== undefined
       ) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, this.options.attemptToWaitForAnyPeerDurationMilliseconds),
-        );
-        this.setReady();
+        (async () => {
+          await new Promise((resolve) =>
+            setTimeout(
+              resolve,
+              this.options.attemptToWaitForDocumentAvailability?.timeoutMilliseconds,
+            ),
+          );
+          if (!this.ready) {
+            console.warn(
+              'Waiting for document availability timed out! Readying up despite the document not being available.',
+            );
+            this.setReady();
+          }
+        })();
+
+        // This runs asynchronously, we don't wait for it to finish.
+        this.checkDocumentAvailability();
       } else {
         this.setReady();
       }
@@ -210,7 +231,6 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       peerId: connectedPeer.connectMetadata.automergePeerId as PeerId,
       peerMetadata: connectedPeer.connectMetadata.automergePeerMetadata,
     });
-    this.setReady();
   }
 
   setReady() {
@@ -233,6 +253,36 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
     console.log(`Received packet from peer ${peer.dataConnection.peer}: `, packet.message);
     this.emit('message', packet.message);
+
+    // This runs asynchronously, we don't wait for it to finish.
+    this.checkDocumentAvailability();
+  }
+
+  async checkDocumentAvailability(): Promise<boolean> {
+    if (!this.ready && this.options.attemptToWaitForDocumentAvailability) {
+      console.debug(
+        `Attempting to check the availability of document ${this.options.attemptToWaitForDocumentAvailability.documentId}`,
+      );
+
+      try {
+        // Note that this can be aborted via an AbortSignal passed as a property to the options argument.
+        await this.options.attemptToWaitForDocumentAvailability.repo.find(
+          this.options.attemptToWaitForDocumentAvailability.documentId,
+        );
+        console.log(
+          `Successfully looked up document ${this.options.attemptToWaitForDocumentAvailability.documentId} while waiting for its availability.`,
+        );
+        this.setReady();
+      } catch {
+        console.log(
+          `Failed to look up document ${this.options.attemptToWaitForDocumentAvailability.documentId} while waiting for its availability.`,
+        );
+        return false;
+      }
+    }
+
+    this.setReady();
+    return true;
   }
 
   onPeerDisconnected(peer: ConnectedPeer) {

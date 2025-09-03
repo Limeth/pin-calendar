@@ -207,9 +207,18 @@ class SharedRepo {
     } else {
       /// Attempt to find the document in the local database, before any network adapters are added to the repo.
       try {
-        this.repoShared.find<SharedDocument>(docDataLocal.value.documentIdShared as DocumentId);
+        console.log(
+          `Attempting to find shared document by ID ${docDataLocal.value.documentIdShared}`,
+        );
+        await this.repoShared.find<SharedDocument>(
+          docDataLocal.value.documentIdShared as DocumentId,
+        );
+        console.log(
+          `Successfully found shared document by ID ${docDataLocal.value.documentIdShared}`,
+        );
         documentSharedAvailableLocally = true;
       } catch {
+        console.log(`Failed to find shared document by ID ${docDataLocal.value.documentIdShared}`);
         documentSharedAvailableLocally = false;
       }
     }
@@ -222,25 +231,27 @@ class SharedRepo {
       const initialized = await repo.initialized!;
 
       while (true) {
-        const webRtcRunning = await (async () => {
-          if (initialized.webRtcTab === undefined) return false;
+        const webRtcRunning =
+          initialized.webRtcTab !== undefined &&
+          (await (async () => {
+            if (initialized.webRtcTab === undefined) return false;
 
-          const alivePromise = Promise.any([
-            initialized.webRtcTab.port
-              .onceAsync((message) => message.type === 'webrtc-pollalive-acq')
-              .then(() => true),
-            new Promise((r) => setTimeout(r, POLL_TIMEOUT_MS)).then(() => false),
-          ]);
+            const alivePromise = Promise.any([
+              initialized.webRtcTab.port
+                .onceAsync((message) => message.type === 'webrtc-pollalive-acq')
+                .then(() => true),
+              new Promise((r) => setTimeout(r, POLL_TIMEOUT_MS)).then(() => false),
+            ]);
 
-          initialized.webRtcTab.port.postMessage({ type: 'webrtc-pollalive' });
+            initialized.webRtcTab.port.postMessage({ type: 'webrtc-pollalive' });
 
-          if (await alivePromise) return true;
+            if (await alivePromise) return true;
 
-          console.warn('WebRTC pollalive timed out.');
-          initialized.webRtcTab.port.postMessage({ type: 'webrtc-stop' });
-          initialized.webRtcTab.timedOut = true;
-          return false;
-        })();
+            console.warn('WebRTC pollalive timed out.');
+            initialized.webRtcTab.port.postMessage({ type: 'webrtc-stop' });
+            initialized.webRtcTab.timedOut = true;
+            return false;
+          })());
 
         if (!webRtcRunning) {
           initialized.webRtcTab = undefined;
@@ -258,6 +269,7 @@ class SharedRepo {
             const tabIndex = Math.floor(Math.random() * responsiveTabs.length);
             const tab = responsiveTabs[tabIndex]!;
             initialized.webRtcTab = tab;
+            console.log(`Requesting a WebRTC client to be hosted in tab #${tabIndex}.`);
             tab.port.postMessage({
               type: 'webrtc-start',
               documentSharedAvailableLocallyDuringInitialization:
