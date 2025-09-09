@@ -1,4 +1,4 @@
-<script setup lang="ts" generic="T, P extends Property & keyof T">
+<script setup lang="ts" generic="T extends object, P extends Property & keyof T">
 import type { Doc } from '@automerge/automerge-repo';
 import { updateText } from '@automerge/automerge';
 import { changeSubtree, type Property, type Ro, type Rop } from 'automerge-diy-vue-hooks';
@@ -9,12 +9,14 @@ const {
   subtree,
   original,
   property,
+  defaultValue,
   parse,
   validate,
   change: changeInner,
 } = defineProps<{
   subtree: Rop<T>;
   original?: Ro<T>;
+  defaultValue?: T[P];
   property: P;
   label?: string;
   parse?: (value: string) => T[P]; // TODO: Make mandatory if T[P] !== string
@@ -40,14 +42,14 @@ if (changeInner === 'assign') {
 //   update: [subtree: T, property: P, value: string];
 // }>();
 const warning: Ref<string | undefined> = ref(undefined);
-console.log(validate);
 
 function onChange(event: Event) {
   const string = (event.target! as HTMLInputElement).value;
   const value = parse !== undefined ? parse(string) : (string as T[P]); // TODO: unsafe
   warning.value = validate?.(value);
   subtree[changeSubtree]((subtreeMut) => {
-    change(subtreeMut, property, value);
+    if (property in subtreeMut) change(subtreeMut, property, value ?? (defaultValue as T[P]));
+    else subtreeMut[property] = value;
   });
 }
 
@@ -56,7 +58,8 @@ function onRevert() {
     const value = original[property] as T[P];
     warning.value = validate?.(value);
     subtree[changeSubtree]((subtreeMut) => {
-      change(subtreeMut, property, value);
+      if (property in subtreeMut) change(subtreeMut, property, value ?? (defaultValue as T[P]));
+      else subtreeMut[property] = value;
     });
   }
 }
@@ -67,15 +70,15 @@ function onRevert() {
   </div>
   <div class="flex gap-2 items-center">
     <slot
-      :value="subtree?.[property]"
+      :value="subtree?.[property] ?? defaultValue"
       :onChange="onChange"
-      :class="'flex-1' + (warning !== undefined ? 'input-warning' : '')"
+      :class="'flex-1 ' + (warning !== undefined ? 'input-warning' : '')"
     />
     <div v-if="original !== undefined" class="tooltip tooltip-left" data-tip="Revert changes">
       <button
         class="btn btn-square btn-ghost"
         v-html="feather.icons['rotate-ccw'].toSvg()"
-        :disabled="subtree[property] === original[property]"
+        :disabled="(subtree[property] ?? defaultValue) === (original[property] ?? defaultValue)"
         @click="onRevert"
       />
     </div>

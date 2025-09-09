@@ -53,6 +53,7 @@ const PinCategoryDescriptorSchema = Type.Intersect([
     pins: Type.Array(IdKeySchema<PinId>()),
     displayName: Type.String(),
     description: Type.String(),
+    details: Type.Optional(Type.String()), // Added in v0.1.2
   }),
 ]);
 
@@ -65,6 +66,7 @@ const PinDescriptorSchema = Type.Intersect([
   Type.Object({
     displayName: Type.String(),
     description: Type.String(),
+    details: Type.Optional(Type.String()), // Added in v0.1.2
     icon: IconSchema,
     backgroundColor: Type.String(),
   }),

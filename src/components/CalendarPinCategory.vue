@@ -12,6 +12,7 @@ import * as R from 'ramda';
 import CalendarPinButton from './CalendarPinButton.vue';
 import type { Rop } from 'automerge-diy-vue-hooks';
 import type { PinDay } from '@/pins/pinCalendarDay';
+import CollapsibleText from './CollapsibleText.vue';
 
 const { depth, pinCategory, pinDay } = defineProps<{
   depth: number;
@@ -51,12 +52,16 @@ const isCollapsed = ref(true);
           />
         </div>
       </ul>
-      <!-- <li class="flex-grow flex flex-row items-center gap-1 text-lg">
-        <div class="flex-grow">{{ pinCategory.displayName }}</div>
-      </li> -->
       <template v-if="!isCollapsed">
         <li class="text-sm" v-if="pinCategory.value.description">
           {{ pinCategory.value.description }}
+        </li>
+        <li v-if="(pinCategory.value.details?.length ?? 0) > 0">
+          <CollapsibleText
+            class="-mx-4 px-4 -py-1 py-1 text-xs"
+            :text="pinCategory.value.details"
+            :collapsible-class="{ 'hover:bg-base-300': true }"
+          />
         </li>
         <li class="-mx-4 w-[inherit]">
           <ul class="flex flex-col">

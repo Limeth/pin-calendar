@@ -11,6 +11,7 @@ import {
 import PinCard from './PinCard.vue';
 import * as R from 'ramda';
 import type { Rop } from 'automerge-diy-vue-hooks';
+import CollapsibleText from './CollapsibleText.vue';
 
 const { depth, pinCategory, predecessorArchived } = defineProps<{
   depth: number;
@@ -137,6 +138,13 @@ const isCollapsed = ref(true);
         <li class="text-sm" v-if="pinCategory.value.description">
           {{ pinCategory.value.description }}
         </li>
+        <li>
+          <CollapsibleText
+            :text="pinCategory.value.details"
+            class="-mx-4 px-4 -py-1 py-1"
+            :collapsible-class="{ 'hover:bg-base-300': true }"
+          />
+        </li>
         <li class="-mx-4 w-[inherit]">
           <ul class="flex flex-col">
             <li
@@ -148,7 +156,7 @@ const isCollapsed = ref(true);
               class="flex flex-row items-center gap-1 px-4 py-1"
               :class="depth % 2 == 0 ? 'odd:bg-base-200' : 'odd:bg-base-300'"
             >
-              <PinCard :pin="pin" class="flex-1" />
+              <PinCard :pin="pin" :details="true" class="flex-1" />
               <template v-if="!predecessorArchived && !pinCategory.value.archived">
                 <button
                   @click="emit('event', { kind: 'pinEdit', pin })"
@@ -212,7 +220,7 @@ const isCollapsed = ref(true);
               class="flex flex-row items-center gap-1 px-4 py-1 -mx-4"
               :class="depth % 2 == 0 ? 'odd:bg-base-200' : 'odd:bg-base-300'"
             >
-              <PinCard :pin="pin" class="flex-1" />
+              <PinCard :pin="pin" :details="true" class="flex-1" />
               <template v-if="!predecessorArchived && !pinCategory.value.archived">
                 <button
                   @click="emit('event', { kind: 'pinArchive', pin, archive: false })"

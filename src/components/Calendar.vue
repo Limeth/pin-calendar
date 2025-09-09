@@ -202,7 +202,7 @@ app.value!.docShared.handle.on('change', () => {
                   >
                     <div class="tooltip">
                       <div class="tooltip-content p-2">
-                        <PinCard :pin="pin" />
+                        <PinCard :pin="pin" :details="false" />
                       </div>
                       <PinIcon :pin="pin" />
                     </div>

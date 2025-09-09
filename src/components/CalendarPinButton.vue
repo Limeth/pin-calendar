@@ -30,7 +30,7 @@ const emit = defineEmits<{
     }"
     @click="emit('event', { kind: 'toggle', pin })"
   >
-    <PinCard :pin="pin" />
+    <PinCard :pin="pin" :details="true" class="w-full" />
   </li>
 </template>
 

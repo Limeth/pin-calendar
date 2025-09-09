@@ -370,6 +370,26 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                   />
                 </ValidatedInput>
               </label>
+              <label class="form-control w-full max-w-xs">
+                <ValidatedInput
+                  v-slot="slot"
+                  :subtree="editingPinCategory.value"
+                  :original="editing.original"
+                  :default-value="''"
+                  property="details"
+                  label="Details"
+                  change="updateText"
+                >
+                  <textarea
+                    type="text"
+                    placeholder="Example Details"
+                    class="textarea w-full max-w-xs"
+                    :value="slot.value"
+                    @input="slot.onChange"
+                    :class="slot.class"
+                  />
+                </ValidatedInput>
+              </label>
             </template>
           </template>
           <template v-if="editing.kind === 'pin'">
@@ -428,6 +448,26 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                     type="text"
                     placeholder="Example Description"
                     class="input input-bordered w-full max-w-xs"
+                    :value="slot.value"
+                    @input="slot.onChange"
+                    :class="slot.class"
+                  />
+                </ValidatedInput>
+              </label>
+              <label class="form-control w-full max-w-xs">
+                <ValidatedInput
+                  v-slot="slot"
+                  :subtree="editingPin.value"
+                  :original="editing.original"
+                  :default-value="''"
+                  property="details"
+                  label="Details"
+                  change="updateText"
+                >
+                  <textarea
+                    type="text"
+                    placeholder="Example Details"
+                    class="textarea w-full max-w-xs"
                     :value="slot.value"
                     @input="slot.onChange"
                     :class="slot.class"
