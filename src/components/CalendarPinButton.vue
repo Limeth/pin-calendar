@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PinDayHasPin, type PinDay } from '@/pins/pinCalendarDay';
-import { type Pin, type PinCatalog, type PinTypeOf } from '../pins/pinCategory';
+import { type Pin, type PinCatalog, type PinTypeOf } from '../pins/pinCatalog';
 import PinCard from './PinCard.vue';
 import type { Rop } from 'automerge-diy-vue-hooks';
 

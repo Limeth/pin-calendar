@@ -7,7 +7,7 @@ import {
   type PinCatalog,
   PinCatalogGetSubcategoriesInCategory,
   type PinCategoryTypeOf,
-} from '../pins/pinCategory';
+} from '../pins/pinCatalog';
 import * as R from 'ramda';
 import CalendarPinButton from './CalendarPinButton.vue';
 import type { Rop } from 'automerge-diy-vue-hooks';

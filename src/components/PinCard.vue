@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type Pin } from '../pins/pinCategory';
+import { type Pin } from '../pins/pinCatalog';
 import PinIcon from './PinIcon.vue';
 
 const { pin } = defineProps<{

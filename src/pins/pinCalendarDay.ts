@@ -1,5 +1,5 @@
 import { Type, type Static } from '@sinclair/typebox';
-import type { Pin, PinId } from './pinCategory';
+import type { Pin, PinId } from './pinCatalog';
 import { IdKeySchema, type IdKey } from './util';
 import type { Ro } from 'automerge-diy-vue-hooks';
 

@@ -18,7 +18,7 @@ import {
   PinCatalogGetPinCategories,
   PinCatalogGetPins,
   PinCatalogAddPin,
-} from '../pins/pinCategory';
+} from '../pins/pinCatalog';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 import { localStorageDataStore } from '@/localStorageData';
 import { keyToId } from '@/pins/util';

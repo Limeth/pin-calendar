@@ -1,5 +1,5 @@
 import { PinCalendarNew, type PinCalendar } from '@/pins/pinCalendar';
-import { PinCatalogDefault, type PinCatalog } from '@/pins/pinCategory';
+import { PinCatalogDefault, type PinCatalog } from '@/pins/pinCatalog';
 import { getCurrentVersionRop, type Versioned } from '@/versioned';
 import type { Rop } from 'automerge-diy-vue-hooks';
 

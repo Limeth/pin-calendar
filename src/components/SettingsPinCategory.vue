@@ -7,7 +7,7 @@ import {
   type PinCatalog,
   type PinCategoryTypeOf,
   type PinTypeOf,
-} from '../pins/pinCategory';
+} from '../pins/pinCatalog';
 import PinCard from './PinCard.vue';
 import * as R from 'ramda';
 import type { Rop } from 'automerge-diy-vue-hooks';

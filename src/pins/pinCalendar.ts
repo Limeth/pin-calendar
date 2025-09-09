@@ -1,5 +1,5 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { PIN_ID_SYMBOL, type Pin, type PinCatalog } from './pinCategory';
+import { PIN_ID_SYMBOL, type Pin, type PinCatalog } from './pinCatalog';
 import { keyToId, type MaybeRo, type MaybeRop } from './util';
 import { toRef, type Ref } from 'vue';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';

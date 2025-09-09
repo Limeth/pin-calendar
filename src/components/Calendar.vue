@@ -2,7 +2,7 @@
 import * as feather from 'feather-icons';
 import { ref, watch, type ShallowRef, shallowRef, computed, reactive } from 'vue';
 import type { Ref } from 'vue';
-import { type Pin, PinCatalogGetRootCategories } from '../pins/pinCategory';
+import { type Pin, PinCatalogGetRootCategories } from '../pins/pinCatalog';
 import { Temporal } from '@js-temporal/polyfill';
 import PinIcon from './PinIcon.vue';
 import CalendarPinCategory from './CalendarPinCategory.vue';
