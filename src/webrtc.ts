@@ -7,7 +7,7 @@ import {
   type PeerMetadata,
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
-import { type Ref } from 'vue';
+import { watch, type Ref } from 'vue';
 import { LocalDocumentAddPeer, type LocalDocument } from './documents/local';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { ConnectedPeers } from './documents/ephemeral';
@@ -104,7 +104,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
 
     this.peer.on('error', (error) => {
-      if (error.type === 'peer-unavailable') {
+      if (error.type === 'peer-unavailable' || error.type === 'unavailable-id') {
         console.log(error.message);
         return;
       }
@@ -116,25 +116,58 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       // Invoked when a connection to the signaling server is established.
       this.peerJsPeerId = id;
 
-      // TODO
-      for (const remotePeerPeerJsPeerId of Object.keys(this.options.docLocal.value.remotePeers)) {
+      const connectToRemotePeer = (remotePeerPeerJsPeerId: string) => {
+        // Guard against double-connecting if this peer was already handled
+        // by a previous 'open' event or a reactive watcher callback.
+        if (this.dataConnections[remotePeerPeerJsPeerId]) return;
+
         const connectMetadata: ConnectMetadata = {
-          automergePeerId: peerId,
-          automergePeerMetadata: peerMetadata ?? {},
+          automergePeerId: this.peerId!,
+          automergePeerMetadata: this.peerMetadata ?? {},
         };
-        const dataConection = this.peer!.connect(remotePeerPeerJsPeerId, {
+
+        const dataConnection = this.peer!.connect(remotePeerPeerJsPeerId, {
           metadata: connectMetadata,
         });
 
-        dataConection.once('open', () => {
-          this.onOutboundConnectionOpened(dataConection);
+        dataConnection.once('open', () => {
+          this.onOutboundConnectionOpened(dataConnection);
         });
+      };
+
+      for (const remotePeerPeerJsPeerId of Object.keys(this.options.docLocal.value.remotePeers)) {
+        connectToRemotePeer(remotePeerPeerJsPeerId);
       }
 
-      if (
-        Object.keys(this.options.docLocal.value.remotePeers).length > 0 &&
-        this.options.attemptToWaitForDocumentAvailability !== undefined
-      ) {
+      // When an invite link is used for the first time, the automerge
+      // document update that adds the inviter to remotePeers may arrive
+      // AFTER peer.on('open') has already fired. Without this watcher we
+      // would never initiate the outbound connection, the adapter would
+      // finish "ready" with zero peers, and the shared document would
+      // remain unavailable forever.
+      watch(
+        () => this.options.docLocal.value.remotePeers,
+        (newPeers, oldPeers) => {
+          if (!this.peer) return;
+
+          const newKeys = Object.keys(newPeers);
+          const oldKeys = oldPeers ? Object.keys(oldPeers) : [];
+
+          for (const peerJsPeerId of newKeys) {
+            if (!oldKeys.includes(peerJsPeerId)) {
+              connectToRemotePeer(peerJsPeerId);
+            }
+          }
+        },
+        { deep: true },
+      );
+
+      // If the shared document isn't available locally we must NOT call
+      // setReady() immediately just because remotePeers happens to be empty
+      // at this instant (e.g. Vue hasn't flushed the doc sync yet). We need
+      // to give the watcher above and checkDocumentAvailability a chance to
+      // bring a peer online before declaring the adapter prepared.
+      if (this.options.attemptToWaitForDocumentAvailability !== undefined) {
         (async () => {
           await new Promise((resolve) =>
             setTimeout(
@@ -310,6 +343,11 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     console.assert(Object.keys(this.options.connectedPeers.value).length === 0);
     console.assert(Object.keys(this.dataConnections).length === 0);
     this.sessionCounter++;
+    // PeerJS keeps the ID registered on the signalling server until destroy()
+    // is called. If we don't clean it up, a later WebRtcNetworkAdapter that
+    // tries to use the same peerJsPeerId will get an 'unavailable-id' error.
+    this.peer?.destroy();
+    this.peer = undefined;
   }
 
   send(message: Message): void {
