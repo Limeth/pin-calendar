@@ -55,13 +55,19 @@ export function getCurrentVersion<R, T extends Versioned<R>>(
   const versionKey = JSON.stringify(currentVersion | 0); // Remove trailing '.0'
 
   if (versionKey in versioned.schemaVersion)
-    return { type: 'current', current: versioned.schemaVersion[versionKey] as R };
+    return {
+      type: 'current',
+      current: versioned.schemaVersion[versionKey] as R,
+    };
 
   // TODO: Migrate from previous versions.
 
   if (typeof init === 'function') {
     (versioned.schemaVersion[versionKey] as R) = init();
-    return { type: 'current', current: versioned.schemaVersion[versionKey] as R };
+    return {
+      type: 'current',
+      current: versioned.schemaVersion[versionKey] as R,
+    };
   }
 
   return { type: 'none' };
@@ -90,7 +96,10 @@ export function getCurrentVersionRop<R, T extends Versioned<R>>(
   const versionKey = JSON.stringify(currentVersion | 0); // Remove trailing '.0'
 
   if (versionKey in versioned.schemaVersion)
-    return { type: 'current', current: versioned.schemaVersion[versionKey] as Rop<R> };
+    return {
+      type: 'current',
+      current: versioned.schemaVersion[versionKey] as Rop<R>,
+    };
 
   // TODO: Migrate from previous versions.
 
@@ -98,7 +107,10 @@ export function getCurrentVersionRop<R, T extends Versioned<R>>(
     versioned[changeSubtree]((versioned) => {
       (versioned.schemaVersion[versionKey] as R) = init();
     });
-    return { type: 'current', current: versioned.schemaVersion[versionKey] as Rop<R> };
+    return {
+      type: 'current',
+      current: versioned.schemaVersion[versionKey] as Rop<R>,
+    };
   }
 
   return { type: 'none' };

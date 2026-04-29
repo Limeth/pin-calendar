@@ -471,7 +471,11 @@ export function PinCatalogDefault(): PinCatalog {
   PinCatalogCreateAndAddPinToCategory(pinCatalog, pinCategoryHealthPhysical!.id, {
     displayName: 'Go on a jog',
     description: 'Run at least 5 km',
-    icon: { type: 'emoji', emoji: { emoji: '', scale: 1 }, image: { base64: '', scale: 1 } },
+    icon: {
+      type: 'emoji',
+      emoji: { emoji: '', scale: 1 },
+      image: { base64: '', scale: 1 },
+    },
     backgroundColor: '#FF0000',
   });
   const pinCategoryHealthMental = PinCatalogCreateAndAddSubcategoryToCategory(
@@ -487,7 +491,11 @@ export function PinCatalogDefault(): PinCatalog {
   PinCatalogCreateAndAddPinToCategory(pinCatalog, pinCategoryHealthMental!.id, {
     displayName: 'Do some self-care',
     description: 'Spend some personal time',
-    icon: { type: 'emoji', emoji: { emoji: '', scale: 1 }, image: { base64: '', scale: 1 } },
+    icon: {
+      type: 'emoji',
+      emoji: { emoji: '', scale: 1 },
+      image: { base64: '', scale: 1 },
+    },
     backgroundColor: '#00FF00',
   });
   const pinCategoryHobbies = PinCatalogCreateAndAddSubcategoryToCategory(pinCatalog, null, {
@@ -499,7 +507,11 @@ export function PinCatalogDefault(): PinCatalog {
   PinCatalogCreateAndAddPinToCategory(pinCatalog, pinCategoryHobbies!.id, {
     displayName: 'Watch a movie',
     description: 'And enjoy it!',
-    icon: { type: 'emoji', emoji: { emoji: '', scale: 1 }, image: { base64: '', scale: 1 } },
+    icon: {
+      type: 'emoji',
+      emoji: { emoji: '', scale: 1 },
+      image: { base64: '', scale: 1 },
+    },
     backgroundColor: '#0000FF',
   });
   return pinCatalog;

@@ -243,7 +243,9 @@ class SharedRepo {
               new Promise((r) => setTimeout(r, POLL_TIMEOUT_MS)).then(() => false),
             ]);
 
-            initialized.webRtcTab.port.postMessage({ type: 'webrtc-pollalive' });
+            initialized.webRtcTab.port.postMessage({
+              type: 'webrtc-pollalive',
+            });
 
             if (await alivePromise) return true;
 
@@ -329,7 +331,13 @@ class SharedRepo {
     this.repoLocal.networkSubsystem.addNetworkAdapter(adapterLocal);
     this.repoShared.networkSubsystem.addNetworkAdapter(adapterShared);
 
-    initialized.tabs.push({ port, adapterEphemeral, adapterLocal, adapterShared, timedOut: false });
+    initialized.tabs.push({
+      port,
+      adapterEphemeral,
+      adapterLocal,
+      adapterShared,
+      timedOut: false,
+    });
   }
 }
 

@@ -131,7 +131,9 @@ function triggerUpload(upload: Upload) {
 function onClickPinsExport() {
   triggerDownload({
     fileName: 'pin-catalog.json',
-    content: new Blob([PinCatalogSerialize(pinCatalog.value)], { type: 'application/json' }),
+    content: new Blob([PinCatalogSerialize(pinCatalog.value)], {
+      type: 'application/json',
+    }),
   });
 }
 
@@ -197,7 +199,9 @@ function onClickPinsClear() {
 function onClickCalendarExport() {
   triggerDownload({
     fileName: 'calendar.json',
-    content: new Blob([PinCalendarSerialize(pinCalendar.value)], { type: 'application/json' }),
+    content: new Blob([PinCalendarSerialize(pinCalendar.value)], {
+      type: 'application/json',
+    }),
   });
 }
 
@@ -312,8 +316,8 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
         <div class="flex flex-col gap-4">
           <div>
             <p>
-              {{ Object.keys(modalData.import.pinCatalog.pinCategories).length }} categories to
-              import.
+              {{ Object.keys(modalData.import.pinCatalog.pinCategories).length }}
+              categories to import.
             </p>
             <p>{{ Object.keys(modalData.import.pinCatalog.pins).length }} pins to import.</p>
           </div>
@@ -327,8 +331,9 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
             <div>
               <p v-if="modalData.import.conflicts.pinCategories.length > 0">
                 <span class="font-semibold"
-                  >Found {{ modalData.import.conflicts.pinCategories.length }} conflicting
-                  categories</span
+                  >Found
+                  {{ modalData.import.conflicts.pinCategories.length }}
+                  conflicting categories</span
                 >:
                 {{
                   // TODO: This is incomprehensible to humans, display the original and new titles instead

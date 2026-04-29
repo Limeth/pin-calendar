@@ -109,7 +109,13 @@ const isCollapsed = ref(true);
               <div class="max-sm:hidden">Edit</div>
             </button>
             <button
-              @click="emit('event', { kind: 'categoryArchive', pinCategory, archive: true })"
+              @click="
+                emit('event', {
+                  kind: 'categoryArchive',
+                  pinCategory,
+                  archive: true,
+                })
+              "
               class="btn btn-sm max-sm:btn-square btn-warning"
             >
               <div v-html="feather.icons['archive'].toSvg()" />
@@ -118,7 +124,13 @@ const isCollapsed = ref(true);
           </template>
           <template v-else>
             <button
-              @click="emit('event', { kind: 'categoryArchive', pinCategory, archive: false })"
+              @click="
+                emit('event', {
+                  kind: 'categoryArchive',
+                  pinCategory,
+                  archive: false,
+                })
+              "
               class="btn btn-sm max-sm:btn-square btn-neutral"
             >
               <div v-html="feather.icons['upload'].toSvg()" />

@@ -69,7 +69,10 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
     const promiseDataReadyLocal: Promise<DataReadyLocal> = new Promise((resolve) => {
       resolvePromiseDataReadyLocal = resolve;
     });
-    return { resolvePromiseDataReadyLocal: resolvePromiseDataReadyLocal!, promiseDataReadyLocal };
+    return {
+      resolvePromiseDataReadyLocal: resolvePromiseDataReadyLocal!,
+      promiseDataReadyLocal,
+    };
   })();
 
   sharedRepoWorker.on((message) => {
