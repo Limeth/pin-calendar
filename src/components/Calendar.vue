@@ -198,7 +198,7 @@ app.value!.docShared.handle.on('change', () => {
                 <div class="flex flex-wrap gap-1 justify-start">
                   <template
                     v-for="pin of PinCalendarGetPinsOnDay(pinCalendar, pinCatalog, day.date)"
-                    :key="pin.id"
+                    :key="pin.id.key"
                   >
                     <div class="tooltip">
                       <div class="tooltip-content p-2">

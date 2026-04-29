@@ -37,9 +37,8 @@ declare const self: SharedWorkerGlobalScope;
 const wasmDependencies = (async () => {
   const { DocHandle, isValidDocumentId, Repo } = await import('@automerge/automerge-repo');
   const { IndexedDBStorageAdapter } = await import('@automerge/automerge-repo-storage-indexeddb');
-  const { MessageChannelNetworkAdapter } = await import(
-    '@automerge/automerge-repo-network-messagechannel'
-  );
+  const { MessageChannelNetworkAdapter } =
+    await import('@automerge/automerge-repo-network-messagechannel');
   return {
     DocHandle,
     isValidDocumentId,
