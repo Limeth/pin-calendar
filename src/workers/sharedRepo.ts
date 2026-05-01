@@ -72,7 +72,15 @@ type Tab = {
   adapterLocal: MessageChannelNetworkAdapter;
   adapterShared: MessageChannelNetworkAdapter;
   timedOut: boolean;
+  readySharedPosted: boolean;
 };
+
+function postReadyShared(tab: Tab) {
+  if (!tab.readySharedPosted) {
+    tab.port.postMessage({ type: 'ready-shared' });
+    tab.readySharedPosted = true;
+  }
+}
 
 class Initialized {
   docEphemeral: DocumentWrapper<EphemeralDocument>;
@@ -302,7 +310,7 @@ class SharedRepo {
     });
   }
 
-  async addTab(message: ToSharedRepoMessageInit, port: TabMessagePort) {
+  async addTab(message: ToSharedRepoMessageInit, port: TabMessagePort): Promise<Tab> {
     const initialized = await this.initialize(message);
 
     // be careful to not accidentally create a strong reference to port
@@ -336,7 +344,10 @@ class SharedRepo {
       adapterLocal,
       adapterShared,
       timedOut: false,
+      readySharedPosted: false,
     });
+
+    return initialized.tabs[initialized.tabs.length - 1];
   }
 }
 
@@ -378,15 +389,15 @@ async function onMessage(message: ToSharedRepoMessage, port: TabMessagePort) {
       port.calendarId = message.calendarId;
       const repo = await GetSharedRepo(port.calendarId);
       const initialized = await repo.initialize(message);
+      const tab = await repo.addTab(message, port);
 
-      repo.addTab(message, port);
       port.postMessage({
         type: 'ready-local',
         documentIdEphemeral: initialized.docEphemeral.handle.documentId,
         documentIdLocal: initialized.docLocal.handle.documentId,
       });
 
-      if (initialized.webRtcStarted) port.postMessage({ type: 'ready-shared' });
+      if (initialized.webRtcStarted) postReadyShared(tab);
 
       break;
     }
@@ -396,7 +407,7 @@ async function onMessage(message: ToSharedRepoMessage, port: TabMessagePort) {
       const initialized = await repo.initialized!;
       initialized.webRtcStarted = true;
 
-      for (const tab of initialized.tabs) tab.port.postMessage({ type: 'ready-shared' });
+      for (const tab of initialized.tabs) postReadyShared(tab);
 
       break;
     }
