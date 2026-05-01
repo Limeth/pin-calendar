@@ -27,6 +27,9 @@ type Literal<T, PrimitiveType> = T extends PrimitiveType
     ? never
     : T
   : never;
+
+// This stores values for all variants, as well as a discriminant.
+// This makes CRDT consistency easier than if it was a union.
 export function Variant<D, T extends TObject>(discriminantField: Literal<D, string>, object: T) {
   // TODO: Check that discriminantField doesn't interfere with the variants.
   return Type.Composite([
