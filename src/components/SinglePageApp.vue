@@ -6,7 +6,7 @@ import Settings from './Settings.vue';
 import feather from 'feather-icons';
 import { appStore } from '../app';
 import QRCode from 'qrcode';
-import { asyncComputed, computedAsync } from '@vueuse/core';
+import { computedAsync } from '@vueuse/core';
 import { decodeHash, encodeHash, type Hash, type HashAddPeer, type HashArgs } from '@/hash';
 import * as uuid from 'uuid';
 import type { CalendarId } from '@/documents/local';
@@ -93,7 +93,7 @@ function openCalendar(calendarId: CalendarId) {
 openCalendar(currentHash.value.path!.calendar.id);
 
 const appIsBeingLoaded = ref(true);
-const appAsync = asyncComputed(
+const appAsync = computedAsync(
   async () => {
     const app = await appStore.value.GetAppOptional(
       currentHash.value.path!.calendar.id,
