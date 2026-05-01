@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { type App } from '../app';
 import * as feather from 'feather-icons';
-import { computed, reactive, ref } from 'vue';
+import { computed, ref } from 'vue';
 import type { Ref } from 'vue';
 import {
   type PinCatalog,
@@ -78,9 +78,9 @@ type ImportCalendar = {
 type Import = ImportPins | ImportCalendar;
 
 const app = defineModel<App>();
-const docData = computed(() => reactive(app.value!.docShared.data.value));
-const pinCalendar = computed(() => reactive(docData.value!.pinCalendar));
-const pinCatalog = computed(() => reactive(docData.value!.pinCatalog));
+const docData = computed(() => app.value!.docShared.data.value);
+const pinCalendar = computed(() => docData.value!.pinCalendar);
+const pinCatalog = computed(() => docData.value!.pinCatalog);
 
 const modalData: Ref<ModalData | undefined> = ref(undefined);
 

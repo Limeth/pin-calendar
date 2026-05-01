@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import * as feather from 'feather-icons';
-import { ref, watch, type ShallowRef, shallowRef, computed, reactive } from 'vue';
+import { ref, watch, type ShallowRef, shallowRef, computed } from 'vue';
 import type { Ref } from 'vue';
 import { type Pin, PinCatalogGetRootCategories } from '../pins/pinCatalog';
 import { Temporal } from '@js-temporal/polyfill';
@@ -25,9 +25,9 @@ type DayListDay = {
 };
 
 const app = defineModel<App>();
-const docData = computed(() => reactive(app.value!.docShared.data.value));
-const pinCalendar = computed(() => reactive(docData.value!.pinCalendar));
-const pinCatalog = computed(() => reactive(docData.value!.pinCatalog));
+const docData = computed(() => app.value!.docShared.data.value);
+const pinCalendar = computed(() => docData.value!.pinCalendar);
+const pinCatalog = computed(() => docData.value!.pinCatalog);
 
 const dateNow = Temporal.Now.plainDateISO();
 const yearMonth = ref({

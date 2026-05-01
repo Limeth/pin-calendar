@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { App } from '../app';
 import * as feather from 'feather-icons';
-import { ref, watch, computed, toRaw, reactive } from 'vue';
+import { ref, watch, computed, toRaw } from 'vue';
 import type { Ref } from 'vue';
 import {
   PinCatalogCreateAndAddPinToCategory,
@@ -50,8 +50,8 @@ type Editing = EditingPin | EditingPinCategory;
 const emojiRegexPattern = emojiRegex();
 
 const app = defineModel<App>();
-const docData = computed(() => reactive(app.value!.docShared.data.value));
-const pinCatalog = computed(() => reactive(docData.value!.pinCatalog));
+const docData = computed(() => app.value!.docShared.data.value);
+const pinCatalog = computed(() => docData.value!.pinCatalog);
 
 const editingPinCategory = computed(() => {
   if (editing.value !== undefined && editing.value.kind == 'category')
