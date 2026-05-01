@@ -344,7 +344,7 @@ const sharedRepoByCalendarId: {
   [calendarId: CalendarId]: Promise<SharedRepo>;
 } = {};
 
-async function GetSharedRepo(calendarId: CalendarId): Promise<SharedRepo> {
+function GetSharedRepo(calendarId: CalendarId): Promise<SharedRepo> {
   if (calendarId in sharedRepoByCalendarId) return sharedRepoByCalendarId[calendarId]!;
 
   sharedRepoByCalendarId[calendarId] = (async (): Promise<SharedRepo> => {
