@@ -7,7 +7,7 @@ import feather from 'feather-icons';
 import { accountStore } from '../app';
 import QRCode from 'qrcode';
 import { asyncComputed, computedAsync } from '@vueuse/core';
-import { decodeHash, encodeHash, type Hash } from '@/hash';
+import { decodeHash, encodeHash, type Hash, type HashAddPeer, type HashArgs } from '@/hash';
 import * as uuid from 'uuid';
 import type { CalendarId } from '@/documents/local';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
@@ -21,7 +21,7 @@ import { localStorageDataStore } from '@/localStorageData';
 const localStorageData = await localStorageDataStore.value.GetData();
 const currentUrl = URL.parse(window.location.href) ?? undefined;
 const currentHash: Ref<Hash> = ref(decodeHash(currentUrl?.hash ?? ''));
-const originalHashArgs = structuredClone(toRaw(currentHash.value.args));
+const originalHashArgs: Ref<HashArgs> = ref(structuredClone(toRaw(currentHash.value.args)));
 
 // Automatically update the URL's hash when `currentHash` is altered.
 watch(
@@ -32,15 +32,21 @@ watch(
   { deep: true },
 );
 
+function isHashValidAddPeer(hash: Hash): hash is HashAddPeer {
+  return hash.args?.action === 'addPeer' && hash.path?.calendar.id !== undefined;
+}
+
+function processAddPeer(hash: HashAddPeer) {
+  // Initialize a calendar to be added.
+  // TODO: This should probably be only performed if the authorization with the originating peer was successful.
+  if (!(hash.path.calendar.id in localStorageData.value.calendars))
+    localStorageData.value.calendars[hash.path.calendar.id] = {};
+}
+
+// Initialize the `currentHash.value.path` field, ensuring it's present.
 {
-  if (
-    currentHash.value.args?.action === 'addPeer' &&
-    currentHash.value.path?.calendar.id !== undefined
-  ) {
-    // Initialize a calendar to be added.
-    // TODO: This should probably be only performed if the authorization with the originating peer was successful.
-    if (!(currentHash.value.path.calendar.id in localStorageData.value.calendars))
-      localStorageData.value.calendars[currentHash.value.path.calendar.id] = {};
+  if (isHashValidAddPeer(currentHash.value)) {
+    processAddPeer(currentHash.value);
   } else {
     const calendarIds = Object.keys(localStorageData.value.calendars);
 
@@ -69,6 +75,9 @@ watch(
   }
 }
 
+// Remove args from the URL.
+currentHash.value.args = undefined;
+
 function openCalendar(calendarId: CalendarId) {
   if (calendarId in localStorageData.value.calendars) {
     localStorageData.value.leastRecentlyUsedCalendar = calendarId;
@@ -81,17 +90,14 @@ function openCalendar(calendarId: CalendarId) {
   };
 }
 
-// Remove args from the URL.
-currentHash.value.args = undefined;
-
-openCalendar(currentHash.value.path.calendar.id);
+openCalendar(currentHash.value.path!.calendar.id);
 
 const appIsBeingLoaded = ref(true);
 const appAsync = asyncComputed(
   async () => {
     const app = await accountStore.value.GetAppOptional(
       currentHash.value.path!.calendar.id,
-      originalHashArgs,
+      structuredClone(toRaw(originalHashArgs.value)),
     );
     // To debug the loading indicator when switching between calendars, uncomment this:
     // await new Promise(() => { /* Never resolve */ });
@@ -188,6 +194,28 @@ const currentPage = ref(pages[0]);
 
 function setPage(newPage: Page) {
   currentPage.value = newPage;
+}
+
+const inviteLink = ref('');
+
+function useInviteLink() {
+  const [, hashString] = inviteLink.value.split('#', 2);
+
+  if (hashString) {
+    const hash = decodeHash(hashString);
+
+    if (isHashValidAddPeer(hash)) {
+      processAddPeer(hash);
+      originalHashArgs.value = hash.args;
+      currentHash.value = hash;
+      // Remove args from the URL.
+      currentHash.value.args = undefined;
+      inviteLink.value = '';
+      return;
+    }
+  }
+
+  console.warn(`Invalid invite link: ${inviteLink.value}`);
 }
 
 function createNewCalendar() {
@@ -301,6 +329,21 @@ function forgetPeer(peerJsPeerId: string) {
             <div v-html="feather.icons['plus'].toSvg()" />
             <div class="max-sm:hidden">Create New Calendar</div>
           </button>
+          <form
+            @submit.prevent="useInviteLink"
+            class="flex justify-center flex-col w-full mt-6 gap-2"
+          >
+            <input
+              type="text"
+              v-model="inviteLink"
+              class="input w-full"
+              placeholder="Paste Invite Link Here"
+              @focus="(event) => (event.target! as HTMLInputElement).select()"
+            />
+            <button type="submit" class="btn btn-sm btn-primary">
+              <div>Use Invite Link</div>
+            </button>
+          </form>
         </template>
         <template v-if="drawerContent === 'peers'">
           <div class="text-2xl mb-4 text-center">Known Devices</div>

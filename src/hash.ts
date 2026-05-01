@@ -2,28 +2,30 @@ import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import * as uuid from 'uuid';
 
-const HashArgsSchema = Type.Union([
-  Type.Undefined(),
-  Type.Object({
-    action: Type.Literal('addPeer'),
-    documentId: Type.String(),
-    peerJsPeerId: Type.String(),
-  }),
-]);
+const HashArgsAddPeerSchema = Type.Object({
+  action: Type.Literal('addPeer'),
+  documentId: Type.String(),
+  peerJsPeerId: Type.String(),
+});
+const HashArgsSchema = Type.Union([Type.Undefined(), HashArgsAddPeerSchema]);
 
+export type HashArgsAddPeer = Static<typeof HashArgsAddPeerSchema>;
 export type HashArgs = Static<typeof HashArgsSchema>;
 
-export type HashPath =
-  | undefined
-  | {
-      calendar: {
-        id: string;
-      };
-    };
+export type HashPathCalendar = {
+  calendar: {
+    id: string;
+  };
+};
+export type HashPath = undefined | HashPathCalendar;
 
 export type Hash = {
   path: HashPath;
   args: HashArgs;
+};
+export type HashAddPeer = {
+  path: HashPathCalendar;
+  args: HashArgsAddPeer;
 };
 
 export function decodeHashPath(path: string): HashPath {
