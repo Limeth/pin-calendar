@@ -281,7 +281,7 @@ export type AppStore = {
   GetAppOptional(calendarId: CalendarId | undefined, hashArgs: HashArgs): Promise<App | undefined>;
 };
 
-export const accountStore: ShallowRef<AppStore> = shallowRef<AppStore>({
+export const appStore: ShallowRef<AppStore> = shallowRef<AppStore>({
   refMap: {},
 
   GetApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App> {

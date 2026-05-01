@@ -4,7 +4,7 @@ import Calendar from './Calendar.vue';
 import Milestones from './Milestones.vue';
 import Settings from './Settings.vue';
 import feather from 'feather-icons';
-import { accountStore } from '../app';
+import { appStore } from '../app';
 import QRCode from 'qrcode';
 import { asyncComputed, computedAsync } from '@vueuse/core';
 import { decodeHash, encodeHash, type Hash, type HashAddPeer, type HashArgs } from '@/hash';
@@ -95,7 +95,7 @@ openCalendar(currentHash.value.path!.calendar.id);
 const appIsBeingLoaded = ref(true);
 const appAsync = asyncComputed(
   async () => {
-    const app = await accountStore.value.GetAppOptional(
+    const app = await appStore.value.GetAppOptional(
       currentHash.value.path!.calendar.id,
       structuredClone(toRaw(originalHashArgs.value)),
     );
