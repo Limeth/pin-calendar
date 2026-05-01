@@ -108,12 +108,11 @@ export function idSetRemove<S extends symbol>(
 ): boolean {
   let removed = false;
 
-  while (true) {
-    const existingIndex = idSet.findIndex((currentId) => currentId === id.key);
+  for (let i = idSet.length - 1; i >= 0; --i)
+    if (idSet[i] == id.key) {
+      idSet.splice(i, 1);
+      removed = true;
+    }
 
-    if (existingIndex === -1) return removed;
-
-    idSet.splice(existingIndex, 1);
-    removed = true;
-  }
+  return removed;
 }
