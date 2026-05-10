@@ -17,6 +17,7 @@ import type {
   AccessResponseError,
   AccessResponseSuccess,
 } from './invite';
+import { Kind } from '@sinclair/typebox';
 
 export type WebRtcNetworkAdapterOptions = {
   calendarId: CalendarId;
@@ -33,23 +34,23 @@ export type WebRtcNetworkAdapterOptions = {
 
 export type ConnectedPeer = {
   dataConnection: DataConnection;
-  connectMetadata: ConnectMetadata;
+  connectMetadata: ConnectRequestPacket;
 };
 
 type Packet = {
   message: Message;
 };
 
-export type ConnectMetadata = {
+export type ConnectRequestPacket = {
   kind: 'connect';
   automergePeerId: string;
   automergePeerMetadata: PeerMetadata;
 };
 
-export type Metadata = ConnectMetadata | AccessRequest;
+export type RequestPacket = ConnectRequestPacket | AccessRequest;
 
 type ConnectResponsePacket = {
-  metadata: ConnectMetadata;
+  message: ConnectRequestPacket;
 };
 
 export const SYMBOL_IS_WEBRTC_NETWORK_ADAPTER = Symbol.for('WebRtcNetworkAdapter');
@@ -131,15 +132,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
         // by a previous 'open' event or a reactive watcher callback.
         if (this.dataConnections[remotePeerPeerJsPeerId]) return;
 
-        const connectMetadata: ConnectMetadata = {
-          kind: 'connect',
-          automergePeerId: this.peerId!,
-          automergePeerMetadata: this.peerMetadata ?? {},
-        };
-
-        const dataConnection = this.peer!.connect(remotePeerPeerJsPeerId, {
-          metadata: connectMetadata,
-        });
+        const dataConnection = this.peer!.connect(remotePeerPeerJsPeerId);
 
         dataConnection.once('open', () => {
           this.onOutboundConnectionOpened(dataConnection);
@@ -218,41 +211,58 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       console.log('Received ConnectResponsePacket: ', packet);
       this.onConnectionOpened({
         dataConnection,
-        connectMetadata: packet.metadata,
+        connectMetadata: packet.message,
       });
     });
+
+    const connectRequestPacket: ConnectRequestPacket = {
+      kind: 'connect',
+      automergePeerId: this.peerId!,
+      automergePeerMetadata: this.peerMetadata ?? {},
+    };
+
+    dataConnection.send(connectRequestPacket);
   }
 
   onInboundConnectionRequested(dataConnection: DataConnection) {
-    const receivedMetadata = dataConnection.metadata as Metadata; // TODO: Validation?
-    console.warn('receivedMetadata:', receivedMetadata);
+    dataConnection.once('open', () => {
+      dataConnection.once('data', (message) => {
+        const requestPacket = message as RequestPacket; // TODO: Schema validation
 
-    if (receivedMetadata.kind === 'connect') {
-      if (!(dataConnection.peer in this.options.docLocal.value.remotePeers)) {
-        console.error(`Denied a connection request from unauthorized peer: ${dataConnection.peer}`);
-        return;
-      }
+        if (requestPacket.kind === 'connect') {
+          // TODO: Check secret
+          if (!(dataConnection.peer in this.options.docLocal.value.remotePeers)) {
+            console.error(
+              `Denied a connection request from unauthorized peer: ${dataConnection.peer}`,
+            );
+            // TODO: Send error.
+            dataConnection.close();
+            return;
+          }
 
-      dataConnection.once('open', () => {
-        const connectResponsePacket: ConnectResponsePacket = {
-          metadata: {
-            kind: 'connect',
-            automergePeerId: this.peerId!,
-            automergePeerMetadata: this.peerMetadata!,
-          },
-        };
-        console.log('Sending ConnectResponsePacket: ', connectResponsePacket);
-        // Asynchronously send a response packet without awaiting.
-        dataConnection.send(connectResponsePacket);
+          const connectResponsePacket: ConnectResponsePacket = {
+            message: {
+              kind: 'connect',
+              automergePeerId: this.peerId!,
+              automergePeerMetadata: this.peerMetadata!,
+            },
+          };
+          console.log('Sending ConnectResponsePacket: ', connectResponsePacket);
+          // Asynchronously send a response packet without awaiting.
+          dataConnection.send(connectResponsePacket);
 
-        this.onConnectionOpened({
-          dataConnection,
-          connectMetadata: receivedMetadata,
-        });
+          this.onConnectionOpened({
+            dataConnection,
+            connectMetadata: requestPacket,
+          });
+        } else if (requestPacket.kind === 'request-access') {
+          this.onRequestAccessReceived(dataConnection, requestPacket);
+        } else {
+          // TODO: Send error
+          dataConnection.close();
+        }
       });
-    } else if (receivedMetadata.kind === 'request-access') {
-      this.onRequestAccessReceived(dataConnection, receivedMetadata);
-    }
+    });
   }
 
   onRequestAccessReceived(dataConnection: DataConnection, receivedMetadata: AccessRequest) {

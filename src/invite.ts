@@ -70,16 +70,19 @@ export class AccessRequester {
       this.peer.on('open', async (id) => {
         console.log(`Peer is now accessible with Peer ID: ${id}`);
 
-        const metadata: AccessRequest = {
-          kind: 'request-access',
-          secret: this.hashArgs.secret,
-        };
-        const dataConnection = this.peer!.connect(this.hashArgs.peerJsPeerId, {
-          metadata,
+        const dataConnection = this.peer!.connect(this.hashArgs.peerJsPeerId);
+
+        dataConnection.once('open', () => {
+          const accessRequestPacket: AccessRequest = {
+            kind: 'request-access',
+            secret: this.hashArgs.secret,
+          };
+
+          // Runs asynchronously
+          dataConnection.send(accessRequestPacket);
         });
 
         dataConnection.once('data', (data) => {
-          // console.log('CONNECTION DATA:', data);
           const packet = data as AccessResponse; // TODO: Validation?
           console.log('Received InviteResponse: ', packet);
           this.peer!.destroy();
@@ -94,9 +97,6 @@ export class AccessRequester {
             resolve(packet);
           }
         });
-
-        // dataConnection.on('close', () => console.warn('CLOSED'));
-        // dataConnection.on('error', (e) => console.warn('ERROR', e));
       });
     });
   }
