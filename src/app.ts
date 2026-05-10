@@ -1,12 +1,12 @@
-import { computed, shallowRef, toRef, type Ref, type ShallowRef } from 'vue';
+import { computed, shallowRef, toRaw, toRef, type Ref, type ShallowRef } from 'vue';
 import * as A from '@automerge/automerge-repo';
 import { makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 import { SYMBOL_IS_WEBRTC_NETWORK_ADAPTER, WebRtcNetworkAdapter } from './webrtc';
 import {
   type LocalDocument,
-  LocalDocumentProcessHash,
   type CalendarId,
   LocalDocumentGetCurrentVersion,
+  LocalDocumentAddPeer,
 } from './documents/local';
 import { encodeHash, type HashArgs } from './hash';
 import {
@@ -82,8 +82,9 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
         (async () => {
           const dataReadyLocal = await promiseDataReadyLocal;
           const webrtc = new WebRtcNetworkAdapter({
+            calendarId,
             docLocal: dataReadyLocal.docLocal.data,
-            connectedPeers: toRef(dataReadyLocal.docEphemeral.data.value.connectedPeers),
+            docEphemeral: dataReadyLocal.docEphemeral.data,
             attemptToWaitForDocumentAvailability:
               message.documentSharedAvailableLocallyDuringInitialization
                 ? undefined
@@ -140,7 +141,7 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
       calendarId,
       documentIdEphemeral: calendarData.documentIdEphemeral as A.DocumentId,
       documentIdLocal: calendarData.documentIdLocal as A.DocumentId,
-      hashArgs,
+      invitation: toRaw(calendarData.invitation),
       repoEphemeralPort: repoEphemeralMessageChannel.port2,
       repoLocalPort: repoLocalMessageChannel.port2,
       repoSharedPort: repoSharedMessageChannel.port2,
@@ -189,11 +190,11 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
   // TODO/FIXME: This `computed` seems problematic because it might cause the entire app to be re-drawn,
   // but using `toRef` instead would break the reactivity, for some reason.
   // This affects `dataShared` and `docDataLocal` in `sharedRepo.ts`, too.
-  const dataLocal = computed(() => LocalDocumentGetCurrentVersion(dataLocalVersioned.value));
+  const dataLocal = computed(() =>
+    LocalDocumentGetCurrentVersion(dataLocalVersioned.value, calendarData.invitation?.localPeerId),
+  );
 
   console.log('dataLocal: ', dataLocal.value);
-
-  LocalDocumentProcessHash(dataLocal.value, hashArgs);
 
   const repoShared = new A.Repo({
     network: [new MessageChannelNetworkAdapter(repoSharedMessageChannel.port1)],
@@ -231,24 +232,6 @@ async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>
 
   const dataSharedVersioned: Ref<Rop<Versioned<SharedDocument>>> = makeReactive(handleShared);
   const dataShared = computed(() => SharedDocumentGetCurrentVersion(dataSharedVersioned.value));
-
-  const currentUrl = URL.parse(window.location.href) ?? undefined;
-  if (currentUrl !== undefined) {
-    const inviteUrl = new URL(currentUrl);
-    inviteUrl.hash = encodeHash({
-      path: {
-        calendar: {
-          id: calendarId,
-        },
-      },
-      args: {
-        action: 'addPeer',
-        documentId: dataLocal.value.documentIdShared,
-        peerJsPeerId: dataLocal.value.localPeer.peerJsPeerId,
-      },
-    });
-    console.log(`Peer invitation URL: ${inviteUrl.href}`);
-  }
 
   return {
     calendarId,

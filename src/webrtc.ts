@@ -8,13 +8,20 @@ import {
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
 import { watch, type Ref } from 'vue';
-import { LocalDocumentAddPeer, type LocalDocument } from './documents/local';
+import { LocalDocumentAddPeer, type CalendarId, type LocalDocument } from './documents/local';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
-import type { ConnectedPeers } from './documents/ephemeral';
+import type { EphemeralDocument } from './documents/ephemeral';
+import type {
+  AccessRequest,
+  AccessResponse,
+  AccessResponseError,
+  AccessResponseSuccess,
+} from './invite';
 
 export type WebRtcNetworkAdapterOptions = {
+  calendarId: CalendarId;
+  docEphemeral: Ref<Rop<EphemeralDocument>>;
   docLocal: Ref<Rop<LocalDocument>>;
-  connectedPeers: Ref<Rop<ConnectedPeers>>;
   attemptToWaitForDocumentAvailability:
     | undefined
     | {
@@ -34,9 +41,12 @@ type Packet = {
 };
 
 export type ConnectMetadata = {
+  kind: 'connect';
   automergePeerId: string;
   automergePeerMetadata: PeerMetadata;
 };
+
+export type Metadata = ConnectMetadata | AccessRequest;
 
 type ConnectResponsePacket = {
   metadata: ConnectMetadata;
@@ -122,6 +132,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
         if (this.dataConnections[remotePeerPeerJsPeerId]) return;
 
         const connectMetadata: ConnectMetadata = {
+          kind: 'connect',
           automergePeerId: this.peerId!,
           automergePeerMetadata: this.peerMetadata ?? {},
         };
@@ -196,7 +207,9 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   getAutomergePeerId(peerJsPeerId: string): PeerId | undefined {
-    return this.options.connectedPeers.value[peerJsPeerId]?.automergePeerId as PeerId | undefined;
+    return this.options.docEphemeral.value.connectedPeers[peerJsPeerId]?.automergePeerId as
+      | PeerId
+      | undefined;
   }
 
   onOutboundConnectionOpened(dataConnection: DataConnection) {
@@ -211,20 +224,121 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   onInboundConnectionRequested(dataConnection: DataConnection) {
-    const connectResponsePacket: ConnectResponsePacket = {
-      metadata: {
-        automergePeerId: this.peerId!,
-        automergePeerMetadata: this.peerMetadata!,
-      },
-    };
-    dataConnection.once('open', () => {
-      console.log('Sending ConnectResponsePacket: ', connectResponsePacket);
-      dataConnection.send(connectResponsePacket);
-      this.onConnectionOpened({
-        dataConnection,
-        connectMetadata: dataConnection.metadata as ConnectMetadata, // TODO: Validation?
+    const receivedMetadata = dataConnection.metadata as Metadata; // TODO: Validation?
+    console.warn('receivedMetadata:', receivedMetadata);
+
+    if (receivedMetadata.kind === 'connect') {
+      if (!(dataConnection.peer in this.options.docLocal.value.remotePeers)) {
+        console.error(`Denied a connection request from unauthorized peer: ${dataConnection.peer}`);
+        return;
+      }
+
+      dataConnection.once('open', () => {
+        const connectResponsePacket: ConnectResponsePacket = {
+          metadata: {
+            kind: 'connect',
+            automergePeerId: this.peerId!,
+            automergePeerMetadata: this.peerMetadata!,
+          },
+        };
+        console.log('Sending ConnectResponsePacket: ', connectResponsePacket);
+        // Asynchronously send a response packet without awaiting.
+        dataConnection.send(connectResponsePacket);
+
+        this.onConnectionOpened({
+          dataConnection,
+          connectMetadata: receivedMetadata,
+        });
       });
-    });
+    } else if (receivedMetadata.kind === 'request-access') {
+      this.onRequestAccessReceived(dataConnection, receivedMetadata);
+    }
+  }
+
+  onRequestAccessReceived(dataConnection: DataConnection, receivedMetadata: AccessRequest) {
+    function sendAndCloseAsynchronously(getMessage: () => undefined | unknown) {
+      const doSend = async () => {
+        console.assert(dataConnection.open);
+        const message = getMessage();
+
+        if (message !== undefined) {
+          console.log('SENDING: ', message);
+          await dataConnection.send(message);
+        }
+
+        dataConnection.close();
+      };
+
+      // dataConnection.on('close', () => console.warn('CLOSED'));
+      // dataConnection.on('error', (e) => console.warn('ERROR', e));
+
+      if (dataConnection.open) {
+        doSend();
+      } else {
+        dataConnection.once('open', doSend);
+      }
+    }
+
+    if (dataConnection.peer in this.options.docLocal.value.remotePeers) {
+      console.info(
+        `The known peer ${dataConnection.peer} is attempting to request access to the document.`,
+      );
+
+      if (this.options.docLocal.value.documentIdShared) {
+        const message: AccessResponseSuccess = {
+          kind: 'success',
+          calendarId: this.options.calendarId,
+          sharedDocumentId: this.options.docLocal.value.documentIdShared,
+        };
+        sendAndCloseAsynchronously(() => message);
+      }
+      return;
+    }
+
+    if (receivedMetadata.secret in this.options.docEphemeral.value.invites) {
+      const invite = this.options.docEphemeral.value.invites[receivedMetadata.secret];
+      if (invite.usedBy === undefined) {
+        sendAndCloseAsynchronously(() => {
+          if (invite.usedBy !== undefined) return;
+          console.info(
+            `Adding peer ${dataConnection.peer} to remote peers of document ${this.options.calendarId}.`,
+          );
+          invite[changeSubtree]((invite) => {
+            invite.usedBy = dataConnection.peer;
+          });
+          this.options.docLocal.value.remotePeers[changeSubtree]((remotePeers) => {
+            remotePeers[dataConnection.peer] = {
+              deviceName: '', // TODO
+            };
+          });
+          const message: AccessResponseSuccess = {
+            kind: 'success',
+            calendarId: this.options.calendarId,
+            sharedDocumentId: this.options.docLocal.value.documentIdShared!,
+          };
+          return message;
+        });
+        return;
+      }
+
+      console.warn(
+        `Peer ${dataConnection.peer} attempted to use an invite link that was already used.`,
+      );
+      const message: AccessResponseError = {
+        kind: 'error',
+        message:
+          "This invite link cannot be used more than once. You might want to request a new invite link from the calendar's owner.",
+      };
+      sendAndCloseAsynchronously(() => message);
+      return;
+    }
+
+    console.error(
+      'Received an access request with an invalid secret: ',
+      dataConnection,
+      receivedMetadata,
+    );
+    dataConnection.close();
   }
 
   onConnectionOpened(connectedPeer: ConnectedPeer) {
@@ -256,7 +370,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       peerJsPeerId: connectedPeer.dataConnection.peer,
       deviceName: '', // TODO
     });
-    this.options.connectedPeers.value[changeSubtree]((connectedPeers) => {
+    this.options.docEphemeral.value.connectedPeers[changeSubtree]((connectedPeers) => {
       connectedPeers[connectedPeer.dataConnection.peer] = connectedPeer.connectMetadata;
     });
     this.dataConnections[connectedPeer.dataConnection.peer] = connectedPeer.dataConnection;
@@ -319,7 +433,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   onPeerDisconnected(peer: ConnectedPeer) {
-    this.options.connectedPeers.value[changeSubtree]((connectedPeers) => {
+    this.options.docEphemeral.value.connectedPeers[changeSubtree]((connectedPeers) => {
       delete connectedPeers[peer.dataConnection.peer];
     });
     delete this.dataConnections[peer.dataConnection.peer];
@@ -331,7 +445,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   disconnect(): void {
     console.log('WebRtcNetworkAdapter::disconnect()');
 
-    this.options.connectedPeers.value[changeSubtree]((connectedPeers) => {
+    this.options.docEphemeral.value.connectedPeers[changeSubtree]((connectedPeers) => {
       for (const peerJsPeerId of Object.keys(connectedPeers)) delete connectedPeers[peerJsPeerId];
     });
 
@@ -340,7 +454,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       delete this.dataConnections[peerJsPeerId];
     }
 
-    console.assert(Object.keys(this.options.connectedPeers.value).length === 0);
+    console.assert(Object.keys(this.options.docEphemeral.value.connectedPeers).length === 0);
     console.assert(Object.keys(this.dataConnections).length === 0);
     this.sessionCounter++;
     // PeerJS keeps the ID registered on the signalling server until destroy()
@@ -351,7 +465,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   send(message: Message): void {
-    console.log(`WebRtcNetworkAdapter::send(message = ${message})`);
+    console.log(`WebRtcNetworkAdapter::send(message = ${JSON.stringify(message)})`);
 
     for (const [peerJsPeerId, dataConnection] of Object.entries(this.dataConnections)) {
       const packet: Packet = {

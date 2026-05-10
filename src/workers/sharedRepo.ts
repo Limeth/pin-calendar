@@ -59,6 +59,7 @@ const firstConnectDebugTimeout = setTimeout(() => {
 export function EphemeralDocumentDefault(): EphemeralDocument {
   return {
     connectedPeers: {},
+    invites: {},
   };
 }
 
@@ -161,41 +162,29 @@ class SharedRepo {
       docHandleLocal = await this.repoLocal.find<Versioned<LocalDocument>>(message.documentIdLocal);
     } else {
       docHandleLocal = this.repoLocal.create<Versioned<LocalDocument>>(
-        makeVersioned(LocalDocumentDefault(), LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT),
+        makeVersioned(
+          LocalDocumentDefault(message.invitation?.localPeerId),
+          LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT,
+        ),
       );
     }
 
     const docDataLocalVersioned: Ref<Rop<Versioned<LocalDocument>>> = makeReactive(docHandleLocal);
     const docDataLocal = computed(() =>
-      LocalDocumentGetCurrentVersion(docDataLocalVersioned.value),
+      LocalDocumentGetCurrentVersion(docDataLocalVersioned.value, message.invitation?.localPeerId),
     );
 
-    if (message.hashArgs?.action === 'addPeer') {
-      let suggestedDocumentIdUsed;
-
+    if (message.invitation !== undefined) {
       if (docDataLocal.value.documentIdShared === undefined) {
-        console.log(`Using suggested shared document ID: ${message.hashArgs.documentId}`);
+        const documentIdShared = message.invitation.documentIdShared;
         docDataLocal.value[changeSubtree]((local) => {
-          local.documentIdShared = message.hashArgs?.documentId;
+          local.documentIdShared = documentIdShared;
         });
-        suggestedDocumentIdUsed = true;
-      } else if (message.hashArgs.documentId === docDataLocal.value.documentIdShared) {
-        console.log(
-          `Suggested shared document ID matches the stored shared document ID: ${docDataLocal.value.documentIdShared}`,
-        );
-        suggestedDocumentIdUsed = true;
-      } else {
-        console.log(
-          `A shared document ID was suggested (${message.hashArgs.documentId}), but was ignored, because an existing stored shared document ID was found: ${docDataLocal.value.documentIdShared}`,
-        );
-        suggestedDocumentIdUsed = false;
       }
-
-      if (suggestedDocumentIdUsed)
-        LocalDocumentAddPeer(docDataLocal.value, {
-          peerJsPeerId: message.hashArgs.peerJsPeerId,
-          deviceName: '', // TODO
-        });
+      LocalDocumentAddPeer(docDataLocal.value, {
+        deviceName: '', // TODO
+        peerJsPeerId: message.invitation.invitedBy,
+      });
     }
 
     let documentSharedAvailableLocally;

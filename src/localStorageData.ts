@@ -8,9 +8,21 @@ const LOCAL_STORAGE_KEY = 'pinCalendar';
 const LOCAL_STORAGE_KEY_BACKUP = 'pinCalendarBackup';
 const LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT = 1;
 
+const InvitationSchema = Type.Object({
+  // The ID of the shared document.
+  documentIdShared: Type.String(),
+  // The Peer JS peer ID of the peer that invited us.
+  invitedBy: Type.String(),
+  // Our Peer JS peer ID we used when confirming the invitation, that the inviter knows us as.
+  localPeerId: Type.String(),
+});
+
+export type Invitation = Static<typeof InvitationSchema>;
+
 const LocalStorageDataCalendarSchema = Type.Object({
   documentIdEphemeral: Type.Optional(Type.String()),
   documentIdLocal: Type.Optional(Type.String()),
+  invitation: Type.Optional(InvitationSchema),
 });
 
 export type LocalStorageDataCalendar = Static<typeof LocalStorageDataCalendarSchema>;

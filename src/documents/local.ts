@@ -12,12 +12,16 @@ const RemotePeerSchema = Type.Object({
 
 export type RemotePeer = Static<typeof RemotePeerSchema>;
 
+/// Peer JS peer ID's are not secret, but should be unique if possible.
+const PeerJsPeerIdSchema = Type.String({ format: 'uuid' });
+
+export type PeerJsPeerId = Static<typeof PeerJsPeerIdSchema>;
+
 const LocalPeerSchema = Type.Composite([
   RemotePeerSchema,
   Type.Object({
     deviceName: Type.String(),
-    /// Peer JS peer ID's are not secret, but should be unique if possible.
-    peerJsPeerId: Type.String({ format: 'uuid' }),
+    peerJsPeerId: PeerJsPeerIdSchema,
   }),
 ]);
 
@@ -29,7 +33,9 @@ export type CalendarId = Static<typeof CalendarIdSchema>;
 
 const LocalDocumentSchema = Type.Object({
   documentIdShared: Type.Optional(Type.String()),
+  /// What our peer is known as.
   localPeer: LocalPeerSchema,
+  /// Peers we synchronize our shared document with.
   /// A map with PeerJS peer ID's as keys.
   remotePeers: Type.Record(Type.String({ format: 'uuid' }), RemotePeerSchema),
 });
@@ -38,11 +44,10 @@ export type LocalDocument = Static<typeof LocalDocumentSchema>;
 
 export function LocalDocumentGetCurrentVersion(
   versioned: Rop<Versioned<LocalDocument>>,
+  defaultPeerJsPeerId: undefined | PeerJsPeerId,
 ): Rop<LocalDocument> {
-  const result = getCurrentVersionRop(
-    versioned,
-    LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT,
-    LocalDocumentDefault,
+  const result = getCurrentVersionRop(versioned, LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT, () =>
+    LocalDocumentDefault(defaultPeerJsPeerId),
   );
 
   if (result.type === 'current') return result.current;
@@ -54,11 +59,11 @@ export function LocalDocumentGetCurrentVersion(
   throw new Error(`No local document found.`);
 }
 
-export function LocalDocumentDefault(): LocalDocument {
+export function LocalDocumentDefault(peerJsPeerId: undefined | PeerJsPeerId): LocalDocument {
   return {
     localPeer: {
       deviceName: 'New device',
-      peerJsPeerId: uuid.v7(),
+      peerJsPeerId: peerJsPeerId ?? uuid.v7(),
     },
     remotePeers: {},
   };
@@ -79,20 +84,5 @@ export function LocalDocumentAddPeer(self: Rop<LocalDocument>, peer: LocalPeer):
     });
     console.log(`Added new peer ${peer.peerJsPeerId}.`);
     return true;
-  }
-}
-
-export function LocalDocumentProcessHash(self: Rop<LocalDocument>, hashArgs: HashArgs) {
-  if (hashArgs?.action === 'addPeer') {
-    if (self.documentIdShared !== undefined && self.documentIdShared !== hashArgs.documentId) {
-      console.warn(
-        `Document ID mismatch (current: ${self.documentIdShared}, requested: ${hashArgs.documentId})`,
-      );
-    } else {
-      LocalDocumentAddPeer(self, {
-        peerJsPeerId: hashArgs.peerJsPeerId,
-        deviceName: '', // TODO
-      });
-    }
   }
 }

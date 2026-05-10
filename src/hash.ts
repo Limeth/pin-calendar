@@ -2,9 +2,10 @@ import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import * as uuid from 'uuid';
 
+// TODO: rename this and the action string to `invite`.
 const HashArgsAddPeerSchema = Type.Object({
   action: Type.Literal('addPeer'),
-  documentId: Type.String(),
+  secret: Type.String(),
   peerJsPeerId: Type.String(),
 });
 const HashArgsSchema = Type.Union([Type.Undefined(), HashArgsAddPeerSchema]);
@@ -24,7 +25,7 @@ export type Hash = {
   args: HashArgs;
 };
 export type HashAddPeer = {
-  path: HashPathCalendar;
+  path: undefined;
   args: HashArgsAddPeer;
 };
 

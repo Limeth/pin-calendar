@@ -1,6 +1,7 @@
 import type { DocumentId } from '@automerge/automerge-repo';
 import type { HashArgs } from './hash';
-import type { CalendarId } from './documents/local';
+import type { CalendarId, PeerJsPeerId } from './documents/local';
+import type { Invitation } from './localStorageData';
 
 export type ToSharedRepoMessageInit = {
   type: 'init';
@@ -8,7 +9,7 @@ export type ToSharedRepoMessageInit = {
   // TODO: The ID is always generated on the shared worker. Remove it from here and from LocalStorageData.
   documentIdEphemeral: DocumentId | undefined;
   documentIdLocal: DocumentId;
-  hashArgs: HashArgs;
+  invitation: Invitation | undefined;
   repoEphemeralPort: MessagePort;
   repoLocalPort: MessagePort;
   repoSharedPort: MessagePort;
