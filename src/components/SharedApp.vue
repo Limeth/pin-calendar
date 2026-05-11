@@ -447,11 +447,13 @@ function closeAddDeviceDialog() {
               </div>
             </li>
           </template>
+          <li class="py-4 w-full flex justify-center">
+            <button @click="openAddDeviceDialog" class="btn btn-sm btn-primary">
+              <div v-html="feather.icons['user-plus'].toSvg()" />
+              <div class="max-sm:hidden">Add a Device</div>
+            </button>
+          </li>
         </ul>
-        <button @click="openAddDeviceDialog" class="btn btn-sm btn-primary">
-          <div v-html="feather.icons['user-plus'].toSvg()" />
-          <div class="max-sm:hidden">Add a Device</div>
-        </button>
       </template>
     </div>
   </div>
