@@ -102,13 +102,26 @@ if (isHashValidAddPeer(currentHash.value)) {
     <SharedApp v-if="currentHash.args?.action !== 'addPeer'" />
   </div>
   <div class="modal" :class="{ 'modal-open': modalData !== undefined }">
-    <div v-if="modalData?.kind === 'invite-confirmation'" class="modal-box">
+    <div v-if="modalData?.kind === 'invite-confirmation'" class="modal-box flex flex-col gap-2">
       <h3 class="text-lg font-bold">Join Calendar</h3>
-      <p class="py-4">
-        You have been invited to join a calendar. This will connect your device to the inviter and
-        share your IP address. Only proceed if you trust the sender.
+      <p>
+        You have been invited to join a calendar. Confirming this invitation will cause your IP
+        address to be shared with the owner of the calendar, so that the calendars can be kept in
+        sync.
       </p>
-      <div v-if="modalData.error !== undefined" class="border-2 border-error rounded-xl px-4 py-2">
+      <p>
+        The owner of the calendar may share the calendar with other parties, which will not show up
+        in your list of devices.
+      </p>
+      <p>
+        Access for other users/devices to your copy of the calendar can be revoked from the devices
+        menu.
+      </p>
+      <p>Only proceed if you trust the sender.</p>
+      <div
+        v-if="modalData.error !== undefined"
+        class="border-2 border-error rounded-xl px-4 py-2 mt-4"
+      >
         <div class="text-error text-xs">
           An error occurred while requesting access to the calendar:
         </div>

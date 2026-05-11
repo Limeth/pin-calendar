@@ -273,12 +273,21 @@ function closeAddDeviceDialog() {
 <template>
   <input id="spa-drawer" type="checkbox" class="drawer-toggle" v-model="isDrawerOpen" />
   <div class="modal" :class="{ 'modal-open': modalData !== undefined }">
-    <div v-if="modalData?.kind === 'add-device'" class="modal-box items-center">
+    <div v-if="modalData?.kind === 'add-device'" class="modal-box flex flex-col gap-2">
       <h3 class="text-lg font-bold">Add a Device</h3>
-      <p class="py-4">
-        The following link or QR code can be used to invite one device to the currently opened
+      <p>
+        The following link or QR code can be used to invite one user/device to the currently opened
         calendar.
       </p>
+      <p>
+        Whoever you share this link with will be able to edit the calendar, and read your IP
+        address.
+      </p>
+      <p>
+        Access for other users/devices to your copy of the calendar can be revoked from the devices
+        menu.
+      </p>
+      <p>Only share this link with people you trust.</p>
       <img :src="modalData?.inviteQr" class="m-auto" style="image-rendering: pixelated; zoom: 4" />
       <label class="w-full flex gap-2">
         <div class="label">
