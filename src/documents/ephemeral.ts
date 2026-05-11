@@ -1,5 +1,5 @@
 import type { ConnectRequestPacket } from '@/webrtc';
-import type { CalendarId, PeerJsPeerId } from './local';
+import type { PeerJsPeerId } from './local';
 
 export type ConnectedPeers = {
   [peerJsPeerId: PeerJsPeerId]: ConnectRequestPacket;

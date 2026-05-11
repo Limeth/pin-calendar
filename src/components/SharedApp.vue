@@ -202,6 +202,11 @@ type ModalAddDevice = {
 type ModalData = ModalAddDevice;
 
 const modalData: Ref<ModalData | undefined> = ref(undefined);
+const inviteUsed = computed(
+  () =>
+    modalData.value?.kind === 'add-device' &&
+    app.value?.docEphemeral.data.value.invites[modalData.value.secret].usedBy !== undefined,
+);
 
 function createInviteUrl() {
   if (app.value === undefined) return undefined;
@@ -287,9 +292,13 @@ function closeAddDeviceDialog() {
           @focus="(event) => (event.target! as HTMLInputElement).select()"
         />
       </label>
-      <div class="modal-action items-baseline">
+      <div class="modal-action items-baseline" v-if="!inviteUsed">
         <p class="mr-2">Waiting for device...</p>
         <button class="btn" @click="closeAddDeviceDialog">Cancel</button>
+      </div>
+      <div class="modal-action items-baseline" v-if="inviteUsed">
+        <p class="mr-2 text-primary">Device added successfully.</p>
+        <button class="btn btn-primary" @click="closeAddDeviceDialog">Close</button>
       </div>
     </div>
   </div>
