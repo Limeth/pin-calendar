@@ -1,6 +1,5 @@
 import type { DocumentId } from '@automerge/automerge-repo';
-import type { HashArgs } from './hash';
-import type { CalendarId, PeerJsPeerId } from './documents/local';
+import type { CalendarId } from './documents/local';
 import type { Invitation } from './localStorageData';
 
 export type ToSharedRepoMessageInit = {

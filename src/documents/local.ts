@@ -1,13 +1,14 @@
 import { Type, type Static } from '@sinclair/typebox';
 import * as uuid from 'uuid';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
-import type { HashArgs } from '@/hash';
 import { getCurrentVersionRop, type Versioned } from '@/versioned';
 
 export const LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT = 1;
 
 const RemotePeerSchema = Type.Object({
   deviceName: Type.String(),
+  // TODO: Cryptographically secure authentication.
+  sharedSecret: Type.String(),
 });
 
 export type RemotePeer = Static<typeof RemotePeerSchema>;
@@ -17,13 +18,10 @@ const PeerJsPeerIdSchema = Type.String({ format: 'uuid' });
 
 export type PeerJsPeerId = Static<typeof PeerJsPeerIdSchema>;
 
-const LocalPeerSchema = Type.Composite([
-  RemotePeerSchema,
-  Type.Object({
-    deviceName: Type.String(),
-    peerJsPeerId: PeerJsPeerIdSchema,
-  }),
-]);
+const LocalPeerSchema = Type.Object({
+  deviceName: Type.String(),
+  peerJsPeerId: PeerJsPeerIdSchema,
+});
 
 export type LocalPeer = Static<typeof LocalPeerSchema>;
 
@@ -31,7 +29,7 @@ export const CalendarIdSchema = Type.String({ format: 'uuid' });
 
 export type CalendarId = Static<typeof CalendarIdSchema>;
 
-const LocalDocumentSchema = Type.Object({
+export const LocalDocumentSchema = Type.Object({
   documentIdShared: Type.Optional(Type.String()),
   /// What our peer is known as.
   localPeer: LocalPeerSchema,
@@ -69,7 +67,10 @@ export function LocalDocumentDefault(peerJsPeerId: undefined | PeerJsPeerId): Lo
   };
 }
 
-export function LocalDocumentAddPeer(self: Rop<LocalDocument>, peer: LocalPeer): boolean {
+export function LocalDocumentAddPeer(
+  self: Rop<LocalDocument>,
+  peer: RemotePeer & { peerJsPeerId: string },
+): boolean {
   const peerAlreadyAdded =
     self.localPeer.peerJsPeerId === peer.peerJsPeerId || peer.peerJsPeerId in self.remotePeers;
 
@@ -80,6 +81,7 @@ export function LocalDocumentAddPeer(self: Rop<LocalDocument>, peer: LocalPeer):
     self[changeSubtree]((localDocument) => {
       localDocument.remotePeers[peer.peerJsPeerId] = {
         deviceName: peer.deviceName,
+        sharedSecret: peer.sharedSecret,
       };
     });
     console.log(`Added new peer ${peer.peerJsPeerId}.`);

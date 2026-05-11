@@ -184,6 +184,7 @@ class SharedRepo {
       LocalDocumentAddPeer(docDataLocal.value, {
         deviceName: '', // TODO
         peerJsPeerId: message.invitation.invitedBy,
+        sharedSecret: message.invitation.sharedSecret,
       });
     }
 
@@ -355,8 +356,6 @@ function GetSharedRepo(calendarId: CalendarId): Promise<SharedRepo> {
 }
 
 self.onconnect = (eventConnect: MessageEvent) => {
-  console.log('connect', eventConnect);
-
   if (eventConnect.ports[0] === undefined) return;
 
   clearTimeout(firstConnectDebugTimeout);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, toRaw, toRef, watch, type Ref } from 'vue';
+import { computed, ref, watch, type Ref } from 'vue';
 import Calendar from './Calendar.vue';
 import Milestones from './Milestones.vue';
 import Settings from './Settings.vue';
@@ -7,7 +7,7 @@ import feather from 'feather-icons';
 import { appStore } from '../app';
 import QRCode from 'qrcode';
 import { computedAsync } from '@vueuse/core';
-import { decodeHash, encodeHash, type Hash, type HashAddPeer, type HashArgs } from '@/hash';
+import { decodeHash, encodeHash, type Hash, type HashAddPeer } from '@/hash';
 import * as uuid from 'uuid';
 import type { CalendarId } from '@/documents/local';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
@@ -32,7 +32,6 @@ const isDrawerOpen = ref(false);
 const localStorageData = await localStorageDataStore.value.GetData();
 const currentUrl = URL.parse(window.location.href) ?? undefined;
 const currentHash: Ref<Hash> = ref(decodeHash(currentUrl?.hash ?? ''));
-const originalHashArgs: Ref<HashArgs> = ref(structuredClone(toRaw(currentHash.value.args)));
 
 // Automatically update the URL's hash when `currentHash` is altered.
 watch(
@@ -42,10 +41,6 @@ watch(
   },
   { deep: true },
 );
-
-function isHashValidAddPeer(hash: Hash): hash is HashAddPeer {
-  return hash.args?.action === 'addPeer' && hash.path?.calendar.id !== undefined;
-}
 
 // Initialize the `currentHash.value.path` field, ensuring it's present.
 {
@@ -97,10 +92,7 @@ openCalendar(currentHash.value.path!.calendar.id);
 const appIsBeingLoaded = ref(true);
 const appAsync = computedAsync(
   async () => {
-    const app = await appStore.value.GetAppOptional(
-      currentHash.value.path!.calendar.id,
-      structuredClone(toRaw(originalHashArgs.value)),
-    );
+    const app = await appStore.value.GetAppOptional(currentHash.value.path!.calendar.id);
     // To debug the loading indicator when switching between calendars, uncomment this:
     // await new Promise(() => { /* Never resolve */ });
     return app;

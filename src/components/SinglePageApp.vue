@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, toRaw, watch, type Ref } from 'vue';
-import { decodeHash, encodeHash, type Hash, type HashAddPeer, type HashArgs } from '@/hash';
+import { ref, watch, type Ref } from 'vue';
+import { decodeHash, encodeHash, type Hash, type HashAddPeer } from '@/hash';
 import { localStorageDataStore } from '@/localStorageData';
 import SharedApp from './SharedApp.vue';
 import { AccessRequester } from '@/invite';
-import { LocalDocumentAddPeer } from '@/documents/local';
 
 // const sharedAppModel: Reactive<SharedAppModel> = reactive({
 //   isDrawerOpen: false,
@@ -17,7 +16,6 @@ import { LocalDocumentAddPeer } from '@/documents/local';
 const localStorageData = await localStorageDataStore.value.GetData();
 const currentUrl = URL.parse(window.location.href) ?? undefined;
 const currentHash: Ref<Hash> = ref(decodeHash(currentUrl?.hash ?? ''));
-const originalHashArgs: Ref<HashArgs> = ref(structuredClone(toRaw(currentHash.value.args)));
 
 console.log(localStorageData.value);
 console.log(currentUrl);
@@ -79,6 +77,7 @@ if (isHashValidAddPeer(currentHash.value)) {
             localStorageData.value.calendars[result.response.calendarId] = {
               invitation: {
                 invitedBy: currentHash.value.args.peerJsPeerId,
+                sharedSecret: currentHash.value.args.secret,
                 localPeerId: result.peerJsPeerId,
                 documentIdShared: result.response.sharedDocumentId,
               },

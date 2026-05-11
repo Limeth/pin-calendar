@@ -1,15 +1,15 @@
-import type { ConnectMetadata } from '@/webrtc';
+import type { ConnectRequestPacket } from '@/webrtc';
 import type { CalendarId, PeerJsPeerId } from './local';
 
 export type ConnectedPeers = {
-  [peerJsPeerId: PeerJsPeerId]: ConnectMetadata;
+  [peerJsPeerId: PeerJsPeerId]: ConnectRequestPacket;
 };
 
 export type InviteSecret = string;
 
 export type EphemeralDocument = {
   connectedPeers: {
-    [peerJsPeerId: PeerJsPeerId]: ConnectMetadata;
+    [peerJsPeerId: PeerJsPeerId]: ConnectRequestPacket;
   };
   invites: {
     [secret: InviteSecret]: {

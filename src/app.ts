@@ -1,4 +1,4 @@
-import { computed, shallowRef, toRaw, toRef, type Ref, type ShallowRef } from 'vue';
+import { computed, shallowRef, toRaw, type Ref, type ShallowRef } from 'vue';
 import * as A from '@automerge/automerge-repo';
 import { makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 import { SYMBOL_IS_WEBRTC_NETWORK_ADAPTER, WebRtcNetworkAdapter } from './webrtc';
@@ -6,9 +6,7 @@ import {
   type LocalDocument,
   type CalendarId,
   LocalDocumentGetCurrentVersion,
-  LocalDocumentAddPeer,
 } from './documents/local';
-import { encodeHash, type HashArgs } from './hash';
 import {
   MessagePortWrapper,
   type FromSharedRepoMessage,
@@ -31,7 +29,7 @@ export type App = {
   readonly docShared: VersionedDocumentWrapper<SharedDocument>;
 };
 
-async function LoadApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App> {
+async function LoadApp(calendarId: CalendarId): Promise<App> {
   // const account = await AccountLoadOrNew();
   // const roomName = await AccountGetPinCatalogRoom(account);
   // const roomPassword = await AccountGetRoomPassword(account);
@@ -260,27 +258,24 @@ export type AppStore = {
     [calendarId: CalendarId]: Promise<App>;
   };
 
-  GetApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App>;
-  GetAppOptional(calendarId: CalendarId | undefined, hashArgs: HashArgs): Promise<App | undefined>;
+  GetApp(calendarId: CalendarId): Promise<App>;
+  GetAppOptional(calendarId: CalendarId | undefined): Promise<App | undefined>;
 };
 
 export const appStore: ShallowRef<AppStore> = shallowRef<AppStore>({
   refMap: {},
 
-  GetApp(calendarId: CalendarId, hashArgs: HashArgs): Promise<App> {
+  GetApp(calendarId: CalendarId): Promise<App> {
     if (calendarId in this.refMap) return this.refMap[calendarId]!;
 
     this.refMap[calendarId] = (async () => {
-      return await LoadApp(calendarId, hashArgs);
+      return await LoadApp(calendarId);
     })();
 
     return this.refMap[calendarId];
   },
 
-  async GetAppOptional(
-    calendarId: CalendarId | undefined,
-    hashArgs: HashArgs,
-  ): Promise<App | undefined> {
-    if (calendarId !== undefined) return await this.GetApp(calendarId, hashArgs);
+  async GetAppOptional(calendarId: CalendarId | undefined): Promise<App | undefined> {
+    if (calendarId !== undefined) return await this.GetApp(calendarId);
   },
 });

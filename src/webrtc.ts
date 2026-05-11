@@ -8,16 +8,15 @@ import {
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
 import { watch, type Ref } from 'vue';
-import { LocalDocumentAddPeer, type CalendarId, type LocalDocument } from './documents/local';
+import {
+  LocalDocumentAddPeer,
+  type CalendarId,
+  type LocalDocument,
+  type RemotePeer,
+} from './documents/local';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { EphemeralDocument } from './documents/ephemeral';
-import type {
-  AccessRequest,
-  AccessResponse,
-  AccessResponseError,
-  AccessResponseSuccess,
-} from './invite';
-import { Kind } from '@sinclair/typebox';
+import type { AccessRequest, AccessResponseError, AccessResponseSuccess } from './invite';
 
 export type WebRtcNetworkAdapterOptions = {
   calendarId: CalendarId;
@@ -34,7 +33,7 @@ export type WebRtcNetworkAdapterOptions = {
 
 export type ConnectedPeer = {
   dataConnection: DataConnection;
-  connectMetadata: ConnectRequestPacket;
+  connectRequestPacket: ConnectRequestPacket;
 };
 
 type Packet = {
@@ -45,6 +44,7 @@ export type ConnectRequestPacket = {
   kind: 'connect';
   automergePeerId: string;
   automergePeerMetadata: PeerMetadata;
+  secret: string;
 };
 
 export type RequestPacket = ConnectRequestPacket | AccessRequest;
@@ -127,7 +127,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       // Invoked when a connection to the signaling server is established.
       this.peerJsPeerId = id;
 
-      const connectToRemotePeer = (remotePeerPeerJsPeerId: string) => {
+      const connectToRemotePeer = (remotePeerPeerJsPeerId: string, remotePeer: RemotePeer) => {
         // Guard against double-connecting if this peer was already handled
         // by a previous 'open' event or a reactive watcher callback.
         if (this.dataConnections[remotePeerPeerJsPeerId]) return;
@@ -135,12 +135,14 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
         const dataConnection = this.peer!.connect(remotePeerPeerJsPeerId);
 
         dataConnection.once('open', () => {
-          this.onOutboundConnectionOpened(dataConnection);
+          this.onOutboundConnectionOpened(dataConnection, remotePeer);
         });
       };
 
-      for (const remotePeerPeerJsPeerId of Object.keys(this.options.docLocal.value.remotePeers)) {
-        connectToRemotePeer(remotePeerPeerJsPeerId);
+      for (const [remotePeerPeerJsPeerId, remotePeer] of Object.entries(
+        this.options.docLocal.value.remotePeers,
+      )) {
+        connectToRemotePeer(remotePeerPeerJsPeerId, remotePeer);
       }
 
       // When an invite link is used for the first time, the automerge
@@ -159,7 +161,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
           for (const peerJsPeerId of newKeys) {
             if (!oldKeys.includes(peerJsPeerId)) {
-              connectToRemotePeer(peerJsPeerId);
+              connectToRemotePeer(peerJsPeerId, newPeers[peerJsPeerId]);
             }
           }
         },
@@ -205,13 +207,13 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       | undefined;
   }
 
-  onOutboundConnectionOpened(dataConnection: DataConnection) {
+  onOutboundConnectionOpened(dataConnection: DataConnection, remotePeer: RemotePeer) {
     dataConnection.once('data', (data) => {
       const packet = data as ConnectResponsePacket; // TODO: Validation?
       console.log('Received ConnectResponsePacket: ', packet);
       this.onConnectionOpened({
         dataConnection,
-        connectMetadata: packet.message,
+        connectRequestPacket: packet.message,
       });
     });
 
@@ -219,6 +221,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       kind: 'connect',
       automergePeerId: this.peerId!,
       automergePeerMetadata: this.peerMetadata ?? {},
+      secret: remotePeer.sharedSecret,
     };
 
     dataConnection.send(connectRequestPacket);
@@ -230,8 +233,12 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
         const requestPacket = message as RequestPacket; // TODO: Schema validation
 
         if (requestPacket.kind === 'connect') {
-          // TODO: Check secret
-          if (!(dataConnection.peer in this.options.docLocal.value.remotePeers)) {
+          // TODO: Implement cryptographically-secure peer authentication
+          if (
+            !(dataConnection.peer in this.options.docLocal.value.remotePeers) ||
+            requestPacket.secret !==
+              this.options.docLocal.value.remotePeers[dataConnection.peer].sharedSecret
+          ) {
             console.error(
               `Denied a connection request from unauthorized peer: ${dataConnection.peer}`,
             );
@@ -245,6 +252,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
               kind: 'connect',
               automergePeerId: this.peerId!,
               automergePeerMetadata: this.peerMetadata!,
+              secret: requestPacket.secret,
             },
           };
           console.log('Sending ConnectResponsePacket: ', connectResponsePacket);
@@ -253,7 +261,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
           this.onConnectionOpened({
             dataConnection,
-            connectMetadata: requestPacket,
+            connectRequestPacket: requestPacket,
           });
         } else if (requestPacket.kind === 'request-access') {
           this.onRequestAccessReceived(dataConnection, requestPacket);
@@ -265,7 +273,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
   }
 
-  onRequestAccessReceived(dataConnection: DataConnection, receivedMetadata: AccessRequest) {
+  onRequestAccessReceived(dataConnection: DataConnection, accessRequest: AccessRequest) {
     function sendAndCloseAsynchronously(getMessage: () => undefined | unknown) {
       const doSend = async () => {
         console.assert(dataConnection.open);
@@ -305,8 +313,8 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       return;
     }
 
-    if (receivedMetadata.secret in this.options.docEphemeral.value.invites) {
-      const invite = this.options.docEphemeral.value.invites[receivedMetadata.secret];
+    if (accessRequest.secret in this.options.docEphemeral.value.invites) {
+      const invite = this.options.docEphemeral.value.invites[accessRequest.secret];
       if (invite.usedBy === undefined) {
         sendAndCloseAsynchronously(() => {
           if (invite.usedBy !== undefined) return;
@@ -319,6 +327,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
           this.options.docLocal.value.remotePeers[changeSubtree]((remotePeers) => {
             remotePeers[dataConnection.peer] = {
               deviceName: '', // TODO
+              sharedSecret: accessRequest.secret,
             };
           });
           const message: AccessResponseSuccess = {
@@ -346,7 +355,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     console.error(
       'Received an access request with an invalid secret: ',
       dataConnection,
-      receivedMetadata,
+      accessRequest,
     );
     dataConnection.close();
   }
@@ -375,18 +384,19 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       console.error(`Data connection error: ${error}`);
     });
 
-    console.log(`Adding opened peer peerJsPeerId:${connectedPeer.dataConnection.peer}`);
+    console.log(`Adding opened peer peerJsPeerId: ${connectedPeer.dataConnection.peer}`);
     LocalDocumentAddPeer(this.options.docLocal.value, {
       peerJsPeerId: connectedPeer.dataConnection.peer,
       deviceName: '', // TODO
+      sharedSecret: connectedPeer.connectRequestPacket.secret,
     });
     this.options.docEphemeral.value.connectedPeers[changeSubtree]((connectedPeers) => {
-      connectedPeers[connectedPeer.dataConnection.peer] = connectedPeer.connectMetadata;
+      connectedPeers[connectedPeer.dataConnection.peer] = connectedPeer.connectRequestPacket;
     });
     this.dataConnections[connectedPeer.dataConnection.peer] = connectedPeer.dataConnection;
     this.emit('peer-candidate', {
-      peerId: connectedPeer.connectMetadata.automergePeerId as PeerId,
-      peerMetadata: connectedPeer.connectMetadata.automergePeerMetadata,
+      peerId: connectedPeer.connectRequestPacket.automergePeerId as PeerId,
+      peerMetadata: connectedPeer.connectRequestPacket.automergePeerMetadata,
     });
   }
 
@@ -448,7 +458,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
     delete this.dataConnections[peer.dataConnection.peer];
     this.emit('peer-disconnected', {
-      peerId: peer.connectMetadata.automergePeerId as PeerId,
+      peerId: peer.connectRequestPacket.automergePeerId as PeerId,
     });
   }
 
