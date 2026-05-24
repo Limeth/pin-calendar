@@ -8,15 +8,20 @@ import {
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
 import { watch, type Ref } from 'vue';
-import {
-  LocalDocumentAddPeer,
-  type CalendarId,
-  type LocalDocument,
-  type RemotePeer,
-} from './documents/local';
+import { type CalendarId, type LocalDocument, type RemotePeer } from './documents/local';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { EphemeralDocument } from './documents/ephemeral';
-import type { AccessRequest, AccessResponseError, AccessResponseSuccess } from './invite';
+import { handleJoinRequest, type JoinRequestPacket } from './invite';
+import * as auth from './auth';
+import {
+  exchange,
+  initiateHandshake,
+  respondToHandshake,
+  sendError,
+  type ErrorPacket,
+  type HandshakeAuthBase,
+  type HandshakeRequestBase,
+} from './handshake';
 
 export type WebRtcNetworkAdapterOptions = {
   calendarId: CalendarId;
@@ -31,27 +36,63 @@ export type WebRtcNetworkAdapterOptions = {
       };
 };
 
+// Information about a peer, exchanged once the peer is authenticated.
+export type PeerInfo = {
+  automergePeerId: string;
+  automergePeerMetadata: PeerMetadata;
+};
+
 export type ConnectedPeer = {
   dataConnection: DataConnection;
-  connectRequestPacket: ConnectRequestPacket;
+  peerInfo: PeerInfo;
 };
 
 type Packet = {
   message: Message;
 };
 
-export type ConnectRequestPacket = {
-  kind: 'connect';
-  automergePeerId: string;
-  automergePeerMetadata: PeerMetadata;
-  secret: string;
+// A connection between paired peers uses the handshake from `handshake.ts`, with the key derived
+// during the invitation.
+
+// 1. Sent from initiator to responder.
+export type ConnectRequestPacket = HandshakeRequestBase & {
+  kind: 'connect-request';
 };
 
-export type RequestPacket = ConnectRequestPacket | AccessRequest;
+// 2. Sent from responder to initiator: `HandshakeResponsePacket`.
 
-type ConnectResponsePacket = {
-  message: ConnectRequestPacket;
+// 3. Sent from initiator to responder, if the `HandshakeResponsePacket::signature` was correct.
+type ConnectAuthPacket = HandshakeAuthBase & {
+  kind: 'connect-auth';
+  peerInfo: PeerInfo;
 };
+
+// 4. Sent from responder to initiator, if the `ConnectAuthPacket::signature` was correct.
+type ConnectAcceptPacket = {
+  kind: 'connect-accept';
+  peerInfo: PeerInfo;
+};
+
+// The first packet sent over a new connection.
+export type HandshakeRequestPacket = ConnectRequestPacket | JoinRequestPacket;
+
+// Close the connection if the handshake fails.
+function closeOnFailure(
+  dataConnection: DataConnection,
+  description: string,
+  result: Promise<ErrorPacket | undefined>,
+) {
+  result
+    .then((error) => {
+      if (error === undefined) return;
+      console.error(`${description} with peer ${dataConnection.peer} failed: ${error.message}`);
+      dataConnection.close();
+    })
+    .catch((error) => {
+      console.error(`${description} with peer ${dataConnection.peer} failed:`, error);
+      dataConnection.close();
+    });
+}
 
 export const SYMBOL_IS_WEBRTC_NETWORK_ADAPTER = Symbol.for('WebRtcNetworkAdapter');
 
@@ -135,7 +176,11 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
         const dataConnection = this.peer!.connect(remotePeerPeerJsPeerId);
 
         dataConnection.once('open', () => {
-          this.onOutboundConnectionOpened(dataConnection, remotePeer);
+          closeOnFailure(
+            dataConnection,
+            'Connection handshake',
+            this.authenticateOutboundConnection(dataConnection, remotePeer),
+          );
         });
       };
 
@@ -207,157 +252,103 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       | undefined;
   }
 
-  onOutboundConnectionOpened(dataConnection: DataConnection, remotePeer: RemotePeer) {
-    dataConnection.once('data', (data) => {
-      const packet = data as ConnectResponsePacket; // TODO: Validation?
-      console.log('Received ConnectResponsePacket: ', packet);
-      this.onConnectionOpened({
-        dataConnection,
-        connectRequestPacket: packet.message,
-      });
-    });
-
-    const connectRequestPacket: ConnectRequestPacket = {
-      kind: 'connect',
+  getLocalPeerInfo(): PeerInfo {
+    return {
       automergePeerId: this.peerId!,
       automergePeerMetadata: this.peerMetadata ?? {},
-      secret: remotePeer.sharedSecret,
+    };
+  }
+
+  // Authenticate a connection opened by this peer, as the initiator of the handshake.
+  async authenticateOutboundConnection(
+    dataConnection: DataConnection,
+    remotePeer: RemotePeer,
+  ): Promise<ErrorPacket | undefined> {
+    const authKey = await auth.loadAuthKey(remotePeer.authKeyId);
+
+    if (authKey === undefined)
+      return { kind: 'error', message: 'No authentication key found for this peer.' };
+
+    const connectRequest: ConnectRequestPacket = {
+      kind: 'connect-request',
+      challenge: auth.generateChallenge(),
+    };
+    const handshake = await initiateHandshake(dataConnection, authKey, connectRequest);
+
+    if (handshake.kind === 'error') return handshake;
+
+    const connectAuth: ConnectAuthPacket = {
+      kind: 'connect-auth',
+      signature: handshake.signature,
+      peerInfo: this.getLocalPeerInfo(),
+    };
+    const connectAccept = await exchange<ConnectAcceptPacket>(dataConnection, connectAuth);
+
+    if (connectAccept.kind === 'error') return connectAccept;
+
+    this.onConnectionOpened({
+      dataConnection,
+      peerInfo: connectAccept.peerInfo,
+    });
+  }
+
+  // Authenticate a connection opened by a remote peer, as the responder of the handshake.
+  async authenticateInboundConnection(
+    dataConnection: DataConnection,
+    connectRequest: ConnectRequestPacket,
+  ): Promise<ErrorPacket | undefined> {
+    const remotePeer = this.options.docLocal.value.remotePeers[dataConnection.peer];
+    const authKey =
+      remotePeer === undefined ? undefined : await auth.loadAuthKey(remotePeer.authKeyId);
+
+    if (authKey === undefined) return await sendError(dataConnection, 'Unauthorized peer.');
+
+    const connectAuth = await respondToHandshake<ConnectAuthPacket>(
+      dataConnection,
+      authKey,
+      connectRequest,
+    );
+
+    if (connectAuth.kind === 'error') return connectAuth;
+
+    const connectAccept: ConnectAcceptPacket = {
+      kind: 'connect-accept',
+      peerInfo: this.getLocalPeerInfo(),
     };
 
-    dataConnection.send(connectRequestPacket);
+    // Send this packet before the connection is opened, so that it arrives before any Automerge
+    // messages.
+    await dataConnection.send(connectAccept);
+
+    this.onConnectionOpened({
+      dataConnection,
+      peerInfo: connectAuth.peerInfo,
+    });
   }
 
   onInboundConnectionRequested(dataConnection: DataConnection) {
     dataConnection.once('open', () => {
       dataConnection.once('data', (message) => {
-        const requestPacket = message as RequestPacket; // TODO: Schema validation
+        const requestPacket = message as HandshakeRequestPacket; // TODO: Schema validation
 
-        if (requestPacket.kind === 'connect') {
-          // TODO: Implement cryptographically-secure peer authentication
-          if (
-            !(dataConnection.peer in this.options.docLocal.value.remotePeers) ||
-            requestPacket.secret !==
-              this.options.docLocal.value.remotePeers[dataConnection.peer].sharedSecret
-          ) {
-            console.error(
-              `Denied a connection request from unauthorized peer: ${dataConnection.peer}`,
-            );
-            // TODO: Send error.
-            dataConnection.close();
-            return;
-          }
-
-          const connectResponsePacket: ConnectResponsePacket = {
-            message: {
-              kind: 'connect',
-              automergePeerId: this.peerId!,
-              automergePeerMetadata: this.peerMetadata!,
-              secret: requestPacket.secret,
-            },
-          };
-          console.log('Sending ConnectResponsePacket: ', connectResponsePacket);
-          // Asynchronously send a response packet without awaiting.
-          dataConnection.send(connectResponsePacket);
-
-          this.onConnectionOpened({
+        if (requestPacket.kind === 'connect-request') {
+          closeOnFailure(
             dataConnection,
-            connectRequestPacket: requestPacket,
-          });
-        } else if (requestPacket.kind === 'request-access') {
-          this.onRequestAccessReceived(dataConnection, requestPacket);
+            'Connection handshake',
+            this.authenticateInboundConnection(dataConnection, requestPacket),
+          );
+        } else if (requestPacket.kind === 'join-request') {
+          closeOnFailure(
+            dataConnection,
+            'Join request',
+            handleJoinRequest(dataConnection, requestPacket, this.options),
+          );
         } else {
           // TODO: Send error
           dataConnection.close();
         }
       });
     });
-  }
-
-  onRequestAccessReceived(dataConnection: DataConnection, accessRequest: AccessRequest) {
-    function sendAndCloseAsynchronously(getMessage: () => undefined | unknown) {
-      const doSend = async () => {
-        console.assert(dataConnection.open);
-        const message = getMessage();
-
-        if (message !== undefined) {
-          console.log('SENDING: ', message);
-          await dataConnection.send(message);
-        }
-
-        dataConnection.close();
-      };
-
-      // dataConnection.on('close', () => console.warn('CLOSED'));
-      // dataConnection.on('error', (e) => console.warn('ERROR', e));
-
-      if (dataConnection.open) {
-        doSend();
-      } else {
-        dataConnection.once('open', doSend);
-      }
-    }
-
-    if (dataConnection.peer in this.options.docLocal.value.remotePeers) {
-      console.info(
-        `The known peer ${dataConnection.peer} is attempting to request access to the document.`,
-      );
-
-      if (this.options.docLocal.value.documentIdShared) {
-        const message: AccessResponseSuccess = {
-          kind: 'success',
-          calendarId: this.options.calendarId,
-          sharedDocumentId: this.options.docLocal.value.documentIdShared,
-        };
-        sendAndCloseAsynchronously(() => message);
-      }
-      return;
-    }
-
-    if (accessRequest.secret in this.options.docEphemeral.value.invites) {
-      const invite = this.options.docEphemeral.value.invites[accessRequest.secret];
-      if (invite.usedBy === undefined) {
-        sendAndCloseAsynchronously(() => {
-          if (invite.usedBy !== undefined) return;
-          console.info(
-            `Adding peer ${dataConnection.peer} to remote peers of document ${this.options.calendarId}.`,
-          );
-          invite[changeSubtree]((invite) => {
-            invite.usedBy = dataConnection.peer;
-          });
-          this.options.docLocal.value.remotePeers[changeSubtree]((remotePeers) => {
-            remotePeers[dataConnection.peer] = {
-              deviceName: '', // TODO
-              sharedSecret: accessRequest.secret,
-            };
-          });
-          const message: AccessResponseSuccess = {
-            kind: 'success',
-            calendarId: this.options.calendarId,
-            sharedDocumentId: this.options.docLocal.value.documentIdShared!,
-          };
-          return message;
-        });
-        return;
-      }
-
-      console.warn(
-        `Peer ${dataConnection.peer} attempted to use an invite link that was already used.`,
-      );
-      const message: AccessResponseError = {
-        kind: 'error',
-        message:
-          "This invite link cannot be used more than once. You might want to request a new invite link from the calendar's owner.",
-      };
-      sendAndCloseAsynchronously(() => message);
-      return;
-    }
-
-    console.error(
-      'Received an access request with an invalid secret: ',
-      dataConnection,
-      accessRequest,
-    );
-    dataConnection.close();
   }
 
   onConnectionOpened(connectedPeer: ConnectedPeer) {
@@ -385,18 +376,13 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
 
     console.log(`Adding opened peer peerJsPeerId: ${connectedPeer.dataConnection.peer}`);
-    LocalDocumentAddPeer(this.options.docLocal.value, {
-      peerJsPeerId: connectedPeer.dataConnection.peer,
-      deviceName: '', // TODO
-      sharedSecret: connectedPeer.connectRequestPacket.secret,
-    });
     this.options.docEphemeral.value.connectedPeers[changeSubtree]((connectedPeers) => {
-      connectedPeers[connectedPeer.dataConnection.peer] = connectedPeer.connectRequestPacket;
+      connectedPeers[connectedPeer.dataConnection.peer] = connectedPeer.peerInfo;
     });
     this.dataConnections[connectedPeer.dataConnection.peer] = connectedPeer.dataConnection;
     this.emit('peer-candidate', {
-      peerId: connectedPeer.connectRequestPacket.automergePeerId as PeerId,
-      peerMetadata: connectedPeer.connectRequestPacket.automergePeerMetadata,
+      peerId: connectedPeer.peerInfo.automergePeerId as PeerId,
+      peerMetadata: connectedPeer.peerInfo.automergePeerMetadata,
     });
   }
 
@@ -458,7 +444,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
     delete this.dataConnections[peer.dataConnection.peer];
     this.emit('peer-disconnected', {
-      peerId: peer.connectRequestPacket.automergePeerId as PeerId,
+      peerId: peer.peerInfo.automergePeerId as PeerId,
     });
   }
 

@@ -7,8 +7,7 @@ export const LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT = 1;
 
 const RemotePeerSchema = Type.Object({
   deviceName: Type.String(),
-  // TODO: Cryptographically secure authentication.
-  sharedSecret: Type.String(),
+  authKeyId: Type.String(),
 });
 
 export type RemotePeer = Static<typeof RemotePeerSchema>;
@@ -81,7 +80,7 @@ export function LocalDocumentAddPeer(
     self[changeSubtree]((localDocument) => {
       localDocument.remotePeers[peer.peerJsPeerId] = {
         deviceName: peer.deviceName,
-        sharedSecret: peer.sharedSecret,
+        authKeyId: peer.authKeyId,
       };
     });
     console.log(`Added new peer ${peer.peerJsPeerId}.`);

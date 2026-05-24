@@ -12,6 +12,7 @@ import * as uuid from 'uuid';
 import type { CalendarId } from '@/documents/local';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 import { localStorageDataStore } from '@/localStorageData';
+import * as auth from '@/auth';
 
 // const app: Ref<App> = ref({
 //   pinCatalog: PinCatalog.loadFromLocalStorageOrDefault(),
@@ -196,7 +197,8 @@ type ModalAddDevice = {
   kind: 'add-device';
   inviteUrl: string;
   inviteQr: string;
-  secret: string;
+  // The key of the invite in `EphemeralDocument::invites`.
+  secretThumbprint: string;
 };
 
 type ModalData = ModalAddDevice;
@@ -205,22 +207,24 @@ const modalData: Ref<ModalData | undefined> = ref(undefined);
 const inviteUsed = computed(
   () =>
     modalData.value?.kind === 'add-device' &&
-    app.value?.docEphemeral.data.value.invites[modalData.value.secret].usedBy !== undefined,
+    app.value?.docEphemeral.data.value.invites[modalData.value.secretThumbprint].usedBy !==
+      undefined,
 );
 
-function createInviteUrl() {
+async function createInviteUrl() {
   if (app.value === undefined) return undefined;
 
   const calendarId = currentHash.value.path?.calendar.id;
 
   if (calendarId === undefined) return undefined;
 
-  // TODO: Use something cryptographically random (secure).
-  const secret = uuid.v7();
+  const secret = await auth.generateInviteSecret();
 
   // Create a new invite.
   app.value.docEphemeral.data.value.invites[changeSubtree]((invites) => {
-    invites[secret] = {};
+    invites[secret.thumbprint] = {
+      secretString: secret.string,
+    };
   });
 
   const inviteUrl = URL.parse(window.location.href)!;
@@ -228,22 +232,22 @@ function createInviteUrl() {
     path: undefined,
     args: {
       action: 'addPeer',
-      secret,
+      secret: secret.string,
       peerJsPeerId: app.value.docLocal.data.value.localPeer.peerJsPeerId,
     },
   };
   inviteUrl.hash = encodeHash(hash);
-  return [inviteUrl.href, secret];
+  return [inviteUrl.href, secret.thumbprint] as const;
 }
 
 async function openAddDeviceDialog() {
   if (modalData.value !== undefined) return;
 
-  const inviteUrlResult = createInviteUrl();
+  const inviteUrlResult = await createInviteUrl();
 
   if (inviteUrlResult === undefined) return;
 
-  const [inviteUrl, secret] = inviteUrlResult;
+  const [inviteUrl, secretThumbprint] = inviteUrlResult;
   const inviteQr = await QRCode.toDataURL(inviteUrl, {
     scale: 1,
   });
@@ -252,7 +256,7 @@ async function openAddDeviceDialog() {
     kind: 'add-device',
     inviteUrl,
     inviteQr,
-    secret,
+    secretThumbprint,
   };
 }
 
@@ -263,7 +267,7 @@ function closeAddDeviceDialog() {
   const modalAddDevice: ModalAddDevice = modalData.value;
 
   app.value.docEphemeral.data.value.invites[changeSubtree]((invites) => {
-    delete invites[modalAddDevice.secret];
+    delete invites[modalAddDevice.secretThumbprint];
   });
 
   modalData.value = undefined;

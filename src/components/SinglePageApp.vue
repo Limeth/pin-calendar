@@ -3,7 +3,7 @@ import { ref, watch, type Ref } from 'vue';
 import { decodeHash, encodeHash, type Hash, type HashAddPeer } from '@/hash';
 import { localStorageDataStore } from '@/localStorageData';
 import SharedApp from './SharedApp.vue';
-import { AccessRequester } from '@/invite';
+import { joinCalendar } from '@/invite';
 
 // const sharedAppModel: Reactive<SharedAppModel> = reactive({
 //   isDrawerOpen: false,
@@ -66,27 +66,26 @@ if (isHashValidAddPeer(currentHash.value)) {
     },
     async actionConfirm() {
       if (isHashValidAddPeer(currentHash.value)) {
-        const accessRequester = new AccessRequester(currentHash.value.args);
         this.status = 'requesting-access';
         this.error = undefined;
-        const result = await accessRequester.requestAccess(10_000);
+        const result = await joinCalendar(currentHash.value.args, 10_000);
 
         if (result.kind === 'success') {
           // Initialize a calendar to be added.
-          if (!(result.response.calendarId in localStorageData.value.calendars))
-            localStorageData.value.calendars[result.response.calendarId] = {
+          if (!(result.calendarId in localStorageData.value.calendars))
+            localStorageData.value.calendars[result.calendarId] = {
               invitation: {
                 invitedBy: currentHash.value.args.peerJsPeerId,
-                sharedSecret: currentHash.value.args.secret,
                 localPeerId: result.peerJsPeerId,
-                documentIdShared: result.response.sharedDocumentId,
+                documentIdShared: result.sharedDocumentId,
+                authKeyId: result.authKeyId,
               },
             };
 
           currentHash.value = { path: currentHash.value.path, args: undefined };
           modalData.value = undefined;
         } else if (result.kind === 'error') {
-          console.error('Failed to request access:', result.message);
+          console.error('Failed to join the calendar:', result.message);
           this.error = result.message;
         }
 

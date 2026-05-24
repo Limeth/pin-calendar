@@ -184,7 +184,7 @@ class SharedRepo {
       LocalDocumentAddPeer(docDataLocal.value, {
         deviceName: '', // TODO
         peerJsPeerId: message.invitation.invitedBy,
-        sharedSecret: message.invitation.sharedSecret,
+        authKeyId: message.invitation.authKeyId,
       });
     }
 
