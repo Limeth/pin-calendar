@@ -3,24 +3,46 @@ import Peer from 'peerjs';
 import type { HashArgsAddPeer } from './hash';
 import type { InviteSecret } from './documents/ephemeral';
 import type { CalendarId, PeerJsPeerId } from './documents/local';
+import { generateChallenge, type Challenge, type Signature } from './auth';
 
-export type AccessRequest = {
-  kind: 'request-access';
-  secret: InviteSecret;
-};
-
-export type AccessResponseSuccess = {
-  kind: 'success';
-  calendarId: CalendarId;
-  sharedDocumentId: string;
-};
-
-export type AccessResponseError = {
+export type ErrorPacket = {
   kind: 'error';
   message: string;
 };
 
-export type AccessResponse = AccessResponseSuccess | AccessResponseError;
+// 1. Sent from invitee to inviter.
+export type HandshakeRequest = {
+  kind: 'handshake-request';
+  challenge: Challenge;
+};
+
+// 2. Sent from inviter to invitee.
+export type HandshakeResponseSuccess = {
+  kind: 'handshake-response';
+  challenge: Challenge;
+  // The signature for `HandshakeRequest::challenge`.
+  signature: Signature;
+};
+
+export type HandshakeResponse = HandshakeResponseSuccess | ErrorPacket;
+
+// 3. Sent from invitee to inviter, if the `HandshakeResponse::signature` was correct.
+export type AccessRequestSuccess = {
+  kind: 'access-request';
+  // The signature for `HandshakeResponse::challenge`.
+  signature: Signature;
+};
+
+export type AccessRequest = AccessRequestSuccess | ErrorPacket;
+
+// 4. Sent from inviter to invitee, if the `AccessRequest::signature` was correct.
+export type AccessResponseSuccess = {
+  kind: 'access-response';
+  calendarId: CalendarId;
+  sharedDocumentId: string;
+};
+
+export type AccessResponse = AccessResponseSuccess | ErrorPacket;
 
 export type AccessRequestResultError = {
   kind: 'error';
@@ -38,6 +60,8 @@ export type AccessRequestResult = AccessRequestResultError | AccessRequestResult
 export class AccessRequester {
   hashArgs: HashArgsAddPeer;
   peer: undefined | Peer;
+  challengeSent: undefined | Challenge;
+  challengeReceived: undefined | Challenge;
 
   constructor(hashArgs: HashArgsAddPeer) {
     this.hashArgs = hashArgs;
@@ -73,9 +97,11 @@ export class AccessRequester {
         const dataConnection = this.peer!.connect(this.hashArgs.peerJsPeerId);
 
         dataConnection.once('open', () => {
-          const accessRequestPacket: AccessRequest = {
-            kind: 'request-access',
-            secret: this.hashArgs.secret,
+          this.challengeSent = generateChallenge();
+          const accessRequestPacket: HandshakeRequest = {
+            kind: 'handshake-request',
+            // secret: this.hashArgs.secret,
+            challenge: this.challengeSent,
           };
 
           // Runs asynchronously
@@ -87,7 +113,7 @@ export class AccessRequester {
           console.log('Received InviteResponse: ', packet);
           this.peer!.destroy();
 
-          if (packet.kind === 'success') {
+          if (packet.kind === 'access-response') {
             resolve({
               kind: 'success',
               peerJsPeerId: id,

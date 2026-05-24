@@ -16,7 +16,7 @@ import {
 } from './documents/local';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { EphemeralDocument } from './documents/ephemeral';
-import type { AccessRequest, AccessResponseError, AccessResponseSuccess } from './invite';
+import type { AccessRequest, ErrorPacket, AccessResponseSuccess } from './invite';
 
 export type WebRtcNetworkAdapterOptions = {
   calendarId: CalendarId;
@@ -343,7 +343,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       console.warn(
         `Peer ${dataConnection.peer} attempted to use an invite link that was already used.`,
       );
-      const message: AccessResponseError = {
+      const message: ErrorPacket = {
         kind: 'error',
         message:
           "This invite link cannot be used more than once. You might want to request a new invite link from the calendar's owner.",
