@@ -7,8 +7,7 @@ export const LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT = 1;
 
 const RemotePeerSchema = Type.Object({
   deviceName: Type.String(),
-  // TODO: Cryptographically secure authentication.
-  sharedSecret: Type.String(),
+  authKeyId: Type.String(),
 });
 
 export type RemotePeer = Static<typeof RemotePeerSchema>;

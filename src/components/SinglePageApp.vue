@@ -73,13 +73,14 @@ if (isHashValidAddPeer(currentHash.value)) {
 
         if (result.kind === 'success') {
           // Initialize a calendar to be added.
-          if (!(result.response.calendarId in localStorageData.value.calendars))
-            localStorageData.value.calendars[result.response.calendarId] = {
+          if (!(result.calendarId in localStorageData.value.calendars))
+            localStorageData.value.calendars[result.calendarId] = {
               invitation: {
                 invitedBy: currentHash.value.args.peerJsPeerId,
                 sharedSecret: currentHash.value.args.secret,
                 localPeerId: result.peerJsPeerId,
-                documentIdShared: result.response.sharedDocumentId,
+                documentIdShared: result.sharedDocumentId,
+                authKeyId: result.authKeyId,
               },
             };
 

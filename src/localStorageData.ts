@@ -16,6 +16,7 @@ const InvitationSchema = Type.Object({
   // Our Peer JS peer ID we used when confirming the invitation, that the inviter knows us as.
   localPeerId: Type.String(),
   sharedSecret: Type.String(),
+  authKeyId: Type.String(),
 });
 
 export type Invitation = Static<typeof InvitationSchema>;

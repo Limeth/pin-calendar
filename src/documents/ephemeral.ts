@@ -11,8 +11,10 @@ export type EphemeralDocument = {
   connectedPeers: {
     [peerJsPeerId: PeerJsPeerId]: ConnectRequestPacket;
   };
+  // Invite secrets, which can only be used once to add a new device.
   invites: {
-    [secret: InviteSecret]: {
+    [secretThumbprint: string]: {
+      secretString: string;
       usedBy?: PeerJsPeerId;
     };
   };

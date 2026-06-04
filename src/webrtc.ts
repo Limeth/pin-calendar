@@ -16,7 +16,13 @@ import {
 } from './documents/local';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { EphemeralDocument } from './documents/ephemeral';
-import type { AccessRequest, ErrorPacket, AccessResponseSuccess } from './invite';
+import {
+  type AccessRequest,
+  type ErrorPacket,
+  type AccessResponseSuccess,
+  processAccessRequest,
+  type HandshakeRequest,
+} from './invite';
 
 export type WebRtcNetworkAdapterOptions = {
   calendarId: CalendarId;
@@ -47,7 +53,7 @@ export type ConnectRequestPacket = {
   secret: string;
 };
 
-export type RequestPacket = ConnectRequestPacket | AccessRequest;
+export type RequestPacket = ConnectRequestPacket | HandshakeRequest;
 
 type ConnectResponsePacket = {
   message: ConnectRequestPacket;
@@ -263,7 +269,8 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
             dataConnection,
             connectRequestPacket: requestPacket,
           });
-        } else if (requestPacket.kind === 'request-access') {
+        } else if (requestPacket.kind === 'handshake-request') {
+          processAccessRequest(dataConnection, requestPacket, this.options, secretString);
           this.onRequestAccessReceived(dataConnection, requestPacket);
         } else {
           // TODO: Send error
