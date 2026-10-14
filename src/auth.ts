@@ -66,24 +66,36 @@ export type HandshakeRole = 'initiator' | 'responder';
 // could open a second connection to a peer, send that peer's own challenge, and reflect the
 // resulting signature back. Without both challenges, a signature could be replayed in another
 // handshake.
-// TODO: Sign JSON data instead.
+type HandshakeSignedData = {
+  // Identifies the purpose of the signature (domain separation).
+  purpose: 'pin-calendar-handshake';
+  role: HandshakeRole;
+  // Base64-encoded challenges.
+  challengeInitiator: string;
+  challengeResponder: string;
+};
+
+// The data is serialized as JSON, so that its fields cannot be confused with each other. The
+// signed JSON is never sent or parsed: the verifier serializes the same data using this function,
+// which always produces the same output, because `JSON.stringify` keeps the order of the fields.
 function handshakeSignedData(
   role: HandshakeRole,
   challengeInitiator: BufferSource,
   challengeResponder: BufferSource,
 ): Uint8Array<ArrayBuffer> {
-  const label = new TextEncoder().encode(`pin-calendar-handshake-${role}`);
   const initiator = toBytes(challengeInitiator);
   const responder = toBytes(challengeResponder);
 
   if (initiator.length !== CHALLENGE_LENGTH || responder.length !== CHALLENGE_LENGTH)
     throw new Error('Invalid handshake challenge length.');
 
-  const result = new Uint8Array(label.length + 2 * CHALLENGE_LENGTH);
-  result.set(label, 0);
-  result.set(initiator, label.length);
-  result.set(responder, label.length + CHALLENGE_LENGTH);
-  return result;
+  const data: HandshakeSignedData = {
+    purpose: 'pin-calendar-handshake',
+    role,
+    challengeInitiator: initiator.toBase64(),
+    challengeResponder: responder.toBase64(),
+  };
+  return new TextEncoder().encode(JSON.stringify(data));
 }
 
 // Packets received via PeerJS may contain an `ArrayBuffer` in place of a `Uint8Array`.
