@@ -1,6 +1,6 @@
 import {
   NetworkAdapter,
-  Repo,
+  type Repo,
   type DocumentId,
   type Message,
   type PeerId,

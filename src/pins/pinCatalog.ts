@@ -8,7 +8,7 @@ import {
   idSetAdd,
   idSetRemove,
   keyToId,
-  RegistryId,
+  type RegistryId,
   Variant,
   type IdKey,
   type MaybeRo,

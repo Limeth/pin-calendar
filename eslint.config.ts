@@ -23,6 +23,9 @@ export default defineConfigWithVueTs(
       // "@typescript-eslint/no-explicit-any": ["off"],
       'vue/multi-word-component-names': ['off'],
       '@typescript-eslint/no-unused-vars': ['warn'],
+      // With `verbatimModuleSyntax`, an import not marked `type` is kept in the output, which fails
+      // at runtime if the module only declares it as a type (e.g. `DataConnection` from `peerjs`).
+      '@typescript-eslint/consistent-type-imports': ['error', { fixStyle: 'inline-type-imports' }],
     },
   },
 

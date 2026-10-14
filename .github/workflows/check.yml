@@ -30,3 +30,7 @@ jobs:
       - name: Formatting Check
         if: always()
         run: npm run format-check
+      # Catches imports of names that are missing at runtime, which the type check cannot detect.
+      - name: Build
+        if: always()
+        run: npm run build-only

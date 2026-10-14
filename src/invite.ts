@@ -1,5 +1,5 @@
 import * as uuid from 'uuid';
-import Peer, { DataConnection } from 'peerjs';
+import Peer, { type DataConnection } from 'peerjs';
 import type { HashArgsAddPeer } from './hash';
 import type { CalendarId, PeerJsPeerId } from './documents/local';
 import * as auth from './auth';

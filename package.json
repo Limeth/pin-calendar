@@ -13,7 +13,7 @@
     "lint:eslint": "eslint",
     "lint": "run-s lint:*",
     "format-check": "prettier --check *.ts src/",
-    "check": "run-s type-check lint format-check",
+    "check": "run-s type-check lint format-check build-only",
     "format": "prettier --write *.ts src/"
   },
   "dependencies": {
