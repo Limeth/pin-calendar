@@ -137,13 +137,16 @@ export async function generateEcdhKeyPair(): Promise<EcdhKeyPair> {
   const keyPair = await window.crypto.subtle.generateKey(
     ECDH_ALGORITHM,
     false, // Only applies to the private key, public keys can always be exported.
-    ['deriveKey'],
+    ['deriveBits'],
   );
   return {
     privateKey: keyPair.privateKey,
     publicKeyRaw: new Uint8Array(await window.crypto.subtle.exportKey('raw', keyPair.publicKey)),
   };
 }
+
+// Identifies the purpose of keys derived by `establishAuthenticationKey`, see below.
+const AUTHENTICATION_KEY_INFO = new TextEncoder().encode('pin-calendar-auth-key');
 
 // Derive the authentication key shared with a remote peer, save it to IndexedDB, and return its ID.
 export async function establishAuthenticationKey(
@@ -155,15 +158,40 @@ export async function establishAuthenticationKey(
     remotePublicKeyRaw,
     ECDH_ALGORITHM,
     false,
-    [], // Public keys have no usages, they are only passed to `deriveKey`.
+    [], // Public keys have no usages, they are only passed to `deriveBits`.
   );
-  const authKey = await window.crypto.subtle.deriveKey(
+
+  // The ECDH shared secret is the x-coordinate of a point on the curve. It is secret, but it is not
+  // uniformly random: only about half of all 256-bit values are x-coordinates of a point, so it
+  // should not be used as a key directly. Instead, it is passed through HKDF (RFC 5869), as
+  // recommended by NIST SP 800-56A, which turns it into a uniformly random key.
+  const sharedSecret = await window.crypto.subtle.deriveBits(
     {
       name: 'ECDH',
       public: remotePublicKey,
     },
     privateKey,
-    { name: 'HMAC', hash: 'SHA-256' },
+    256, // The full shared secret of P-256.
+  );
+  const hkdfKey = await window.crypto.subtle.importKey('raw', sharedSecret, 'HKDF', false, [
+    'deriveKey',
+  ]);
+  const authKey = await window.crypto.subtle.deriveKey(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      // A salt is optional, and only adds value when the secret is weak or reused. The shared
+      // secret is neither: both key pairs are freshly generated for every invitation.
+      salt: new Uint8Array(0),
+      // Binds the key to its purpose, so that the same shared secret could never produce the same
+      // key for another purpose (domain separation).
+      info: AUTHENTICATION_KEY_INFO,
+    },
+    hkdfKey,
+    // 256 bits is the recommended key length for HMAC-SHA-256 (the length of its output, see
+    // RFC 2104). A longer key would not be more secure, because P-256 only provides about 128 bits
+    // of security. Without a length, the key would be as long as the hash's block size (512 bits).
+    { name: 'HMAC', hash: 'SHA-256', length: 256 },
     false, // Disallow exporting, so that the key cannot be stolen (could still be abused via XSS).
     ['sign', 'verify'],
   );
