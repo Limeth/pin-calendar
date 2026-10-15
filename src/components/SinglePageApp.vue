@@ -292,8 +292,11 @@ if (isHashValidAddPeer(currentHash.value)) {
       </div>
       <div class="modal-action">
         <button class="btn" @click="modalData.actionCancel">Cancel</button>
+        <!-- Hidden while checking, as the choice depends on whether joining is offered. -->
         <button
-          v-if="modalData.existingCalendarId !== undefined"
+          v-if="
+            modalData.existingCalendarId !== undefined && modalData.inviterPairing !== 'checking'
+          "
           class="btn"
           :class="{ 'btn-primary': !isJoinOffered(modalData.inviterPairing) }"
           :disabled="modalData.status !== 'idle'"
