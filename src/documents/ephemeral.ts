@@ -25,6 +25,8 @@ export type EphemeralDocument = {
       secretString: string;
       // The peer that is joining, or has joined, using this invite.
       usedBy?: PeerJsPeerId;
+      // Whether that peer has joined, rather than only being in the process of joining.
+      joined?: boolean;
     };
   };
   // Requests to join this calendar, which this device already has, e.g. after it forgot the

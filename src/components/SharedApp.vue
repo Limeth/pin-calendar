@@ -206,12 +206,17 @@ type ModalAddDevice = {
 type ModalData = ModalAddDevice;
 
 const modalData: Ref<ModalData | undefined> = ref(undefined);
-const inviteUsed = computed(
-  () =>
-    modalData.value?.kind === 'add-device' &&
-    app.value?.docEphemeral.data.value.invites[modalData.value.secretThumbprint].usedBy !==
-      undefined,
-);
+// The state of the invite of the open invite dialog: waiting for a device, being used by a device
+// that is joining, or used by a device that has joined.
+const inviteState = computed((): 'waiting' | 'joining' | 'joined' => {
+  if (modalData.value?.kind !== 'add-device') return 'waiting';
+
+  const invite = app.value?.docEphemeral.data.value.invites[modalData.value.secretThumbprint];
+
+  if (invite?.joined) return 'joined';
+  if (invite?.usedBy !== undefined) return 'joining';
+  return 'waiting';
+});
 
 async function createInviteUrl() {
   if (app.value === undefined) return undefined;
@@ -308,11 +313,19 @@ function closeAddDeviceDialog() {
           @focus="(event) => (event.target! as HTMLInputElement).select()"
         />
       </label>
-      <div class="modal-action items-baseline" v-if="!inviteUsed">
+      <div class="modal-action items-baseline" v-if="inviteState === 'waiting'">
         <p class="mr-2">Waiting for device...</p>
         <button class="btn" @click="closeAddDeviceDialog">Cancel</button>
       </div>
-      <div class="modal-action items-baseline" v-if="inviteUsed">
+      <!-- Cancelling is not possible while a device is joining, as the device may already have
+      added this one as a peer, see `JoinConfirmPacket`. Joining either finishes or fails soon. -->
+      <div class="modal-action items-baseline" v-if="inviteState === 'joining'">
+        <p class="mr-2">
+          A device is joining... <span class="loading loading-spinner loading-sm"></span>
+        </p>
+        <button class="btn" disabled>Cancel</button>
+      </div>
+      <div class="modal-action items-baseline" v-if="inviteState === 'joined'">
         <p class="mr-2 text-primary">Device added successfully.</p>
         <button class="btn btn-primary" @click="closeAddDeviceDialog">Close</button>
       </div>

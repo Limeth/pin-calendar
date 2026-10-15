@@ -226,6 +226,11 @@ async function runJoinHandshake(
   };
 }
 
+// The reply to a join request with an invite that cannot be used. It is the same in all cases, see
+// `handleJoinRequest`.
+const UNUSABLE_INVITE_MESSAGE =
+  "This invite link is invalid, has expired, or has already been used. You might want to request a new invite link from the calendar's owner.";
+
 // Let a peer join the calendar using an invite, as the inviter.
 export async function handleJoinRequest(
   dataConnection: DataConnection,
@@ -246,10 +251,7 @@ export async function handleJoinRequest(
   if (unusableReason !== undefined) {
     // The reason is only logged by the inviter. The remote peer gets the same message in all cases,
     // so that it cannot tell whether someone else is using, or has used, the invite.
-    await sendError(
-      dataConnection,
-      "This invite link is invalid, has expired, or has already been used. You might want to request a new invite link from the calendar's owner.",
-    );
+    await sendError(dataConnection, UNUSABLE_INVITE_MESSAGE);
     return {
       kind: 'error',
       message: `Join request denied: ${unusableReason}.`,
@@ -278,6 +280,13 @@ export async function handleJoinRequest(
     if (joinAuth.kind === 'error') return joinAuth;
 
     const ecdhKeyPair = await auth.generateEcdhKeyPair();
+
+    // The last point at which joining can be refused, e.g. if the invite was cancelled meanwhile:
+    // once `join-accept` is sent, the invitee adds this device as a peer, so this device must add
+    // the invitee too, see `JoinConfirmPacket`.
+    if (!isInviteReservedBy(options, joinRequest.secretThumbprint, dataConnection.peer))
+      return await sendError(dataConnection, UNUSABLE_INVITE_MESSAGE);
+
     const joinAccept: JoinAcceptPacket = {
       kind: 'join-accept',
       ecdhPublicKey: ecdhKeyPair.publicKeyRaw,
@@ -311,12 +320,33 @@ export async function handleJoinRequest(
     });
     joined = true;
 
+    // Lets the invite dialog tell that the device was added. The invite may have been deleted in
+    // the meantime, e.g. by closing the tab of the invite dialog.
+    const invites = options.docEphemeral.value.invites;
+
+    if (Object.hasOwn(invites, joinRequest.secretThumbprint))
+      invites[joinRequest.secretThumbprint][changeSubtree]((invite) => {
+        invite.joined = true;
+      });
+
     if (previousRemotePeer !== undefined) await auth.deleteAuthKey(previousRemotePeer.authKeyId);
 
     await closeConnection(dataConnection);
   } finally {
     if (!joined) releaseInvite(options, joinRequest.secretThumbprint, dataConnection.peer);
   }
+}
+
+// Whether the invite still exists, reserved by the given peer, see `handleJoinRequest`.
+function isInviteReservedBy(
+  options: WebRtcNetworkAdapterOptions,
+  secretThumbprint: string,
+  peerJsPeerId: PeerJsPeerId,
+): boolean {
+  const invites = options.docEphemeral.value.invites;
+  return (
+    Object.hasOwn(invites, secretThumbprint) && invites[secretThumbprint].usedBy === peerJsPeerId
+  );
 }
 
 // Release the reservation of an invite made by `handleJoinRequest`, so that it can be used again.
