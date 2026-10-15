@@ -4,6 +4,9 @@ import { decodeHash, encodeHash, type Hash, type HashAddPeer, type HashArgsAddPe
 import { localStorageDataStore } from '@/localStorageData';
 import SharedApp from './SharedApp.vue';
 import { joinCalendar } from '@/invite';
+import { checkInviterPairing, joinExistingCalendar, type InviterPairing } from '@/rejoin';
+import { appStore } from '@/app';
+import type { ErrorPacket } from '@/handshake';
 import * as auth from '@/auth';
 import type { CalendarId } from '@/documents/local';
 
@@ -63,12 +66,48 @@ type ModalInviteConfirmation = {
   kind: 'invite-confirmation';
   status: 'idle' | 'requesting-access';
   error: undefined | string;
-  // The calendar of the invite, if this device already has it. Then, it is not joined again.
+  // The calendar of the invite, if this device already has it. Then, joining shares the device's
+  // existing copy of the calendar with the inviter, see `joinExistingCalendar`.
   existingCalendarId: undefined | CalendarId;
+  // Whether the existing calendar is still shared with the inviter, see `InviterPairing`. Joining is
+  // only offered if it is not. Undefined if this device does not have the calendar.
+  inviterPairing: undefined | 'checking' | InviterPairing;
   actionCancel(): void;
   actionConfirm(): void;
   actionOpenExistingCalendar(): void;
 };
+
+// Whether joining is offered: for a new calendar, or an existing one no longer shared with the
+// inviter.
+function isJoinOffered(inviterPairing: ModalInviteConfirmation['inviterPairing']): boolean {
+  return (
+    inviterPairing === undefined ||
+    inviterPairing === 'forgotten-inviter' ||
+    inviterPairing === 'unconnected-inviter'
+  );
+}
+
+// How long to wait for a connection to the inviter, before concluding that the existing calendar
+// is no longer shared with it, see `checkInviterPairing`.
+const PAIRING_CHECK_TIMEOUT_MS = 10_000;
+
+// Join a calendar this device does not have yet, as a new device.
+async function joinNewCalendar(invite: HashArgsAddPeer): Promise<ErrorPacket | undefined> {
+  const result = await joinCalendar(invite, 10_000);
+
+  if (result.kind === 'error') return result;
+
+  // Initialize a calendar to be added.
+  if (!(result.calendarId in localStorageData.value.calendars))
+    localStorageData.value.calendars[result.calendarId] = {
+      invitation: {
+        invitedBy: invite.peerJsPeerId,
+        localPeerId: result.peerJsPeerId,
+        documentIdShared: result.sharedDocumentId,
+        authKeyId: result.authKeyId,
+      },
+    };
+}
 
 // TODO: Combine with ModalData in SharedApp and other dialogs in settings.
 type ModalData = ModalInviteConfirmation;
@@ -78,43 +117,50 @@ const modalData: Ref<ModalData | undefined> = ref(undefined);
 // Initialize the `currentHash.value.path` field, ensuring it's present.
 console.log('isHashValidAddPeer(currentHash.value)', isHashValidAddPeer(currentHash.value));
 if (isHashValidAddPeer(currentHash.value)) {
+  const existingCalendarId = await findInvitedCalendar(currentHash.value.args);
+
   modalData.value = {
     kind: 'invite-confirmation',
     status: 'idle',
     error: undefined,
-    existingCalendarId: await findInvitedCalendar(currentHash.value.args),
+    existingCalendarId,
+    inviterPairing: existingCalendarId === undefined ? undefined : 'checking',
     actionCancel() {
       modalData.value = undefined;
       currentHash.value = { path: undefined, args: undefined };
       modalData.value = undefined;
     },
     async actionConfirm() {
-      if (isHashValidAddPeer(currentHash.value)) {
-        this.status = 'requesting-access';
-        this.error = undefined;
-        const result = await joinCalendar(currentHash.value.args, 10_000);
+      if (!isHashValidAddPeer(currentHash.value)) return;
+      if (this.existingCalendarId !== undefined && !isJoinOffered(this.inviterPairing)) return;
 
-        if (result.kind === 'success') {
-          // Initialize a calendar to be added.
-          if (!(result.calendarId in localStorageData.value.calendars))
-            localStorageData.value.calendars[result.calendarId] = {
-              invitation: {
-                invitedBy: currentHash.value.args.peerJsPeerId,
-                localPeerId: result.peerJsPeerId,
-                documentIdShared: result.sharedDocumentId,
-                authKeyId: result.authKeyId,
-              },
-            };
+      this.status = 'requesting-access';
+      this.error = undefined;
 
-          currentHash.value = { path: currentHash.value.path, args: undefined };
-          modalData.value = undefined;
-        } else if (result.kind === 'error') {
-          console.error('Failed to join the calendar:', result.message);
-          this.error = result.message;
-        }
+      const error =
+        this.existingCalendarId === undefined
+          ? await joinNewCalendar(currentHash.value.args)
+          : await joinExistingCalendar(
+              await appStore.value.GetApp(this.existingCalendarId),
+              currentHash.value.args,
+              30_000,
+            );
 
-        this.status = 'idle';
+      if (error === undefined) {
+        currentHash.value = {
+          path:
+            this.existingCalendarId === undefined
+              ? currentHash.value.path
+              : { calendar: { id: this.existingCalendarId } },
+          args: undefined,
+        };
+        modalData.value = undefined;
+      } else {
+        console.error('Failed to join the calendar:', error.message);
+        this.error = error.message;
       }
+
+      this.status = 'idle';
     },
     actionOpenExistingCalendar() {
       if (this.existingCalendarId === undefined) return;
@@ -123,6 +169,24 @@ if (isHashValidAddPeer(currentHash.value)) {
       modalData.value = undefined;
     },
   };
+
+  if (existingCalendarId !== undefined) {
+    const invite = currentHash.value.args;
+
+    appStore.value
+      .GetApp(existingCalendarId)
+      .then((app) => checkInviterPairing(app, invite, PAIRING_CHECK_TIMEOUT_MS))
+      .catch((error): InviterPairing => {
+        // Offer joining, which reports its own errors. Assume that the inviter was not contacted, so
+        // that the dialog mentions that joining shares the IP address with it.
+        console.error('Failed to check whether the calendar is shared with the inviter:', error);
+        return 'forgotten-inviter';
+      })
+      .then((pairing) => {
+        if (modalData.value?.kind === 'invite-confirmation')
+          modalData.value.inviterPairing = pairing;
+      });
+  }
 }
 </script>
 
@@ -133,9 +197,73 @@ if (isHashValidAddPeer(currentHash.value)) {
   <div class="modal" :class="{ 'modal-open': modalData !== undefined }">
     <div v-if="modalData?.kind === 'invite-confirmation'" class="modal-box flex flex-col gap-2">
       <h3 class="text-lg font-bold">Join Calendar</h3>
-      <template v-if="modalData.existingCalendarId !== undefined">
-        <p>You have been invited to join a calendar, which you already have on this device.</p>
+      <!-- The ID is only known for a calendar this device already has. For a new calendar, the invite
+      link only identifies it by a tag, see `auth.calendarIdTag`. -->
+      <!-- TODO: Display the calendar's name instead of its ID, once calendars have names. -->
+      <p v-if="modalData.existingCalendarId !== undefined">
+        Calendar: <span class="font-mono break-all">{{ modalData.existingCalendarId }}</span>
+      </p>
+      <template v-if="modalData.inviterPairing === 'checking'">
+        <p>
+          You have been invited to join a calendar, which you already have on this device. Checking
+          whether it is still shared with the device that created this invite link...
+          <span class="loading loading-spinner loading-sm"></span>
+        </p>
+      </template>
+      <template v-else-if="modalData.inviterPairing === 'own-invite'">
+        <p>
+          This invite link was created by this device, for a calendar it already has, so there is
+          nothing to join.
+        </p>
         <p>The invite link has not been used, so it can still be used to invite another device.</p>
+      </template>
+      <template v-else-if="modalData.inviterPairing === 'paired'">
+        <p>
+          You have been invited to join a calendar, which you already have on this device. It is
+          already shared with the device that created this invite link, so there is nothing to join.
+        </p>
+        <p>The invite link has not been used, so it can still be used to invite another device.</p>
+      </template>
+      <template v-else-if="modalData.inviterPairing === 'forgotten-inviter'">
+        <p>
+          You have been invited to join a calendar, which you already have on this device. It is not
+          shared with the device that invited you, for example because this device removed it.
+        </p>
+        <div role="alert" class="alert alert-warning">
+          <span>
+            Joining will share your existing copy of the calendar with the device that invited you.
+            Both copies will be merged, and each device will receive the other's changes.
+          </span>
+        </div>
+        <p>Joining will also cause your IP address to be shared with that device.</p>
+        <p>
+          To only view the calendar, open your copy of it instead. The invite link will remain
+          unused.
+        </p>
+        <p>Only proceed with sharing the calendar if you trust the sender.</p>
+      </template>
+      <template v-else-if="modalData.inviterPairing === 'unconnected-inviter'">
+        <p>
+          You have been invited to join a calendar, which you already have on this device. The
+          device that invited you is still one of this device's peers, but they could not connect,
+          for example because that device removed this one.
+        </p>
+        <div role="alert" class="alert alert-warning">
+          <span>
+            Joining will share your existing copy of the calendar with the device that invited you.
+            Both copies will be merged, and each device will receive the other's changes.
+          </span>
+        </div>
+        <p>
+          As with all of its peers, this device already connects to that device whenever the
+          calendar is open, which shares your IP address with it. Joining lets the two devices
+          recognize each other again.
+        </p>
+        <p>
+          To only view the calendar, open your copy of it instead. The invite link will remain
+          unused.
+        </p>
+        <p>Only proceed with sharing the calendar if you trust the sender.</p>
       </template>
       <template v-else>
         <p>
@@ -166,18 +294,23 @@ if (isHashValidAddPeer(currentHash.value)) {
         <button class="btn" @click="modalData.actionCancel">Cancel</button>
         <button
           v-if="modalData.existingCalendarId !== undefined"
-          class="btn btn-primary"
+          class="btn"
+          :class="{ 'btn-primary': !isJoinOffered(modalData.inviterPairing) }"
+          :disabled="modalData.status !== 'idle'"
           @click="modalData.actionOpenExistingCalendar"
         >
-          Open Calendar
+          <!-- When joining is offered, make clear that this is the alternative to sharing. -->
+          {{ isJoinOffered(modalData.inviterPairing) ? 'Open Without Sharing' : 'Open Calendar' }}
         </button>
         <button
-          v-else
+          v-if="isJoinOffered(modalData.inviterPairing)"
           class="btn btn-primary"
           :disabled="modalData.status !== 'idle'"
           @click="modalData.actionConfirm"
         >
-          <template v-if="modalData.status === 'idle'">Request Access</template>
+          <template v-if="modalData.status === 'idle'">
+            {{ modalData.existingCalendarId !== undefined ? 'Open and Share' : 'Request Access' }}
+          </template>
           <template v-if="modalData.status === 'requesting-access'"
             >Requesting Access <span class="loading loading-spinner loading-md"></span
           ></template>

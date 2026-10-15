@@ -8,10 +8,11 @@ import {
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
 import { watch, type Ref } from 'vue';
-import { type CalendarId, type LocalDocument, type RemotePeer } from './documents/local';
+import { type CalendarId, type LocalDocument } from './documents/local';
+import type { HashArgsAddPeer } from './hash';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { EphemeralDocument } from './documents/ephemeral';
-import { handleJoinRequest, type JoinRequestPacket } from './invite';
+import { handleJoinRequest, joinCalendarVia, type JoinRequestPacket } from './invite';
 import * as auth from './auth';
 import { closeConnection } from './util/peerjs';
 import {
@@ -19,6 +20,7 @@ import {
   initiateHandshake,
   respondToHandshake,
   sendError,
+  toErrorPacket,
   type ErrorPacket,
   type HandshakeAuthBase,
   type HandshakeRequestBase,
@@ -101,6 +103,9 @@ function closeOnFailure(
     });
 }
 
+// How long to wait for the inviter to accept a join requested via `EphemeralDocument::outgoingJoins`.
+const OUTGOING_JOIN_TIMEOUT_MS = 10_000;
+
 export const SYMBOL_IS_WEBRTC_NETWORK_ADAPTER = Symbol.for('WebRtcNetworkAdapter');
 
 export class WebRtcNetworkAdapter extends NetworkAdapter {
@@ -179,27 +184,8 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       // Invoked when a connection to the signaling server is established.
       this.peerJsPeerId = id;
 
-      const connectToRemotePeer = (remotePeerPeerJsPeerId: string, remotePeer: RemotePeer) => {
-        // Guard against double-connecting if this peer was already handled
-        // by a previous 'open' event or a reactive watcher callback.
-        if (this.connections[remotePeerPeerJsPeerId] !== undefined) return;
-
-        const dataConnection = this.peer!.connect(remotePeerPeerJsPeerId);
-
-        dataConnection.once('open', () => {
-          closeOnFailure(
-            dataConnection,
-            'Connection handshake',
-            this.authenticateOutboundConnection(dataConnection, remotePeer),
-          );
-        });
-      };
-
-      for (const [remotePeerPeerJsPeerId, remotePeer] of Object.entries(
-        this.options.docLocal.value.remotePeers,
-      )) {
-        connectToRemotePeer(remotePeerPeerJsPeerId, remotePeer);
-      }
+      for (const remotePeerPeerJsPeerId of Object.keys(this.options.docLocal.value.remotePeers))
+        this.connectToRemotePeer(remotePeerPeerJsPeerId);
 
       // When an invite link is used for the first time, the automerge
       // document update that adds the inviter to remotePeers may arrive
@@ -217,11 +203,18 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
           for (const peerJsPeerId of newKeys) {
             if (!oldKeys.includes(peerJsPeerId)) {
-              connectToRemotePeer(peerJsPeerId, newPeers[peerJsPeerId]);
+              this.connectToRemotePeer(peerJsPeerId);
             }
           }
         },
         { deep: true },
+      );
+
+      // Joins requested by the join dialog, possibly in another tab.
+      watch(
+        () => this.options.docEphemeral.value.outgoingJoins,
+        () => this.performOutgoingJoins(),
+        { deep: true, immediate: true },
       );
 
       // If the shared document isn't available locally we must NOT call
@@ -257,6 +250,98 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
   }
 
+  connectToRemotePeer(remotePeerPeerJsPeerId: string) {
+    // Guard against double-connecting if this peer was already handled
+    // by a previous 'open' event or a reactive watcher callback.
+    if (this.connections[remotePeerPeerJsPeerId] !== undefined) return;
+
+    const dataConnection = this.peer!.connect(remotePeerPeerJsPeerId);
+
+    dataConnection.once('open', () => {
+      closeOnFailure(
+        dataConnection,
+        'Connection handshake',
+        this.authenticateOutboundConnection(dataConnection),
+      );
+    });
+  }
+
+  // Perform the requested joins of this calendar, which this device already has, see
+  // `EphemeralDocument::outgoingJoins`. They are performed from this adapter's peer, because the
+  // device must join with its existing peer ID in the calendar: other devices know it by that ID,
+  // and the signalling server only lets one peer use an ID at a time.
+  performOutgoingJoins() {
+    if (!this.peer?.open) return;
+
+    for (const [secretThumbprint, outgoingJoin] of Object.entries(
+      this.options.docEphemeral.value.outgoingJoins,
+    )) {
+      if (outgoingJoin.status !== 'requested') continue;
+
+      // Marked before yielding, so that the request is not performed twice.
+      outgoingJoin[changeSubtree]((outgoingJoin) => {
+        outgoingJoin.status = 'joining';
+      });
+
+      this.performOutgoingJoin({ ...outgoingJoin.invite })
+        .catch(toErrorPacket)
+        .then((error) => {
+          if (error !== undefined)
+            console.error(`Joining the calendar again failed: ${error.message}`);
+
+          const outgoingJoins = this.options.docEphemeral.value.outgoingJoins;
+
+          // The request may have been withdrawn in the meantime, e.g. when the join dialog timed out.
+          if (!Object.hasOwn(outgoingJoins, secretThumbprint)) return;
+
+          outgoingJoins[secretThumbprint][changeSubtree]((outgoingJoin) => {
+            if (error === undefined) {
+              outgoingJoin.status = 'joined';
+            } else {
+              outgoingJoin.status = 'failed';
+              outgoingJoin.error = error.message;
+            }
+          });
+        });
+    }
+  }
+
+  async performOutgoingJoin(invite: HashArgsAddPeer): Promise<ErrorPacket | undefined> {
+    const secret = await auth.parseInviteSecret(invite.secret);
+
+    // The join dialog only requests joins for the calendar of the invite, see `auth.calendarIdTag`.
+    if ((await auth.calendarIdTag(secret, this.options.calendarId)) !== invite.calendarIdTag)
+      return { kind: 'error', message: 'The invite link is for a different calendar.' };
+
+    const result = await joinCalendarVia(this.peer!, invite, {
+      timeoutMs: OUTGOING_JOIN_TIMEOUT_MS,
+      sharedDocumentId: this.options.docLocal.value.documentIdShared,
+    });
+
+    if (result.kind === 'error') return result;
+
+    const inviterPeerJsPeerId = invite.peerJsPeerId;
+    const remotePeers = this.options.docLocal.value.remotePeers;
+    // The inviter is still known, if only the inviter forgot this device. The values are read
+    // before the entry is overwritten below.
+    const previousRemotePeer = Object.hasOwn(remotePeers, inviterPeerJsPeerId)
+      ? { ...remotePeers[inviterPeerJsPeerId] }
+      : undefined;
+
+    remotePeers[changeSubtree]((remotePeers) => {
+      remotePeers[inviterPeerJsPeerId] = {
+        deviceName: previousRemotePeer?.deviceName ?? '', // TODO
+        authKeyId: result.authKeyId,
+      };
+    });
+
+    if (previousRemotePeer !== undefined) {
+      await auth.deleteAuthKey(previousRemotePeer.authKeyId);
+      // New peers are connected to by the watcher of `remotePeers`, but known peers are not.
+      this.connectToRemotePeer(inviterPeerJsPeerId);
+    }
+  }
+
   getAutomergePeerId(peerJsPeerId: string): PeerId | undefined {
     return this.options.docEphemeral.value.connectedPeers[peerJsPeerId]?.automergePeerId as
       | PeerId
@@ -273,9 +358,14 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   // Authenticate a connection opened by this peer, as the initiator of the handshake.
   async authenticateOutboundConnection(
     dataConnection: DataConnection,
-    remotePeer: RemotePeer,
   ): Promise<ErrorPacket | undefined> {
-    const authKey = await auth.loadAuthKey(remotePeer.authKeyId);
+    // Looked up only now, rather than when connecting: document entries are snapshots, which are
+    // replaced on every change, and the peer's key may have been replaced since, e.g. by joining
+    // again, or the peer may have been forgotten.
+    const remotePeers = this.options.docLocal.value.remotePeers;
+    const authKey = Object.hasOwn(remotePeers, dataConnection.peer)
+      ? await auth.loadAuthKey(remotePeers[dataConnection.peer].authKeyId)
+      : undefined;
 
     if (authKey === undefined)
       return { kind: 'error', message: 'No authentication key found for this peer.' };

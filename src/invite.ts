@@ -59,7 +59,8 @@ export type JoinSuccess = {
 
 export type JoinResult = JoinSuccess | ErrorPacket;
 
-// Join a calendar using an invite, as the invitee.
+// Join a calendar using an invite, as a new device, using a new peer that is destroyed afterwards.
+// To join a calendar this device already has, see `WebRtcNetworkAdapter.performOutgoingJoins`.
 export async function joinCalendar(
   invite: HashArgsAddPeer,
   timeoutMs: number,
@@ -68,37 +69,69 @@ export async function joinCalendar(
     debug: 3,
     secure: true,
   });
-
-  // Resolved when the inviter does not accept in time, or when the peer fails. Errors of the data
-  // connection are reported by `runJoinHandshake` itself.
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const failure = new Promise<ErrorPacket>((resolve) => {
-    timeout = setTimeout(
-      () => resolve({ kind: 'error', message: 'Joining the calendar timed out.' }),
-      timeoutMs,
-    );
+  // The peer is only used for joining, so any of its errors makes joining fail.
+  const peerFailure = new Promise<ErrorPacket>((resolve) => {
     peer.on('error', (error) => {
       console.error('Peer error: ', error);
       resolve(toErrorPacket(error));
     });
   });
 
+  try {
+    return await joinCalendarVia(peer, invite, { timeoutMs, abort: peerFailure });
+  } finally {
+    peer.destroy();
+  }
+}
+
+export type JoinOptions = {
+  // How long to wait for the inviter to accept.
+  timeoutMs: number;
+  // Resolved when joining should fail, e.g. on an error of the peer.
+  abort?: Promise<ErrorPacket>;
+  // Required ID of the inviter's shared document, when joining a calendar this device already has:
+  // a different document could not be synchronized with the device's existing copy.
+  sharedDocumentId?: string;
+};
+
+// Join a calendar using an invite, as the invitee, from the given peer. The peer may be shared with
+// other connections, and is not destroyed.
+export async function joinCalendarVia(
+  peer: Peer,
+  invite: HashArgsAddPeer,
+  options: JoinOptions,
+): Promise<JoinResult> {
+  // Resolved when the inviter does not accept in time, or when joining is aborted. Errors of the
+  // data connection are reported by `runJoinHandshake` itself.
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const failure = Promise.race([
+    new Promise<ErrorPacket>((resolve) => {
+      timeout = setTimeout(
+        () => resolve({ kind: 'error', message: 'Joining the calendar timed out.' }),
+        options.timeoutMs,
+      );
+    }),
+    ...(options.abort === undefined ? [] : [options.abort]),
+  ]);
+
   let dataConnection: DataConnection | undefined;
 
   try {
-    const peerJsPeerId = await Promise.race([
-      new Promise<string>((resolve) => peer.once('open', resolve)),
-      failure,
-    ]);
+    if (!peer.open) {
+      const opened = await Promise.race([
+        new Promise<void>((resolve) => peer.once('open', () => resolve())),
+        failure,
+      ]);
 
-    if (typeof peerJsPeerId !== 'string') return peerJsPeerId;
+      if (opened !== undefined) return opened;
+    }
 
-    console.log(`Peer is now accessible with Peer ID: ${peerJsPeerId}`);
+    console.log(`Joining a calendar as peer ${peer.id}.`);
 
     dataConnection = peer.connect(invite.peerJsPeerId);
 
     const accepted = await Promise.race([
-      runJoinHandshake(dataConnection, invite).catch(toErrorPacket),
+      runJoinHandshake(dataConnection, invite, options.sharedDocumentId).catch(toErrorPacket),
       failure,
     ]);
 
@@ -118,11 +151,9 @@ export async function joinCalendar(
     // Delivered by closing the connection below.
     await dataConnection.send(joinConfirm);
 
-    // Remote peer's authKeyId is updated during the initialization of the local document.
-
     return {
       kind: 'success',
-      peerJsPeerId,
+      peerJsPeerId: peer.id,
       calendarId: accepted.joinAccept.calendarId,
       sharedDocumentId: accepted.joinAccept.sharedDocumentId,
       authKeyId,
@@ -135,8 +166,6 @@ export async function joinCalendar(
     // Destroying the peer discards packets that are still in flight, such as `join-confirm` or an
     // error packet, so close the connection first, which delivers them.
     if (dataConnection !== undefined) await closeConnection(dataConnection);
-
-    peer.destroy();
   }
 }
 
@@ -151,6 +180,7 @@ type JoinAccepted = {
 async function runJoinHandshake(
   dataConnection: DataConnection,
   invite: HashArgsAddPeer,
+  sharedDocumentId: string | undefined,
 ): Promise<JoinAccepted | ErrorPacket> {
   await asyncOnceOpen(dataConnection);
 
@@ -181,6 +211,12 @@ async function runJoinHandshake(
     return await sendError(
       dataConnection,
       'The shared calendar does not match the calendar of the invite link.',
+    );
+
+  if (sharedDocumentId !== undefined && joinAccept.sharedDocumentId !== sharedDocumentId)
+    return await sendError(
+      dataConnection,
+      'The shared calendar is a different copy of the calendar than the one on the joining device.',
     );
 
   return {
@@ -260,14 +296,22 @@ export async function handleJoinRequest(
       ecdhKeyPair.privateKey,
       joinAuth.ecdhPublicKey,
     );
+    const remotePeers = options.docLocal.value.remotePeers;
+    // A known peer joins again, e.g. after it forgot this device, and replaces its key. The values
+    // are read before the entry is overwritten below.
+    const previousRemotePeer = Object.hasOwn(remotePeers, dataConnection.peer)
+      ? { ...remotePeers[dataConnection.peer] }
+      : undefined;
 
-    options.docLocal.value.remotePeers[changeSubtree]((remotePeers) => {
+    remotePeers[changeSubtree]((remotePeers) => {
       remotePeers[dataConnection.peer] = {
-        deviceName: '', // TODO
+        deviceName: previousRemotePeer?.deviceName ?? '', // TODO
         authKeyId,
       };
     });
     joined = true;
+
+    if (previousRemotePeer !== undefined) await auth.deleteAuthKey(previousRemotePeer.authKeyId);
 
     await closeConnection(dataConnection);
   } finally {

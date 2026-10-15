@@ -59,6 +59,7 @@ export function EphemeralDocumentDefault(): EphemeralDocument {
   return {
     connectedPeers: {},
     invites: {},
+    outgoingJoins: {},
   };
 }
 
