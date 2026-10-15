@@ -56,3 +56,35 @@ export function asyncOnceClose(connection: DataConnection): Promise<void> {
     });
   });
 }
+
+// How long `closeConnection` waits for the remote peer to close the connection.
+const CLOSE_TIMEOUT_MS = 5_000;
+
+// Close the connection once the packets sent so far have been delivered, which is how connections
+// should be closed by default (enforced by a lint rule).
+// PeerJS's plain `close()` tears down the connection immediately, discarding packets that are still
+// in flight, such as an error packet sent right before closing. With `flush`, PeerJS sends a close
+// marker after them instead, and the remote peer closes the connection when it receives the
+// marker. If it does not do so in time (e.g. it is unresponsive), the connection is closed
+// immediately.
+export async function closeConnection(connection: DataConnection): Promise<void> {
+  if (!connection.open) {
+    // There is nothing to deliver, but `close()` still cleans up a connection being negotiated.
+    // eslint-disable-next-line no-restricted-syntax
+    connection.close();
+    return;
+  }
+
+  const closed = asyncOnceClose(connection);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  connection.close({ flush: true });
+  await Promise.race([
+    closed,
+    new Promise((resolve) => (timeout = setTimeout(resolve, CLOSE_TIMEOUT_MS))),
+  ]);
+  clearTimeout(timeout);
+
+  // eslint-disable-next-line no-restricted-syntax
+  if (connection.open) connection.close();
+}

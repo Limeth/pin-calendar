@@ -13,6 +13,7 @@ export type EphemeralDocument = {
   invites: {
     [secretThumbprint: string]: {
       secretString: string;
+      // The peer that is joining, or has joined, using this invite.
       usedBy?: PeerJsPeerId;
     };
   };

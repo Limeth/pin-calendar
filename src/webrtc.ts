@@ -13,6 +13,7 @@ import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { EphemeralDocument } from './documents/ephemeral';
 import { handleJoinRequest, type JoinRequestPacket } from './invite';
 import * as auth from './auth';
+import { closeConnection } from './util/peerjs';
 import {
   exchange,
   initiateHandshake,
@@ -86,11 +87,11 @@ function closeOnFailure(
     .then((error) => {
       if (error === undefined) return;
       console.error(`${description} with peer ${dataConnection.peer} failed: ${error.message}`);
-      dataConnection.close();
+      closeConnection(dataConnection);
     })
     .catch((error) => {
       console.error(`${description} with peer ${dataConnection.peer} failed:`, error);
-      dataConnection.close();
+      closeConnection(dataConnection);
     });
 }
 
@@ -345,7 +346,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
           );
         } else {
           // TODO: Send error
-          dataConnection.close();
+          closeConnection(dataConnection);
         }
       });
     });
@@ -456,6 +457,10 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
 
     for (const [peerJsPeerId, dataConnection] of Object.entries(this.dataConnections)) {
+      // An exception to closing connections via `closeConnection`: the peer is destroyed right
+      // below, which would cut off a graceful close anyway, and it cannot wait, because the next
+      // adapter may need the same peer ID immediately.
+      // eslint-disable-next-line no-restricted-syntax
       dataConnection.close();
       delete this.dataConnections[peerJsPeerId];
     }

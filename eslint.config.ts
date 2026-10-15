@@ -26,6 +26,15 @@ export default defineConfigWithVueTs(
       // With `verbatimModuleSyntax`, an import not marked `type` is kept in the output, which fails
       // at runtime if the module only declares it as a type (e.g. `DataConnection` from `peerjs`).
       '@typescript-eslint/consistent-type-imports': ['error', { fixStyle: 'inline-type-imports' }],
+      'no-restricted-syntax': [
+        'error',
+        {
+          // PeerJS's plain `close()` discards packets that are still in flight.
+          selector: "CallExpression[callee.property.name='close'][arguments.length=0]",
+          message:
+            'Close PeerJS connections via `closeConnection` from `util/peerjs.ts`, which delivers pending packets first.',
+        },
+      ],
     },
   },
 
