@@ -7,7 +7,7 @@ import {
   type PeerMetadata,
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
-import { watch, type Ref } from 'vue';
+import { watch, type Ref, type WatchStopHandle } from 'vue';
 import { type CalendarId, type LocalDocument } from './documents/local';
 import type { HashArgsAddPeer } from './hash';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
@@ -125,6 +125,9 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   };
   /// Incremented every time this peer is disconnected.
   sessionCounter: number;
+  // Stops the watchers of this adapter, see `disconnect`. Without stopping them, they would keep
+  // running, and keep this adapter in memory, after the WebRTC host moves to another tab.
+  stopWatchers: WatchStopHandle[] = [];
 
   constructor(options: WebRtcNetworkAdapterOptions) {
     super();
@@ -174,7 +177,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       // would never initiate the outbound connection, the adapter would
       // finish "ready" with zero peers, and the shared document would
       // remain unavailable forever.
-      watch(
+      const stopWatchingRemotePeers = watch(
         () => this.options.docLocal.value.remotePeers,
         (newPeers, oldPeers) => {
           if (!this.peer) return;
@@ -197,11 +200,13 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       );
 
       // Joins requested by the join dialog, possibly in another tab.
-      watch(
+      const stopWatchingOutgoingJoins = watch(
         () => this.options.docEphemeral.value.outgoingJoins,
         () => this.performOutgoingJoins(),
         { deep: true, immediate: true },
       );
+
+      this.stopWatchers.push(stopWatchingRemotePeers, stopWatchingOutgoingJoins);
 
       // If the shared document isn't available locally we must NOT call
       // setReady() immediately just because remotePeers happens to be empty
@@ -618,6 +623,9 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
   disconnect(): void {
     console.log('WebRtcNetworkAdapter::disconnect()');
+
+    for (const stopWatcher of this.stopWatchers) stopWatcher();
+    this.stopWatchers = [];
 
     this.options.docEphemeral.value.connectedPeers[changeSubtree]((connectedPeers) => {
       for (const peerJsPeerId of Object.keys(connectedPeers)) delete connectedPeers[peerJsPeerId];
