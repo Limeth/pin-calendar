@@ -57,6 +57,52 @@ export function asyncOnceClose(connection: DataConnection): Promise<void> {
   });
 }
 
+// The fingerprints of the DTLS certificates of both ends of a connection, see
+// `getDtlsFingerprints`.
+export type DtlsFingerprints = {
+  local: string;
+  remote: string;
+};
+
+// Get the fingerprints of the DTLS certificates of both ends of the connection, from their session
+// descriptions. The browser only establishes the connection if the remote end's certificate matches
+// the fingerprint in its session description, so they identify the encrypted connection.
+// Throws if they are not available, so that a handshake cannot proceed without them.
+export function getDtlsFingerprints(connection: DataConnection): DtlsFingerprints {
+  const local = connection.peerConnection?.localDescription?.sdp;
+  const remote = connection.peerConnection?.remoteDescription?.sdp;
+
+  if (local === undefined || remote === undefined)
+    throw new Error('The session descriptions of the connection are not available.');
+
+  return {
+    local: parseDtlsFingerprints(local),
+    remote: parseDtlsFingerprints(remote),
+  };
+}
+
+// Parse the `a=fingerprint:<algorithm> <fingerprint>` lines of a session description, into a
+// string that is the same for both ends of the connection.
+function parseDtlsFingerprints(sdp: string): string {
+  const fingerprints = sdp
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('a=fingerprint:'))
+    .map((line) => {
+      const [algorithm = '', fingerprint = ''] = line
+        .slice('a=fingerprint:'.length)
+        .trim()
+        .split(/\s+/);
+      return `${algorithm.toLowerCase()} ${fingerprint.toUpperCase()}`;
+    });
+
+  if (fingerprints.length === 0)
+    throw new Error('The session description of the connection has no DTLS fingerprint.');
+
+  // A description may repeat a fingerprint for each of its media sections. The default sort orders
+  // by UTF-16 code units, which is the same on every device.
+  return [...new Set(fingerprints)].sort().join(',');
+}
+
 // How long `closeConnection` waits for the remote peer to close the connection.
 const CLOSE_TIMEOUT_MS = 5_000;
 

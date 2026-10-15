@@ -1,7 +1,7 @@
 import type { DataConnection } from 'peerjs';
 import * as auth from './auth';
 import type { Challenge, Signature } from './auth';
-import { asyncOnceData } from './util/peerjs';
+import { asyncOnceData, getDtlsFingerprints } from './util/peerjs';
 
 // The handshake shared by invitations and connections between paired peers, see
 // `auth.signHandshake`. Each kind of handshake adds its own fields to the packets of steps 1, 3
@@ -51,14 +51,14 @@ export type HandshakeRequestBase = {
 export type HandshakeResponsePacket = {
   kind: 'handshake-response';
   challenge: Challenge;
-  // The responder's signature of both challenges, see `auth.signHandshake`.
+  // The responder's signature of the handshake, see `auth.signHandshake`.
   signature: Signature;
 };
 
 // 3. Sent from initiator to responder, if the `HandshakeResponsePacket::signature` was correct.
 export type HandshakeAuthBase = {
   kind: string;
-  // The initiator's signature of both challenges, see `auth.signHandshake`.
+  // The initiator's signature of the handshake, see `auth.signHandshake`.
   signature: Signature;
 };
 
@@ -69,29 +69,25 @@ export async function initiateHandshake(
   hmacKey: CryptoKey,
   request: HandshakeRequestBase,
 ): Promise<{ kind: 'success'; signature: Signature } | ErrorPacket> {
+  // The initiator's end of the connection is the local one, see `HandshakeSignedData`.
+  const fingerprints = getDtlsFingerprints(dataConnection);
   const response = await exchange<HandshakeResponsePacket>(dataConnection, request);
 
   if (isErrorPacket(response)) return response;
 
-  if (
-    !(await auth.verifyHandshake(
-      hmacKey,
-      'responder',
-      request.challenge,
-      response.challenge,
-      response.signature,
-    ))
-  )
+  const transcript: auth.HandshakeTranscript = {
+    challengeInitiator: request.challenge,
+    challengeResponder: response.challenge,
+    fingerprintsInitiator: fingerprints.local,
+    fingerprintsResponder: fingerprints.remote,
+  };
+
+  if (!(await auth.verifyHandshake(hmacKey, 'responder', transcript, response.signature)))
     return await sendError(dataConnection, 'Invalid signature in handshake response.');
 
   return {
     kind: 'success',
-    signature: await auth.signHandshake(
-      hmacKey,
-      'initiator',
-      request.challenge,
-      response.challenge,
-    ),
+    signature: await auth.signHandshake(hmacKey, 'initiator', transcript),
   };
 }
 
@@ -102,25 +98,25 @@ export async function respondToHandshake<T extends HandshakeAuthBase>(
   hmacKey: CryptoKey,
   request: HandshakeRequestBase,
 ): Promise<T | ErrorPacket> {
+  // The responder's end of the connection is the local one, see `HandshakeSignedData`.
+  const fingerprints = getDtlsFingerprints(dataConnection);
   const challenge = auth.generateChallenge();
+  const transcript: auth.HandshakeTranscript = {
+    challengeInitiator: request.challenge,
+    challengeResponder: challenge,
+    fingerprintsInitiator: fingerprints.remote,
+    fingerprintsResponder: fingerprints.local,
+  };
   const response: HandshakeResponsePacket = {
     kind: 'handshake-response',
     challenge,
-    signature: await auth.signHandshake(hmacKey, 'responder', request.challenge, challenge),
+    signature: await auth.signHandshake(hmacKey, 'responder', transcript),
   };
   const reply = await exchange<T>(dataConnection, response);
 
   if (isErrorPacket(reply)) return reply;
 
-  if (
-    !(await auth.verifyHandshake(
-      hmacKey,
-      'initiator',
-      request.challenge,
-      challenge,
-      reply.signature,
-    ))
-  )
+  if (!(await auth.verifyHandshake(hmacKey, 'initiator', transcript, reply.signature)))
     return await sendError(dataConnection, 'Invalid signature in handshake request.');
 
   return reply;

@@ -122,6 +122,14 @@ export type HandshakeRole = 'initiator' | 'responder';
 // could open a second connection to a peer, send that peer's own challenge, and reflect the
 // resulting signature back. Without both challenges, a signature could be replayed in another
 // handshake.
+// The signed data also contains the DTLS fingerprints of both ends of the connection, which binds
+// the handshake to the encrypted connection it is performed on (channel binding). Without them, the
+// signalling server could establish two connections, one with each peer, in place of a single one
+// between them, and relay the handshake between them unchanged, which would then succeed, letting
+// the signalling server read and modify everything sent afterwards (e.g. replace the public keys of
+// a join). With them, each peer signs the fingerprints it sees, which differ between the two
+// connections, so the handshake fails. Once it succeeds, everything sent afterwards on the
+// connection is known to come from the peer, as the connection is encrypted end to end.
 type HandshakeSignedData = {
   // Identifies the purpose of the signature (domain separation).
   purpose: 'pin-calendar-handshake';
@@ -129,6 +137,17 @@ type HandshakeSignedData = {
   // Base64-encoded challenges.
   challengeInitiator: string;
   challengeResponder: string;
+  // DTLS fingerprints of each end of the connection, see `getDtlsFingerprints`.
+  fingerprintsInitiator: string;
+  fingerprintsResponder: string;
+};
+
+// What both peers sign in a handshake, each from its own point of view, see `HandshakeSignedData`.
+export type HandshakeTranscript = {
+  challengeInitiator: BufferSource;
+  challengeResponder: BufferSource;
+  fingerprintsInitiator: string;
+  fingerprintsResponder: string;
 };
 
 // The data is serialized as JSON, so that its fields cannot be confused with each other. The
@@ -136,11 +155,10 @@ type HandshakeSignedData = {
 // which always produces the same output, because `JSON.stringify` keeps the order of the fields.
 function handshakeSignedData(
   role: HandshakeRole,
-  challengeInitiator: BufferSource,
-  challengeResponder: BufferSource,
+  transcript: HandshakeTranscript,
 ): Uint8Array<ArrayBuffer> {
-  const initiator = toBytes(challengeInitiator);
-  const responder = toBytes(challengeResponder);
+  const initiator = toBytes(transcript.challengeInitiator);
+  const responder = toBytes(transcript.challengeResponder);
 
   if (initiator.length !== CHALLENGE_LENGTH || responder.length !== CHALLENGE_LENGTH)
     throw new Error('Invalid handshake challenge length.');
@@ -150,6 +168,8 @@ function handshakeSignedData(
     role,
     challengeInitiator: initiator.toBase64(),
     challengeResponder: responder.toBase64(),
+    fingerprintsInitiator: transcript.fingerprintsInitiator,
+    fingerprintsResponder: transcript.fingerprintsResponder,
   };
   return new TextEncoder().encode(JSON.stringify(data));
 }
@@ -165,10 +185,9 @@ function toBytes(buffer: BufferSource): Uint8Array {
 export async function signHandshake(
   hmacKey: CryptoKey,
   role: HandshakeRole,
-  challengeInitiator: BufferSource,
-  challengeResponder: BufferSource,
+  transcript: HandshakeTranscript,
 ): Promise<Signature> {
-  const data = handshakeSignedData(role, challengeInitiator, challengeResponder);
+  const data = handshakeSignedData(role, transcript);
   return new Uint8Array(await window.crypto.subtle.sign('HMAC', hmacKey, data));
 }
 
@@ -176,14 +195,13 @@ export async function signHandshake(
 export async function verifyHandshake(
   hmacKey: CryptoKey,
   role: HandshakeRole,
-  challengeInitiator: BufferSource,
-  challengeResponder: BufferSource,
+  transcript: HandshakeTranscript,
   signature: BufferSource,
 ): Promise<boolean> {
   let data;
 
   try {
-    data = handshakeSignedData(role, challengeInitiator, challengeResponder);
+    data = handshakeSignedData(role, transcript);
   } catch {
     return false;
   }
