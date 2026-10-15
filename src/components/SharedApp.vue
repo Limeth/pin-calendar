@@ -191,11 +191,8 @@ async function forgetPeer(peerJsPeerId: string) {
     delete remotePeers[peerJsPeerId];
   });
 
+  // The WebRTC network adapter disconnects from the peer, see `disconnectFromRemotePeer`.
   if (authKeyId !== undefined) await auth.deleteAuthKey(authKeyId);
-
-  // TODO/FIXME: We reload the page to get rid of stray connections.
-  // Ideally, we would just close the WebRTC connections instead.
-  location.reload();
 }
 
 type ModalAddDevice = {

@@ -137,25 +137,6 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     this.readyResolver = readyResolver!;
     this.connections = {};
     this.sessionCounter = 0;
-
-    // Disconnect from peers that are removed by the user.
-    // TODO: Doesn't work. Currently, we just reload the page.
-    // watch(toRef(this.options.docLocal.value.remotePeers), (valueNew, valueOld) => {
-    //   const removedPeers = Object.keys(valueOld).filter((peerJsPeerId) => !(peerJsPeerId in valueNew));
-    //   console.log("RemotePeers changed:");
-    //   console.log(valueNew);
-    //   console.log(valueOld);
-    //   console.log(removedPeers)
-
-    //   for (const removedPeer of removedPeers) {
-    //     const dataConnection = this.dataConnections[removedPeer];
-
-    //     if (dataConnection !== undefined) {
-    //       console.log(`Disconnecting from removed peer: ${removedPeer}`);
-    //       dataConnection.close();
-    //     }
-    //   }
-    // }, { deep: true });
   }
 
   connect(peerId: PeerId, peerMetadata?: PeerMetadata): void {
@@ -206,6 +187,11 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
               this.connectToRemotePeer(peerJsPeerId);
             }
           }
+
+          // Disconnect from peers that were forgotten, possibly in another tab. This adapter holds
+          // the connections of all tabs, so it is the one that has to close them.
+          for (const peerJsPeerId of oldKeys)
+            if (!newKeys.includes(peerJsPeerId)) this.disconnectFromRemotePeer(peerJsPeerId);
         },
         { deep: true },
       );
@@ -455,9 +441,28 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
   }
 
+  // Close all connections to a peer, e.g. after it was forgotten.
+  disconnectFromRemotePeer(peerJsPeerId: string) {
+    for (const { dataConnection } of this.connections[peerJsPeerId] ?? []) {
+      console.log(`Disconnecting from forgotten peer ${peerJsPeerId}.`);
+      // Removed from `connections` once closed, see `onPeerDisconnected`.
+      closeConnection(dataConnection);
+    }
+  }
+
   onConnectionOpened(connectedPeer: ConnectedPeer) {
     console.assert(connectedPeer.dataConnection.open);
     console.log('Connection established: ', connectedPeer);
+
+    // The peer may have been forgotten while the handshake was in progress, after its key was
+    // looked up, in which case `disconnectFromRemotePeer` did not see this connection yet.
+    if (
+      !Object.hasOwn(this.options.docLocal.value.remotePeers, connectedPeer.dataConnection.peer)
+    ) {
+      console.log(`Dropping a connection to forgotten peer ${connectedPeer.dataConnection.peer}.`);
+      closeConnection(connectedPeer.dataConnection);
+      return;
+    }
 
     // const automergePeerId = this.getAutomergePeerId(dataConnection.peer)
 
