@@ -308,9 +308,12 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     dataConnection: DataConnection,
     connectRequest: ConnectRequestPacket,
   ): Promise<ErrorPacket | undefined> {
-    const remotePeer = this.options.docLocal.value.remotePeers[dataConnection.peer];
-    const authKey =
-      remotePeer === undefined ? undefined : await auth.loadAuthKey(remotePeer.authKeyId);
+    const remotePeers = this.options.docLocal.value.remotePeers;
+    // `hasOwn`, because the remote peer chooses its own PeerJS peer ID, which could otherwise match
+    // an inherited property, such as `constructor`.
+    const authKey = Object.hasOwn(remotePeers, dataConnection.peer)
+      ? await auth.loadAuthKey(remotePeers[dataConnection.peer].authKeyId)
+      : undefined;
 
     if (authKey === undefined) return await sendError(dataConnection, 'Unauthorized peer.');
 

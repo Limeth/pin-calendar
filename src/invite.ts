@@ -198,11 +198,14 @@ export async function handleJoinRequest(
 ): Promise<ErrorPacket | undefined> {
   if (!dataConnection.open) await asyncOnceOpen(dataConnection);
 
+  const invites = options.docEphemeral.value.invites;
+
   if (
-    // Invite exists
-    !(joinRequest.secretThumbprint in options.docEphemeral.value.invites) ||
+    // Invite exists (`hasOwn`, because the thumbprint is chosen by the remote peer, and `in` would
+    // also match inherited properties, such as `toString`)
+    !Object.hasOwn(invites, joinRequest.secretThumbprint) ||
     // And hasn't already been used
-    options.docEphemeral.value.invites[joinRequest.secretThumbprint].usedBy !== undefined
+    invites[joinRequest.secretThumbprint].usedBy !== undefined
   ) {
     await sendError(
       dataConnection,
@@ -214,7 +217,7 @@ export async function handleJoinRequest(
     };
   }
 
-  const invite = options.docEphemeral.value.invites[joinRequest.secretThumbprint];
+  const invite = invites[joinRequest.secretThumbprint];
 
   // Reserve the invite immediately after checking whether it is usable, so that it cannot be used
   // by multiple join requests at once. There shall be no yield points between this and the check
