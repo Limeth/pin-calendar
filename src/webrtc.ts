@@ -443,10 +443,11 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
   // Close all connections to a peer, e.g. after it was forgotten.
   disconnectFromRemotePeer(peerJsPeerId: string) {
-    for (const { dataConnection } of this.connections[peerJsPeerId] ?? []) {
+    // Iterate over a copy, as `removeConnection` modifies the array.
+    for (const connectedPeer of (this.connections[peerJsPeerId] ?? []).slice()) {
       console.log(`Disconnecting from forgotten peer ${peerJsPeerId}.`);
-      // Removed from `connections` once closed, see `onPeerDisconnected`.
-      closeConnection(dataConnection);
+      this.removeConnection(connectedPeer);
+      closeConnection(connectedPeer.dataConnection);
     }
   }
 
@@ -477,7 +478,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
 
     connectedPeer.dataConnection.on('close', () => {
-      this.onPeerDisconnected(connectedPeer);
+      this.removeConnection(connectedPeer);
     });
 
     connectedPeer.dataConnection.on('error', (error) => {
@@ -520,11 +521,12 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       )
       .slice(1);
 
-    for (const { dataConnection } of spareConnections) {
+    for (const spareConnection of spareConnections) {
+      const { dataConnection } = spareConnection;
       console.log(
         `Closing spare connection ${dataConnection.connectionId} to ${dataConnection.peer}.`,
       );
-      // Removed from `connections` once closed, see `onPeerDisconnected`.
+      this.removeConnection(spareConnection);
       closeConnection(dataConnection);
     }
   }
@@ -581,14 +583,18 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     return true;
   }
 
-  onPeerDisconnected(peer: ConnectedPeer) {
+  // Stop using a connection: when it closes, or as soon as it is decided to close it, because
+  // `send` would otherwise keep using it until it closes, and the remote peer discards whatever it
+  // receives after the close marker of `closeConnection`. Messages received on it are still
+  // processed. Does nothing if the connection was already removed.
+  removeConnection(peer: ConnectedPeer) {
     const peerJsPeerId = peer.dataConnection.peer;
     const connections = this.connections[peerJsPeerId] ?? [];
     const index = connections.indexOf(peer);
 
     if (index === -1) return;
 
-    // Only this connection is closed, the peer may still have others, see `connections`.
+    // Only this connection is removed, the peer may still have others, see `connections`.
     connections.splice(index, 1);
 
     const newestConnection = connections.at(-1);
@@ -617,7 +623,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       for (const peerJsPeerId of Object.keys(connectedPeers)) delete connectedPeers[peerJsPeerId];
     });
 
-    // Closing a connection removes it from `connections` (see `onPeerDisconnected`), so iterate over
+    // Closing a connection removes it from `connections` (see `removeConnection`), so iterate over
     // a copy.
     for (const connectedPeer of Object.values(this.connections).flat()) {
       // An exception to closing connections via `closeConnection`: the peer is destroyed right
