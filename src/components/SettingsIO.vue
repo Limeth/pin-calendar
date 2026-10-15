@@ -21,6 +21,7 @@ import {
 } from '../pins/pinCatalog';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 import { localStorageDataStore } from '@/localStorageData';
+import * as auth from '@/auth';
 import { keyToId } from '@/pins/util';
 import {
   PinCalendarClear,
@@ -253,8 +254,15 @@ function onClickCalendarDelete() {
     actionConfirm: async () => {
       const localStorageData = await localStorageDataStore.value.GetData();
 
+      const authKeyIds = Object.values(app.value!.docLocal.data.value.remotePeers).map(
+        (remotePeer) => remotePeer.authKeyId,
+      );
+
       // TODO: Implement proper deletion of all calendar data. This is just superficial.
       delete localStorageData.value.calendars[app.value!.calendarId];
+
+      // The keys authenticate this device's connections with the calendar's peers.
+      await Promise.all(authKeyIds.map((authKeyId) => auth.deleteAuthKey(authKeyId)));
     },
   };
   getSettingsIoModal().showModal();

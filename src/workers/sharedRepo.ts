@@ -5,7 +5,6 @@ import type { Rop } from 'automerge-diy-vue-hooks';
 import * as uuid from 'uuid';
 import {
   LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT,
-  LocalDocumentAddPeer,
   LocalDocumentDefault,
   LocalDocumentGetCurrentVersion,
   type CalendarId,
@@ -161,11 +160,21 @@ class SharedRepo {
     if ((await wasmDependencies).isValidDocumentId(message.documentIdLocal)) {
       docHandleLocal = await this.repoLocal.find<Versioned<LocalDocument>>(message.documentIdLocal);
     } else {
+      const localDocument = LocalDocumentDefault(message.invitation?.localPeerId);
+
+      // The invitation is only applied when the local document is created. Afterwards, the local
+      // document is the source of truth: e.g. the inviter must not be added again after the user
+      // forgets it.
+      if (message.invitation !== undefined) {
+        localDocument.documentIdShared = message.invitation.documentIdShared;
+        localDocument.remotePeers[message.invitation.invitedBy] = {
+          deviceName: '', // TODO
+          authKeyId: message.invitation.authKeyId,
+        };
+      }
+
       docHandleLocal = this.repoLocal.create<Versioned<LocalDocument>>(
-        makeVersioned(
-          LocalDocumentDefault(message.invitation?.localPeerId),
-          LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT,
-        ),
+        makeVersioned(localDocument, LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT),
       );
     }
 
@@ -173,20 +182,6 @@ class SharedRepo {
     const docDataLocal = computed(() =>
       LocalDocumentGetCurrentVersion(docDataLocalVersioned.value, message.invitation?.localPeerId),
     );
-
-    if (message.invitation !== undefined) {
-      if (docDataLocal.value.documentIdShared === undefined) {
-        const documentIdShared = message.invitation.documentIdShared;
-        docDataLocal.value[changeSubtree]((local) => {
-          local.documentIdShared = documentIdShared;
-        });
-      }
-      LocalDocumentAddPeer(docDataLocal.value, {
-        deviceName: '', // TODO
-        peerJsPeerId: message.invitation.invitedBy,
-        authKeyId: message.invitation.authKeyId,
-      });
-    }
 
     let documentSharedAvailableLocally;
 

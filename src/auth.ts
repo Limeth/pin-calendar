@@ -275,3 +275,9 @@ export async function loadAuthKey(id: string): Promise<CryptoKey | undefined> {
   const dbKey = await dbKeyPromise;
   return (await dbKey.get(DATABASE_KEY_STORE, id)) as CryptoKey | undefined;
 }
+
+// Delete the key, once the peer it authenticates is no longer trusted.
+export async function deleteAuthKey(id: string) {
+  const dbKey = await dbKeyPromise;
+  await dbKey.delete(DATABASE_KEY_STORE, id);
+}

@@ -181,12 +181,17 @@ function createNewCalendar() {
   localStorageData.value.calendars[calendarId] = {};
 }
 
-function forgetPeer(peerJsPeerId: string) {
+async function forgetPeer(peerJsPeerId: string) {
   if (app.value === undefined) return;
 
+  const authKeyId = app.value.docLocal.data.value.remotePeers[peerJsPeerId]?.authKeyId;
+
+  // Remove the peer first, so that its key can no longer be used to connect.
   app.value.docLocal.data.value.remotePeers[changeSubtree]((remotePeers) => {
     delete remotePeers[peerJsPeerId];
   });
+
+  if (authKeyId !== undefined) await auth.deleteAuthKey(authKeyId);
 
   // TODO/FIXME: We reload the page to get rid of stray connections.
   // Ideally, we would just close the WebRTC connections instead.

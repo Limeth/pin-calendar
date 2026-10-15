@@ -1,6 +1,6 @@
 import { Type, type Static } from '@sinclair/typebox';
 import * as uuid from 'uuid';
-import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
+import { type Rop } from 'automerge-diy-vue-hooks';
 import { getCurrentVersionRop, type Versioned } from '@/versioned';
 
 export const LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT = 1;
@@ -64,26 +64,4 @@ export function LocalDocumentDefault(peerJsPeerId: undefined | PeerJsPeerId): Lo
     },
     remotePeers: {},
   };
-}
-
-export function LocalDocumentAddPeer(
-  self: Rop<LocalDocument>,
-  peer: RemotePeer & { peerJsPeerId: string },
-): boolean {
-  const peerAlreadyAdded =
-    self.localPeer.peerJsPeerId === peer.peerJsPeerId || peer.peerJsPeerId in self.remotePeers;
-
-  if (peerAlreadyAdded) {
-    console.log(`Not adding peer ${peer.peerJsPeerId}, because this peer is already known.`);
-    return false;
-  } else {
-    self[changeSubtree]((localDocument) => {
-      localDocument.remotePeers[peer.peerJsPeerId] = {
-        deviceName: peer.deviceName,
-        authKeyId: peer.authKeyId,
-      };
-    });
-    console.log(`Added new peer ${peer.peerJsPeerId}.`);
-    return true;
-  }
 }
