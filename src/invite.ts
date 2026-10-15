@@ -199,21 +199,24 @@ export async function handleJoinRequest(
   if (!dataConnection.open) await asyncOnceOpen(dataConnection);
 
   const invites = options.docEphemeral.value.invites;
+  // Why the invite cannot be used, if it cannot. `hasOwn`, because the thumbprint is chosen by the
+  // remote peer, and `in` would also match inherited properties, such as `toString`.
+  const unusableReason = !Object.hasOwn(invites, joinRequest.secretThumbprint)
+    ? 'unknown or expired invite'
+    : invites[joinRequest.secretThumbprint].usedBy !== undefined
+      ? `invite already used by peer ${invites[joinRequest.secretThumbprint].usedBy}`
+      : undefined;
 
-  if (
-    // Invite exists (`hasOwn`, because the thumbprint is chosen by the remote peer, and `in` would
-    // also match inherited properties, such as `toString`)
-    !Object.hasOwn(invites, joinRequest.secretThumbprint) ||
-    // And hasn't already been used
-    invites[joinRequest.secretThumbprint].usedBy !== undefined
-  ) {
+  if (unusableReason !== undefined) {
+    // The reason is only logged by the inviter. The remote peer gets the same message in all cases,
+    // so that it cannot tell whether someone else is using, or has used, the invite.
     await sendError(
       dataConnection,
-      "This invite link cannot be used more than once. You might want to request a new invite link from the calendar's owner.",
+      "This invite link is invalid, has expired, or has already been used. You might want to request a new invite link from the calendar's owner.",
     );
     return {
       kind: 'error',
-      message: 'Join request denied due to an invalid invite secret.',
+      message: `Join request denied: ${unusableReason}.`,
     };
   }
 
