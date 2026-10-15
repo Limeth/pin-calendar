@@ -77,6 +77,12 @@ type ConnectAcceptPacket = {
 // The first packet sent over a new connection.
 export type HandshakeRequestPacket = ConnectRequestPacket | JoinRequestPacket;
 
+// Compares by UTF-16 code units, unlike `localeCompare`, which depends on the user's locale and
+// could order the same strings differently on different devices.
+function compareStrings(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 // Close the connection if the handshake fails.
 function closeOnFailure(
   dataConnection: DataConnection,
@@ -105,8 +111,12 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   readyResolver: () => void;
   peer: Peer | undefined;
   peerJsPeerId: string | undefined;
-  dataConnections: {
-    [peerJsPeerId: string]: DataConnection;
+  // The open, authenticated connections to each peer, oldest first. A peer can have more than one
+  // connection for a while: when both peers connect to each other at the same time, or when a peer
+  // reconnects (e.g. after reloading) before its previous connection is detected as closed. Which
+  // one is dead cannot be told until it closes, so each connection is tracked until it does.
+  connections: {
+    [peerJsPeerId: string]: ConnectedPeer[];
   };
   /// Incremented every time this peer is disconnected.
   sessionCounter: number;
@@ -120,7 +130,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       readyResolver = resolve;
     });
     this.readyResolver = readyResolver!;
-    this.dataConnections = {};
+    this.connections = {};
     this.sessionCounter = 0;
 
     // Disconnect from peers that are removed by the user.
@@ -172,7 +182,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       const connectToRemotePeer = (remotePeerPeerJsPeerId: string, remotePeer: RemotePeer) => {
         // Guard against double-connecting if this peer was already handled
         // by a previous 'open' event or a reactive watcher callback.
-        if (this.dataConnections[remotePeerPeerJsPeerId]) return;
+        if (this.connections[remotePeerPeerJsPeerId] !== undefined) return;
 
         const dataConnection = this.peer!.connect(remotePeerPeerJsPeerId);
 
@@ -376,15 +386,49 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       console.error(`Data connection error: ${error}`);
     });
 
-    console.log(`Adding opened peer peerJsPeerId: ${connectedPeer.dataConnection.peer}`);
+    const peerJsPeerId = connectedPeer.dataConnection.peer;
+    const connections = (this.connections[peerJsPeerId] ??= []);
+    // Another connection to the same Automerge peer, e.g. when both peers connected to each other.
+    const automergePeerAlreadyConnected = connections.some(
+      (connection) =>
+        connection.peerInfo.automergePeerId === connectedPeer.peerInfo.automergePeerId,
+    );
+
+    console.log(`Adding opened peer peerJsPeerId: ${peerJsPeerId}`);
+    connections.push(connectedPeer);
     this.options.docEphemeral.value.connectedPeers[changeSubtree]((connectedPeers) => {
-      connectedPeers[connectedPeer.dataConnection.peer] = connectedPeer.peerInfo;
+      connectedPeers[peerJsPeerId] = connectedPeer.peerInfo;
     });
-    this.dataConnections[connectedPeer.dataConnection.peer] = connectedPeer.dataConnection;
-    this.emit('peer-candidate', {
-      peerId: connectedPeer.peerInfo.automergePeerId as PeerId,
-      peerMetadata: connectedPeer.peerInfo.automergePeerMetadata,
-    });
+
+    if (!automergePeerAlreadyConnected)
+      this.emit('peer-candidate', {
+        peerId: connectedPeer.peerInfo.automergePeerId as PeerId,
+        peerMetadata: connectedPeer.peerInfo.automergePeerMetadata,
+      });
+    else this.closeSpareConnections(connections, connectedPeer.peerInfo.automergePeerId);
+  }
+
+  // Close all but one of the connections to an Automerge peer. They all lead to the same session of
+  // the remote peer (a peer gets a new Automerge peer ID when it reloads), so the others are
+  // redundant, e.g. when both peers connected to each other at the same time.
+  // Both peers must close the same connections, or they could end up closing all of them. So both
+  // keep the connection with the smallest connection ID, which is the same on both ends: PeerJS
+  // sends it to the remote peer when opening the connection.
+  closeSpareConnections(connections: ConnectedPeer[], automergePeerId: string) {
+    const spareConnections = connections
+      .filter((connection) => connection.peerInfo.automergePeerId === automergePeerId)
+      .toSorted((a, b) =>
+        compareStrings(a.dataConnection.connectionId, b.dataConnection.connectionId),
+      )
+      .slice(1);
+
+    for (const { dataConnection } of spareConnections) {
+      console.log(
+        `Closing spare connection ${dataConnection.connectionId} to ${dataConnection.peer}.`,
+      );
+      // Removed from `connections` once closed, see `onPeerDisconnected`.
+      closeConnection(dataConnection);
+    }
   }
 
   setReady() {
@@ -440,13 +484,32 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   onPeerDisconnected(peer: ConnectedPeer) {
+    const peerJsPeerId = peer.dataConnection.peer;
+    const connections = this.connections[peerJsPeerId] ?? [];
+    const index = connections.indexOf(peer);
+
+    if (index === -1) return;
+
+    // Only this connection is closed, the peer may still have others, see `connections`.
+    connections.splice(index, 1);
+
+    const newestConnection = connections.at(-1);
+
+    if (newestConnection === undefined) delete this.connections[peerJsPeerId];
+
     this.options.docEphemeral.value.connectedPeers[changeSubtree]((connectedPeers) => {
-      delete connectedPeers[peer.dataConnection.peer];
+      if (newestConnection === undefined) delete connectedPeers[peerJsPeerId];
+      else connectedPeers[peerJsPeerId] = newestConnection.peerInfo;
     });
-    delete this.dataConnections[peer.dataConnection.peer];
-    this.emit('peer-disconnected', {
-      peerId: peer.peerInfo.automergePeerId as PeerId,
-    });
+
+    const automergePeerStillConnected = connections.some(
+      (connection) => connection.peerInfo.automergePeerId === peer.peerInfo.automergePeerId,
+    );
+
+    if (!automergePeerStillConnected)
+      this.emit('peer-disconnected', {
+        peerId: peer.peerInfo.automergePeerId as PeerId,
+      });
   }
 
   disconnect(): void {
@@ -456,17 +519,19 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       for (const peerJsPeerId of Object.keys(connectedPeers)) delete connectedPeers[peerJsPeerId];
     });
 
-    for (const [peerJsPeerId, dataConnection] of Object.entries(this.dataConnections)) {
+    // Closing a connection removes it from `connections` (see `onPeerDisconnected`), so iterate over
+    // a copy.
+    for (const connectedPeer of Object.values(this.connections).flat()) {
       // An exception to closing connections via `closeConnection`: the peer is destroyed right
       // below, which would cut off a graceful close anyway, and it cannot wait, because the next
       // adapter may need the same peer ID immediately.
       // eslint-disable-next-line no-restricted-syntax
-      dataConnection.close();
-      delete this.dataConnections[peerJsPeerId];
+      connectedPeer.dataConnection.close();
     }
 
+    this.connections = {};
+
     console.assert(Object.keys(this.options.docEphemeral.value.connectedPeers).length === 0);
-    console.assert(Object.keys(this.dataConnections).length === 0);
     this.sessionCounter++;
     // PeerJS keeps the ID registered on the signalling server until destroy()
     // is called. If we don't clean it up, a later WebRtcNetworkAdapter that
@@ -478,7 +543,13 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   send(message: Message): void {
     console.log(`WebRtcNetworkAdapter::send(message = ${JSON.stringify(message)})`);
 
-    for (const [peerJsPeerId, dataConnection] of Object.entries(this.dataConnections)) {
+    for (const [peerJsPeerId, connections] of Object.entries(this.connections)) {
+      // The newest connection is the most likely to be alive, see `connections`. Incoming messages
+      // are received on all of them.
+      const dataConnection = connections.at(-1)?.dataConnection;
+
+      if (dataConnection === undefined) continue;
+
       const packet: Packet = {
         message,
       };
