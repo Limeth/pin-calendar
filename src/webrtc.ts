@@ -14,7 +14,7 @@ import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { EphemeralDocument } from './documents/ephemeral';
 import { handleJoinRequest, joinCalendarVia, type JoinRequestPacket } from './invite';
 import * as auth from './auth';
-import { closeConnection } from './util/peerjs';
+import { asyncOnceOpen, closeConnection } from './util/peerjs';
 import {
   exchange,
   initiateHandshake,
@@ -106,6 +106,24 @@ function closeOnFailure(
 // How long to wait for the inviter to accept a join requested via `EphemeralDocument::outgoingJoins`.
 const OUTGOING_JOIN_TIMEOUT_MS = 10_000;
 
+// Connections are attempted on events after which they may succeed, see `retryConnections`. A
+// failed attempt is retried after a delay, which doubles with every failure, up to a maximum.
+const CONNECTION_ATTEMPT_TIMEOUT_MS = 15_000;
+const RETRY_INITIAL_DELAY_MS = 2_000;
+const RETRY_MAX_DELAY_MS = 60_000;
+
+// The delay before a retry, randomized, so that peers that failed at the same time do not retry at
+// the same time again.
+function retryDelay(delayMs: number): number {
+  return delayMs * (0.75 + Math.random() * 0.5);
+}
+
+// A retry after a delay, which doubles with every failure.
+type Retry = {
+  delayMs: number;
+  timer?: ReturnType<typeof setTimeout>;
+};
+
 export const SYMBOL_IS_WEBRTC_NETWORK_ADAPTER = Symbol.for('WebRtcNetworkAdapter');
 
 export class WebRtcNetworkAdapter extends NetworkAdapter {
@@ -128,6 +146,18 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   // Stops the watchers of this adapter, see `disconnect`. Without stopping them, they would keep
   // running, and keep this adapter in memory, after the WebRTC host moves to another tab.
   stopWatchers: WatchStopHandle[] = [];
+  // Whether `disconnect` was called, after which no connections are attempted anymore.
+  stopped = false;
+  // Connections to remote peers that are being attempted, see `connectToRemotePeer`.
+  pendingConnections: { [peerJsPeerId: string]: DataConnection } = {};
+  // Retries of failed connections to remote peers, see `scheduleConnectionRetry`.
+  connectionRetries: { [peerJsPeerId: string]: Retry } = {};
+  // Retries of failed reconnections to the signalling server, see `reconnectToSignallingServer`.
+  signallingRetry: Retry = { delayMs: RETRY_INITIAL_DELAY_MS };
+  readonly onOnline = () => this.retryConnections();
+  readonly onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') this.retryConnections();
+  };
 
   constructor(options: WebRtcNetworkAdapterOptions) {
     super();
@@ -164,12 +194,27 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       console.error('Unhandled peer error: ', error);
     });
 
+    // Connecting to remote peers requires the signalling server, so reconnect to it once it is lost.
+    this.peer.on('disconnected', () => this.reconnectToSignallingServer());
+
+    // Events after which connections that failed may succeed: the device is back online, or the
+    // user returns to the tab, e.g. after the device woke up from sleep.
+    window.addEventListener('online', this.onOnline);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+
+    let started = false;
+
     this.peer.on('open', async (id) => {
       // Invoked when a connection to the signaling server is established.
       this.peerJsPeerId = id;
+      clearTimeout(this.signallingRetry.timer);
+      this.signallingRetry = { delayMs: RETRY_INITIAL_DELAY_MS };
+      this.connectToRemotePeers();
 
-      for (const remotePeerPeerJsPeerId of Object.keys(this.options.docLocal.value.remotePeers))
-        this.connectToRemotePeer(remotePeerPeerJsPeerId);
+      // Reconnected to the signalling server, see `reconnectToSignallingServer`.
+      if (started) return;
+
+      started = true;
 
       // When an invite link is used for the first time, the automerge
       // document update that adds the inviter to remotePeers may arrive
@@ -241,20 +286,128 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
   }
 
+  connectToRemotePeers() {
+    for (const remotePeerPeerJsPeerId of Object.keys(this.options.docLocal.value.remotePeers))
+      this.connectToRemotePeer(remotePeerPeerJsPeerId);
+  }
+
+  // Attempt to connect to a remote peer, unless already connected, or an attempt is in progress. If
+  // the attempt fails, it is retried, see `scheduleConnectionRetry`.
   connectToRemotePeer(remotePeerPeerJsPeerId: string) {
-    // Guard against double-connecting if this peer was already handled
-    // by a previous 'open' event or a reactive watcher callback.
+    // Without the signalling server, connections are attempted once it is reconnected to.
+    if (this.stopped || !this.peer?.open) return;
+    if (this.connections[remotePeerPeerJsPeerId] !== undefined) return;
+    if (this.pendingConnections[remotePeerPeerJsPeerId] !== undefined) return;
+
+    // Attempting now replaces a scheduled retry, while keeping its delay for the next failure.
+    const retry = this.connectionRetries[remotePeerPeerJsPeerId];
+
+    if (retry !== undefined) {
+      clearTimeout(retry.timer);
+      delete retry.timer;
+    }
+
+    const dataConnection = this.peer.connect(remotePeerPeerJsPeerId);
+
+    this.pendingConnections[remotePeerPeerJsPeerId] = dataConnection;
+    this.attemptConnection(dataConnection).then((error) => {
+      if (this.pendingConnections[remotePeerPeerJsPeerId] === dataConnection)
+        delete this.pendingConnections[remotePeerPeerJsPeerId];
+
+      // On success, the connection was added by `onConnectionOpened`.
+      if (error === undefined) return;
+
+      console.error(`Connecting to peer ${remotePeerPeerJsPeerId} failed: ${error.message}`);
+      closeConnection(dataConnection);
+      this.scheduleConnectionRetry(remotePeerPeerJsPeerId);
+    });
+  }
+
+  // Open the connection and authenticate it, within a time limit. When the remote peer is not
+  // reachable, PeerJS does not report it on the connection, so this is how such attempts end.
+  async attemptConnection(dataConnection: DataConnection): Promise<ErrorPacket | undefined> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      return await Promise.race([
+        (async () => {
+          await asyncOnceOpen(dataConnection);
+          return await this.authenticateOutboundConnection(dataConnection);
+        })().catch(toErrorPacket),
+        new Promise<ErrorPacket>((resolve) => {
+          timeout = setTimeout(
+            () => resolve({ kind: 'error', message: 'Connecting timed out.' }),
+            CONNECTION_ATTEMPT_TIMEOUT_MS,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  // Retry connecting to a remote peer after a failed attempt, with a delay that doubles with every
+  // failure, until connected (by either peer), the peer is forgotten, or this adapter is stopped.
+  // The remote peer may be offline, or may have forgotten this device, but this cannot be told
+  // apart from a temporary failure, so retrying continues, at least every `RETRY_MAX_DELAY_MS`.
+  scheduleConnectionRetry(remotePeerPeerJsPeerId: string) {
+    if (this.stopped) return;
+    if (!Object.hasOwn(this.options.docLocal.value.remotePeers, remotePeerPeerJsPeerId)) return;
     if (this.connections[remotePeerPeerJsPeerId] !== undefined) return;
 
-    const dataConnection = this.peer!.connect(remotePeerPeerJsPeerId);
-
-    dataConnection.once('open', () => {
-      closeOnFailure(
-        dataConnection,
-        'Connection handshake',
-        this.authenticateOutboundConnection(dataConnection),
-      );
+    const retry = (this.connectionRetries[remotePeerPeerJsPeerId] ??= {
+      delayMs: RETRY_INITIAL_DELAY_MS,
     });
+
+    if (retry.timer !== undefined) return;
+
+    retry.timer = setTimeout(() => {
+      delete retry.timer;
+      this.connectToRemotePeer(remotePeerPeerJsPeerId);
+    }, retryDelay(retry.delayMs));
+    retry.delayMs = Math.min(retry.delayMs * 2, RETRY_MAX_DELAY_MS);
+  }
+
+  cancelConnectionRetry(remotePeerPeerJsPeerId: string) {
+    clearTimeout(this.connectionRetries[remotePeerPeerJsPeerId]?.timer);
+    delete this.connectionRetries[remotePeerPeerJsPeerId];
+  }
+
+  // Reconnect to the signalling server after the connection to it was lost. If it is still lost
+  // after a delay, which doubles with every failure, try again.
+  reconnectToSignallingServer() {
+    if (this.stopped || this.peer === undefined || this.peer.destroyed) return;
+    if (this.signallingRetry.timer !== undefined) return;
+
+    // PeerJS only reconnects a disconnected peer; otherwise, it is still connecting.
+    if (this.peer.disconnected) {
+      console.log('Reconnecting to the signalling server.');
+      this.peer.reconnect();
+    }
+
+    this.signallingRetry.timer = setTimeout(() => {
+      delete this.signallingRetry.timer;
+      if (!this.peer?.open) this.reconnectToSignallingServer();
+    }, retryDelay(this.signallingRetry.delayMs));
+    this.signallingRetry.delayMs = Math.min(this.signallingRetry.delayMs * 2, RETRY_MAX_DELAY_MS);
+  }
+
+  // Retry all connections immediately, after an event after which they may succeed, rather than
+  // waiting for the delays of their retries.
+  retryConnections() {
+    if (this.stopped || this.peer === undefined) return;
+
+    for (const remotePeerPeerJsPeerId of Object.keys(this.connectionRetries))
+      this.cancelConnectionRetry(remotePeerPeerJsPeerId);
+
+    if (this.peer.open) {
+      this.connectToRemotePeers();
+    } else {
+      clearTimeout(this.signallingRetry.timer);
+      this.signallingRetry = { delayMs: RETRY_INITIAL_DELAY_MS };
+      // Connects to the remote peers once reconnected, see the `open` event.
+      this.reconnectToSignallingServer();
+    }
   }
 
   // Perform the requested joins of this calendar, which this device already has, see
@@ -448,6 +601,8 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
   // Close all connections to a peer, e.g. after it was forgotten.
   disconnectFromRemotePeer(peerJsPeerId: string) {
+    this.cancelConnectionRetry(peerJsPeerId);
+
     // Iterate over a copy, as `removeConnection` modifies the array.
     for (const connectedPeer of (this.connections[peerJsPeerId] ?? []).slice()) {
       console.log(`Disconnecting from forgotten peer ${peerJsPeerId}.`);
@@ -483,7 +638,10 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
 
     connectedPeer.dataConnection.on('close', () => {
-      this.removeConnection(connectedPeer);
+      // Connections closed on purpose are removed before they are closed, see `removeConnection`.
+      // Otherwise, the connection was lost, e.g. due to a network failure, so reconnect.
+      if (this.removeConnection(connectedPeer))
+        this.connectToRemotePeer(connectedPeer.dataConnection.peer);
     });
 
     connectedPeer.dataConnection.on('error', (error) => {
@@ -503,6 +661,8 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     this.options.docEphemeral.value.connectedPeers[changeSubtree]((connectedPeers) => {
       connectedPeers[peerJsPeerId] = connectedPeer.peerInfo;
     });
+    // Connected, whether by this peer or by the remote peer.
+    this.cancelConnectionRetry(peerJsPeerId);
 
     if (!automergePeerAlreadyConnected)
       this.emit('peer-candidate', {
@@ -591,13 +751,13 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   // Stop using a connection: when it closes, or as soon as it is decided to close it, because
   // `send` would otherwise keep using it until it closes, and the remote peer discards whatever it
   // receives after the close marker of `closeConnection`. Messages received on it are still
-  // processed. Does nothing if the connection was already removed.
-  removeConnection(peer: ConnectedPeer) {
+  // processed. Returns whether the connection was removed, as it may already have been.
+  removeConnection(peer: ConnectedPeer): boolean {
     const peerJsPeerId = peer.dataConnection.peer;
     const connections = this.connections[peerJsPeerId] ?? [];
     const index = connections.indexOf(peer);
 
-    if (index === -1) return;
+    if (index === -1) return false;
 
     // Only this connection is removed, the peer may still have others, see `connections`.
     connections.splice(index, 1);
@@ -619,13 +779,28 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       this.emit('peer-disconnected', {
         peerId: peer.peerInfo.automergePeerId as PeerId,
       });
+
+    return true;
   }
 
   disconnect(): void {
     console.log('WebRtcNetworkAdapter::disconnect()');
 
+    // Set first, so that closing the connections below does not cause reconnecting.
+    this.stopped = true;
+
     for (const stopWatcher of this.stopWatchers) stopWatcher();
     this.stopWatchers = [];
+
+    window.removeEventListener('online', this.onOnline);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+
+    for (const remotePeerPeerJsPeerId of Object.keys(this.connectionRetries))
+      this.cancelConnectionRetry(remotePeerPeerJsPeerId);
+
+    clearTimeout(this.signallingRetry.timer);
+    // Closed by destroying the peer below.
+    this.pendingConnections = {};
 
     this.options.docEphemeral.value.connectedPeers[changeSubtree]((connectedPeers) => {
       for (const peerJsPeerId of Object.keys(connectedPeers)) delete connectedPeers[peerJsPeerId];
