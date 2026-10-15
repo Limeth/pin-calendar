@@ -7,6 +7,8 @@ const HashArgsAddPeerSchema = Type.Object({
   action: Type.Literal('addPeer'),
   secret: Type.String(),
   peerJsPeerId: Type.String(),
+  // Identifies the invited calendar without revealing its ID, see `auth.calendarIdTag`.
+  calendarIdTag: Type.String(),
 });
 const HashArgsSchema = Type.Union([Type.Undefined(), HashArgsAddPeerSchema]);
 

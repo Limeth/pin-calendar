@@ -176,6 +176,13 @@ async function runJoinHandshake(
 
   if (joinAccept.kind === 'error') return joinAccept;
 
+  // Not confirming makes the inviter release the invite, see `JoinConfirmPacket`.
+  if ((await auth.calendarIdTag(secret, joinAccept.calendarId)) !== invite.calendarIdTag)
+    return await sendError(
+      dataConnection,
+      'The shared calendar does not match the calendar of the invite link.',
+    );
+
   return {
     kind: 'accepted',
     ecdhKeyPair,

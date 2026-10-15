@@ -41,6 +41,46 @@ export async function parseInviteSecret(secretString: string): Promise<InviteSec
   };
 }
 
+type CalendarIdTagSignedData = {
+  // Identifies the purpose of the signature (domain separation). The invite secret also signs
+  // handshakes, see `HandshakeSignedData`, which must never be confused with calendar ID tags.
+  purpose: 'pin-calendar-invite-calendar-id';
+  calendarId: string;
+};
+
+// Compute the calendar ID tag of an invite: an identifier of the invited calendar, which is
+// included in the invite link in place of the calendar ID itself.
+//
+// Purpose:
+// - Lets the invitee recognize a calendar it already has before joining, by comparing the tag in
+//   the link to the tags of its own calendars. Joining a calendar it already has would make the
+//   inviter add a peer that the invitee never uses, because the invitee keeps its existing
+//   identity in that calendar.
+// - Lets the invitee verify that the inviter shares the calendar the link was created for, see
+//   `JoinAcceptPacket::calendarId`.
+//
+// Why not the calendar ID itself: invite links are sent over channels that may be logged or
+// forwarded, and they outlive the invite. The calendar ID is not a credential, but there is no
+// need to expose it to anyone who has not joined.
+//
+// Why an HMAC keyed with the invite secret, rather than a plain hash of the calendar ID: a plain
+// hash would be the same in every invite link for the calendar, acting as a permanent alias that
+// links them together. Keyed with the invite secret, the tag differs for every invite, and can
+// only be checked against a calendar ID by someone who has the link, and who could thus learn the
+// calendar ID by joining anyway.
+export async function calendarIdTag(secret: InviteSecret, calendarId: string): Promise<string> {
+  const data: CalendarIdTagSignedData = {
+    purpose: 'pin-calendar-invite-calendar-id',
+    calendarId,
+  };
+  const tag = await window.crypto.subtle.sign(
+    'HMAC',
+    secret.hmacKey,
+    new TextEncoder().encode(JSON.stringify(data)),
+  );
+  return new Uint8Array(tag).toBase64({ alphabet: 'base64url', omitPadding: true });
+}
+
 export type Challenge = Uint8Array<ArrayBuffer>;
 
 const CHALLENGE_LENGTH = 32;

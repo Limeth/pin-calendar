@@ -234,6 +234,7 @@ async function createInviteUrl() {
       action: 'addPeer',
       secret: secret.string,
       peerJsPeerId: app.value.docLocal.data.value.localPeer.peerJsPeerId,
+      calendarIdTag: await auth.calendarIdTag(secret, calendarId),
     },
   };
   inviteUrl.hash = encodeHash(hash);
