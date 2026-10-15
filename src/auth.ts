@@ -1,49 +1,70 @@
 import { openDB } from 'idb';
-import * as jose from 'jose';
 import * as uuid from 'uuid';
 
 // The secret of an invite link, used as the key of the handshake when joining a calendar.
 export type InviteSecret = {
   hmacKey: CryptoKey;
   string: string;
-  // A key ID/fingerprint of the secret. This can be shared publicly.
+  // A key ID/fingerprint of the secret. This can be shared publicly, see `inviteSecretThumbprint`.
   thumbprint: string;
 };
 
+// 256 bits, the recommended key length for HMAC-SHA-256 (the length of its output, see RFC 2104).
+const INVITE_SECRET_LENGTH = 32;
+
 // Generate a new invite secret, to be included in an invite link.
 export async function generateInviteSecret(): Promise<InviteSecret> {
-  const hmacKey = await window.crypto.subtle.generateKey({ name: 'HMAC', hash: 'SHA-256' }, true, [
-    'sign',
-    'verify',
-  ]);
-  const array = await window.crypto.subtle.exportKey('raw', hmacKey);
-  const bytes = new Uint8Array(array);
-  return {
-    hmacKey,
-    string: bytes.toBase64(),
-    thumbprint: await jose.calculateJwkThumbprint(hmacKey, 'sha256'),
-  };
+  const bytes = new Uint8Array(INVITE_SECRET_LENGTH);
+  window.crypto.getRandomValues(bytes);
+  return await parseInviteSecret(bytes.toBase64());
 }
 
 // Parse the invite secret from the string included in an invite link.
 export async function parseInviteSecret(secretString: string): Promise<InviteSecret> {
+  const bytes = Uint8Array.fromBase64(secretString);
+
+  if (bytes.length !== INVITE_SECRET_LENGTH) throw new Error('Invalid invite secret length.');
+
   const hmacKey = await window.crypto.subtle.importKey(
     'raw',
-    Uint8Array.fromBase64(secretString),
+    bytes,
     { name: 'HMAC', hash: 'SHA-256' },
-    true,
+    false, // The key is never exported, the secret is kept as `string` where needed.
     ['sign', 'verify'],
   );
   return {
     hmacKey,
     string: secretString,
-    thumbprint: await jose.calculateJwkThumbprint(hmacKey, 'sha256'),
+    thumbprint: await inviteSecretThumbprint(hmacKey),
   };
 }
 
+// Sign JSON data with an HMAC key, returning the signature as base64url. The data must identify
+// its purpose, so that a signature for one purpose is never valid for another (domain separation):
+// the invite secret signs thumbprints, calendar ID tags, and handshakes, see `HandshakeSignedData`.
+async function signJson(hmacKey: CryptoKey, data: { purpose: string }): Promise<string> {
+  const signature = await window.crypto.subtle.sign(
+    'HMAC',
+    hmacKey,
+    new TextEncoder().encode(JSON.stringify(data)),
+  );
+  return new Uint8Array(signature).toBase64({ alphabet: 'base64url', omitPadding: true });
+}
+
+type InviteSecretThumbprintSignedData = {
+  purpose: 'pin-calendar-invite-thumbprint';
+};
+
+// Compute an identifier of the invite secret, by which the inviter looks up the invite, see
+// `JoinRequestPacket::secretThumbprint`. It is an HMAC of a fixed label, keyed with the secret, so
+// it cannot be computed without the secret, and does not reveal it.
+async function inviteSecretThumbprint(hmacKey: CryptoKey): Promise<string> {
+  const data: InviteSecretThumbprintSignedData = { purpose: 'pin-calendar-invite-thumbprint' };
+  return await signJson(hmacKey, data);
+}
+
 type CalendarIdTagSignedData = {
-  // Identifies the purpose of the signature (domain separation). The invite secret also signs
-  // handshakes, see `HandshakeSignedData`, which must never be confused with calendar ID tags.
+  // Identifies the purpose of the signature, see `signJson`.
   purpose: 'pin-calendar-invite-calendar-id';
   calendarId: string;
 };
@@ -73,12 +94,7 @@ export async function calendarIdTag(secret: InviteSecret, calendarId: string): P
     purpose: 'pin-calendar-invite-calendar-id',
     calendarId,
   };
-  const tag = await window.crypto.subtle.sign(
-    'HMAC',
-    secret.hmacKey,
-    new TextEncoder().encode(JSON.stringify(data)),
-  );
-  return new Uint8Array(tag).toBase64({ alphabet: 'base64url', omitPadding: true });
+  return await signJson(secret.hmacKey, data);
 }
 
 export type Challenge = Uint8Array<ArrayBuffer>;
