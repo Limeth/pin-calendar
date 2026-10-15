@@ -15,6 +15,7 @@ import type { EphemeralDocument } from './documents/ephemeral';
 import { handleJoinRequest, joinCalendarVia, type JoinRequestPacket } from './invite';
 import * as auth from './auth';
 import { asyncOnceOpen, closeConnection } from './util/peerjs';
+import { setRemotePeerKey } from './peers';
 import {
   exchange,
   initiateHandshake,
@@ -464,26 +465,15 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
     if (result.kind === 'error') return result;
 
-    const inviterPeerJsPeerId = invite.peerJsPeerId;
-    const remotePeers = this.options.docLocal.value.remotePeers;
-    // The inviter is still known, if only the inviter forgot this device. The values are read
-    // before the entry is overwritten below.
-    const previousRemotePeer = Object.hasOwn(remotePeers, inviterPeerJsPeerId)
-      ? { ...remotePeers[inviterPeerJsPeerId] }
-      : undefined;
+    // The inviter is still known, if only the inviter forgot this device.
+    const replaced = await setRemotePeerKey(
+      this.options.docLocal,
+      invite.peerJsPeerId,
+      result.authKeyId,
+    );
 
-    remotePeers[changeSubtree]((remotePeers) => {
-      remotePeers[inviterPeerJsPeerId] = {
-        deviceName: previousRemotePeer?.deviceName ?? '', // TODO
-        authKeyId: result.authKeyId,
-      };
-    });
-
-    if (previousRemotePeer !== undefined) {
-      await auth.deleteAuthKey(previousRemotePeer.authKeyId);
-      // New peers are connected to by the watcher of `remotePeers`, but known peers are not.
-      this.connectToRemotePeer(inviterPeerJsPeerId);
-    }
+    // New peers are connected to by the watcher of `remotePeers`, but known peers are not.
+    if (replaced) this.connectToRemotePeer(invite.peerJsPeerId);
   }
 
   getAutomergePeerId(peerJsPeerId: string): PeerId | undefined {

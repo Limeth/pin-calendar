@@ -4,6 +4,7 @@ import type { HashArgsAddPeer } from './hash';
 import type { CalendarId, PeerJsPeerId } from './documents/local';
 import * as auth from './auth';
 import { asyncOnceOpen, closeConnection } from './util/peerjs';
+import { setRemotePeerKey } from './peers';
 import type { WebRtcNetworkAdapterOptions } from './webrtc';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 import {
@@ -305,19 +306,8 @@ export async function handleJoinRequest(
       ecdhKeyPair.privateKey,
       joinAuth.ecdhPublicKey,
     );
-    const remotePeers = options.docLocal.value.remotePeers;
-    // A known peer joins again, e.g. after it forgot this device, and replaces its key. The values
-    // are read before the entry is overwritten below.
-    const previousRemotePeer = Object.hasOwn(remotePeers, dataConnection.peer)
-      ? { ...remotePeers[dataConnection.peer] }
-      : undefined;
-
-    remotePeers[changeSubtree]((remotePeers) => {
-      remotePeers[dataConnection.peer] = {
-        deviceName: previousRemotePeer?.deviceName ?? '', // TODO
-        authKeyId,
-      };
-    });
+    // A known peer may join again, e.g. after it forgot this device, and replace its key.
+    await setRemotePeerKey(options.docLocal, dataConnection.peer, authKeyId);
     joined = true;
 
     // Lets the invite dialog tell that the device was added. The invite may have been deleted in
@@ -328,8 +318,6 @@ export async function handleJoinRequest(
       invites[joinRequest.secretThumbprint][changeSubtree]((invite) => {
         invite.joined = true;
       });
-
-    if (previousRemotePeer !== undefined) await auth.deleteAuthKey(previousRemotePeer.authKeyId);
 
     await closeConnection(dataConnection);
   } finally {

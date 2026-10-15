@@ -13,6 +13,7 @@ import type { CalendarId } from '@/documents/local';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 import { localStorageDataStore } from '@/localStorageData';
 import * as auth from '@/auth';
+import { forgetRemotePeer } from '@/peers';
 
 // const app: Ref<App> = ref({
 //   pinCatalog: PinCatalog.loadFromLocalStorageOrDefault(),
@@ -184,15 +185,7 @@ function createNewCalendar() {
 async function forgetPeer(peerJsPeerId: string) {
   if (app.value === undefined) return;
 
-  const authKeyId = app.value.docLocal.data.value.remotePeers[peerJsPeerId]?.authKeyId;
-
-  // Remove the peer first, so that its key can no longer be used to connect.
-  app.value.docLocal.data.value.remotePeers[changeSubtree]((remotePeers) => {
-    delete remotePeers[peerJsPeerId];
-  });
-
-  // The WebRTC network adapter disconnects from the peer, see `disconnectFromRemotePeer`.
-  if (authKeyId !== undefined) await auth.deleteAuthKey(authKeyId);
+  await forgetRemotePeer(app.value.docLocal.data, peerJsPeerId);
 }
 
 type ModalAddDevice = {
