@@ -38,5 +38,14 @@ export default defineConfigWithVueTs(
     },
   },
 
+  {
+    name: 'app/tests',
+    files: ['src/**/__tests__/**'],
+    rules: {
+      // Tests close connections abruptly on purpose, to simulate network failures.
+      'no-restricted-syntax': ['off'],
+    },
+  },
+
   ...pluginOxlint.buildFromOxlintConfigFile('./.oxlintrc.json'),
 );

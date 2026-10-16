@@ -34,3 +34,6 @@ jobs:
       - name: Build
         if: always()
         run: npm run build-only
+      - name: Unit Tests
+        if: always()
+        run: npm run test
