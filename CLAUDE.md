@@ -8,6 +8,8 @@ Automerge documents. Devices are paired via invite links.
 - `npm run check`: type-check, lint, formatting check and build.
 - `npm run test`: unit tests (Vitest). Not part of `check`; CI runs both, see below.
 - `npm run format`: format with Prettier.
+- `npm run dev`: dev server; the app is served under `/pin-calendar/`. `.claude/launch.json` starts
+  a separate one on port 5180 for Claude's browser preview, as 5173 is usually already in use.
 
 ## Documents are snapshots
 
