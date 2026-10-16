@@ -463,6 +463,35 @@ describe('joining a calendar this device already has', () => {
     ).toBe(true);
   });
 
+  it('is performed once reconnected to the signalling server', { timeout: 20_000 }, async () => {
+    const inviter = started('inviter-e');
+    const phone = started('phone-e');
+    await sleep(50);
+    signalling.reachable = false;
+    phone.peer().loseSignalling();
+    const invite = await createInvite(inviter, 'inviter-e');
+
+    phone.docEphemeral.value.outgoingJoins[changeSubtree]((joins) => {
+      joins[invite.secret.thumbprint] = { invite: invite.args, status: 'requested' };
+    });
+    await sleep(500);
+    expect(phone.docEphemeral.value.outgoingJoins[invite.secret.thumbprint]?.status).toBe(
+      'requested',
+    );
+
+    signalling.reachable = true;
+
+    expect(
+      await until(
+        () => phone.docEphemeral.value.outgoingJoins[invite.secret.thumbprint]?.status === 'joined',
+        8_000,
+      ),
+    ).toBe(true);
+    expect(
+      await until(() => isConnected(phone, 'inviter-e') && isConnected(inviter, 'phone-e')),
+    ).toBe(true);
+  });
+
   it('fails for a different copy of the calendar', { timeout: 20_000 }, async () => {
     const inviter = started('inviter-c');
     const phone = started('phone-c', {}, { documentIdShared: 'other-shared-document' });

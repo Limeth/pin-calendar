@@ -225,6 +225,8 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       clearTimeout(this.signallingRetry.timer);
       this.signallingRetry = { delayMs: RETRY_INITIAL_DELAY_MS };
       this.connectToRemotePeers();
+      // Including those requested while not connected to the signalling server.
+      this.performOutgoingJoins();
 
       // Reconnected to the signalling server, see `reconnectToSignallingServer`.
       if (this.started) return;
@@ -259,11 +261,12 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
         { deep: true },
       );
 
-      // Joins requested by the join dialog, possibly in another tab.
+      // Joins requested by the join dialog, possibly in another tab. Those already requested were
+      // performed above.
       const stopWatchingOutgoingJoins = watch(
         () => this.options.docEphemeral.value.outgoingJoins,
         () => this.performOutgoingJoins(),
-        { deep: true, immediate: true },
+        { deep: true },
       );
 
       this.stopWatchers.push(stopWatchingRemotePeers, stopWatchingOutgoingJoins);
@@ -437,6 +440,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   // device must join with its existing peer ID in the calendar: other devices know it by that ID,
   // and the signalling server only lets one peer use an ID at a time.
   performOutgoingJoins() {
+    // Without the signalling server, joins are performed once it is reconnected to.
     if (!this.peer?.open) return;
 
     for (const [secretThumbprint, outgoingJoin] of Object.entries(
