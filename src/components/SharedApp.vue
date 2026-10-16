@@ -8,10 +8,9 @@ import { appStore } from '../app';
 import QRCode from 'qrcode';
 import { computedAsync } from '@vueuse/core';
 import { decodeHash, encodeHash, type Hash, type HashAddPeer } from '@/hash';
-import * as uuid from 'uuid';
 import type { CalendarId } from '@/documents/local';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
-import { localStorageDataStore } from '@/localStorageData';
+import { LocalStorageDataAddCalendar, localStorageDataStore } from '@/localStorageData';
 import * as auth from '@/auth';
 import { forgetRemotePeer } from '@/peers';
 
@@ -60,14 +59,14 @@ function defaultCalendarId(): CalendarId | undefined {
   const calendarIds = Object.keys(localStorageData.value.calendars);
 
   if (calendarIds.length === 0) {
-    // If no calendars exist, create one.
+    // If no calendars exist, create one. The ID in the URL, if any, is not used, like when it is
+    // not one of the calendars below.
     // TODO: This should be done manually by the user.
     currentHash.value.path = {
       calendar: {
-        id: currentHash.value.path?.calendar.id ?? uuid.v7(),
+        id: LocalStorageDataAddCalendar(localStorageData.value),
       },
     };
-    localStorageData.value.calendars[currentHash.value.path.calendar.id] = {};
   } else if (
     currentHash.value.path?.calendar.id === undefined ||
     !(currentHash.value.path.calendar.id in localStorageData.value.calendars)
@@ -117,10 +116,9 @@ watch(
       return;
     }
 
-    // No calendars are left, so create one, as on startup.
-    const newCalendarId = uuid.v7();
-    localStorageData.value.calendars[newCalendarId] = {};
-    openCalendar(newCalendarId);
+    // No calendars are left, so create one, as on startup. Deleting the last calendar already
+    // creates one, so this is only a fallback, e.g. for when the site data was cleared.
+    openCalendar(LocalStorageDataAddCalendar(localStorageData.value));
   },
 );
 
@@ -211,8 +209,7 @@ function useInviteLink() {
 }
 
 function createNewCalendar() {
-  const calendarId = uuid.v7();
-  localStorageData.value.calendars[calendarId] = {};
+  LocalStorageDataAddCalendar(localStorageData.value);
 }
 
 async function forgetPeer(peerJsPeerId: string) {

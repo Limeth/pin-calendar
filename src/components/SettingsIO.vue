@@ -20,7 +20,7 @@ import {
   PinCatalogAddPin,
 } from '../pins/pinCatalog';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
-import { localStorageDataStore } from '@/localStorageData';
+import { LocalStorageDataAddCalendar, localStorageDataStore } from '@/localStorageData';
 import * as auth from '@/auth';
 import { keyToId } from '@/pins/util';
 import {
@@ -263,6 +263,11 @@ function onClickCalendarDelete() {
 
       // TODO: Implement proper deletion of all calendar data. This is just superficial.
       delete localStorageData.value.calendars[app.value!.calendarId];
+
+      // Replace the last calendar in the same change, so that the list is saved once, and never
+      // saved empty. Otherwise, every open tab would receive the empty list, and create its own.
+      if (Object.keys(localStorageData.value.calendars).length === 0)
+        LocalStorageDataAddCalendar(localStorageData.value);
 
       // The keys authenticate this device's connections with the calendar's peers.
       await Promise.all(authKeyIds.map((authKeyId) => auth.deleteAuthKey(authKeyId)));

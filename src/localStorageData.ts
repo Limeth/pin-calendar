@@ -1,6 +1,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { ref, shallowRef, watch, type Ref, type ShallowRef } from 'vue';
-import { CalendarIdSchema } from './documents/local';
+import * as uuid from 'uuid';
+import { CalendarIdSchema, type CalendarId } from './documents/local';
 import { Value } from '@sinclair/typebox/value';
 import { getCurrentVersion, makeVersioned, Versioned } from './versioned';
 
@@ -34,6 +35,14 @@ const LocalStorageDataSchema = Type.Object({
 });
 
 export type LocalStorageData = Static<typeof LocalStorageDataSchema>;
+
+// Add a new, empty calendar, and return its ID. Always under a new ID: one that was used before may
+// belong to a deleted calendar, which the shared worker still remembers, see `webRtcShutDown`.
+export function LocalStorageDataAddCalendar(self: LocalStorageData): CalendarId {
+  const calendarId = uuid.v7();
+  self.calendars[calendarId] = {};
+  return calendarId;
+}
 
 export function LocalStorageDataSave(self: LocalStorageData) {
   const string = JSON.stringify(makeVersioned(self, LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT));
