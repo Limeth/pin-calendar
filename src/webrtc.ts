@@ -247,11 +247,13 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
           const newKeys = Object.keys(newPeers);
           const oldKeys = oldPeers ? Object.keys(oldPeers) : [];
 
-          for (const peerJsPeerId of newKeys) {
-            if (!oldKeys.includes(peerJsPeerId)) {
+          // New peers, and peers whose key was replaced, e.g. after joining again.
+          for (const peerJsPeerId of newKeys)
+            if (
+              !oldKeys.includes(peerJsPeerId) ||
+              oldPeers![peerJsPeerId]!.authKeyId !== newPeers[peerJsPeerId]!.authKeyId
+            )
               this.connectToRemotePeer(peerJsPeerId);
-            }
-          }
 
           // Disconnect from peers that were forgotten, possibly in another tab. This adapter holds
           // the connections of all tabs, so it is the one that has to close them.
@@ -490,15 +492,9 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
     if (result.kind === 'error') return result;
 
-    // The inviter is still known, if only the inviter forgot this device.
-    const replaced = await setRemotePeerKey(
-      this.options.docLocal,
-      invite.peerJsPeerId,
-      result.authKeyId,
-    );
-
-    // New peers are connected to by the watcher of `remotePeers`, but known peers are not.
-    if (replaced) this.connectToRemotePeer(invite.peerJsPeerId);
+    // The inviter is still known, if only the inviter forgot this device. Either way, the watcher
+    // of `remotePeers` connects to the inviter with the new key.
+    await setRemotePeerKey(this.options.docLocal, invite.peerJsPeerId, result.authKeyId);
   }
 
   getAutomergePeerId(peerJsPeerId: string): PeerId | undefined {
@@ -514,6 +510,16 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     };
   }
 
+  // Load the authentication key of a remote peer, if the peer is known and its key exists.
+  async loadRemotePeerKey(peerJsPeerId: string): Promise<CryptoKey | undefined> {
+    const remotePeers = this.options.docLocal.value.remotePeers;
+    // `hasOwn`, because the remote peer chooses its own PeerJS peer ID, which could otherwise match
+    // an inherited property, such as `constructor`.
+    return Object.hasOwn(remotePeers, peerJsPeerId)
+      ? await auth.loadAuthKey(remotePeers[peerJsPeerId].authKeyId)
+      : undefined;
+  }
+
   // Authenticate a connection opened by this peer, as the initiator of the handshake.
   async authenticateOutboundConnection(
     dataConnection: DataConnection,
@@ -521,10 +527,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     // Looked up only now, rather than when connecting: document entries are snapshots, which are
     // replaced on every change, and the peer's key may have been replaced since, e.g. by joining
     // again, or the peer may have been forgotten.
-    const remotePeers = this.options.docLocal.value.remotePeers;
-    const authKey = Object.hasOwn(remotePeers, dataConnection.peer)
-      ? await auth.loadAuthKey(remotePeers[dataConnection.peer].authKeyId)
-      : undefined;
+    const authKey = await this.loadRemotePeerKey(dataConnection.peer);
 
     if (authKey === undefined)
       return { kind: 'error', message: 'No authentication key found for this peer.' };
@@ -557,12 +560,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     dataConnection: DataConnection,
     connectRequest: ConnectRequestPacket,
   ): Promise<ErrorPacket | undefined> {
-    const remotePeers = this.options.docLocal.value.remotePeers;
-    // `hasOwn`, because the remote peer chooses its own PeerJS peer ID, which could otherwise match
-    // an inherited property, such as `constructor`.
-    const authKey = Object.hasOwn(remotePeers, dataConnection.peer)
-      ? await auth.loadAuthKey(remotePeers[dataConnection.peer].authKeyId)
-      : undefined;
+    const authKey = await this.loadRemotePeerKey(dataConnection.peer);
 
     if (authKey === undefined) return await sendError(dataConnection, 'Unauthorized peer.');
 
