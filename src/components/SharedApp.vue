@@ -44,6 +44,17 @@ watch(
   { deep: true },
 );
 
+// The calendar to open when none is chosen: the least recently used one, if it still exists, or
+// the first one.
+function defaultCalendarId(): CalendarId | undefined {
+  const { calendars, leastRecentlyUsedCalendar } = localStorageData.value;
+
+  if (leastRecentlyUsedCalendar !== undefined && leastRecentlyUsedCalendar in calendars)
+    return leastRecentlyUsedCalendar;
+
+  return Object.keys(calendars)[0];
+}
+
 // Initialize the `currentHash.value.path` field, ensuring it's present.
 {
   const calendarIds = Object.keys(localStorageData.value.calendars);
@@ -64,8 +75,7 @@ watch(
     // Otherwise, if no ID was given, choose one of the calendars to display.
     currentHash.value.path = {
       calendar: {
-        // Open the least recently used calendar.
-        id: localStorageData.value.leastRecentlyUsedCalendar ?? calendarIds[0]!,
+        id: defaultCalendarId()!,
       },
     };
   }
@@ -90,6 +100,29 @@ function openCalendar(calendarId: CalendarId) {
 }
 
 openCalendar(currentHash.value.path!.calendar.id);
+
+// Open another calendar when the open one is removed from the list, e.g. when it was deleted,
+// possibly in another tab. `in`, because Vue does not track `Object.hasOwn`.
+watch(
+  () =>
+    currentHash.value.path !== undefined &&
+    currentHash.value.path.calendar.id in localStorageData.value.calendars,
+  (isListed) => {
+    if (isListed) return;
+
+    const calendarId = defaultCalendarId();
+
+    if (calendarId !== undefined) {
+      openCalendar(calendarId);
+      return;
+    }
+
+    // No calendars are left, so create one, as on startup.
+    const newCalendarId = uuid.v7();
+    localStorageData.value.calendars[newCalendarId] = {};
+    openCalendar(newCalendarId);
+  },
+);
 
 const appIsBeingLoaded = ref(true);
 const appAsync = computedAsync(

@@ -36,10 +36,13 @@ const LocalStorageDataSchema = Type.Object({
 export type LocalStorageData = Static<typeof LocalStorageDataSchema>;
 
 export function LocalStorageDataSave(self: LocalStorageData) {
-  localStorage.setItem(
-    LOCAL_STORAGE_KEY,
-    JSON.stringify(makeVersioned(self, LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT)),
-  );
+  const string = JSON.stringify(makeVersioned(self, LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT));
+
+  // Writing an unchanged value would only make the other tabs reload it, see
+  // `localStorageDataStore`, which they would then save again.
+  if (localStorage.getItem(LOCAL_STORAGE_KEY) === string) return;
+
+  localStorage.setItem(LOCAL_STORAGE_KEY, string);
 }
 
 export function LocalStorageDataLoadOrDefault(): LocalStorageData {
@@ -109,6 +112,19 @@ export const localStorageDataStore: ShallowRef<LocalStorageDataStore> =
           },
           { deep: true },
         );
+
+        // Reload the stored value when another tab changes it, e.g. when it deletes a calendar.
+        // Otherwise, this tab would not see the change, and would overwrite it the next time it
+        // saves. The browser only notifies the other tabs, not the one that made the change.
+        window.addEventListener('storage', (event) => {
+          // A `null` key means that the whole storage was cleared.
+          if (event.storageArea !== localStorage) return;
+          if (event.key !== null && event.key !== LOCAL_STORAGE_KEY) return;
+
+          const localStorageData = LocalStorageDataLoad();
+
+          if (localStorageData !== undefined) innerRef.value = localStorageData;
+        });
 
         return innerRef;
       })();
