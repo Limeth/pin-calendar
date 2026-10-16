@@ -2,19 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { App } from '@/app';
 import { checkInviterPairing } from '@/rejoin';
 import type { HashArgsAddPeer } from '@/hash';
-import { device, pairedKeys, type Device } from './helpers';
+import { pairedKeys, started, stopStartedDevices, type Device } from './helpers';
 
-const devices: Device[] = [];
-
-afterEach(() => {
-  for (const { adapter } of devices.splice(0)) adapter.disconnect();
-});
-
-function started(...args: Parameters<typeof device>): Device {
-  const created = device(...args);
-  devices.push(created);
-  return created;
-}
+afterEach(stopStartedDevices);
 
 // The parts of the app of a device used by `checkInviterPairing`.
 function app(of: Device): App {

@@ -65,6 +65,8 @@ to be read later (e.g. a peer's key is looked up when a handshake needs it, not 
 - Vitest, with real Automerge documents (`helpers.ts`), `happy-dom` and `fake-indexeddb`. Only
   PeerJS is faked (`fakes/peerjs.ts`), as WebRTC and the signalling server are not available, and
   tests need to cause network failures. Keep the fake's behaviour faithful to PeerJS.
+- Test files run in parallel, the tests of a file one after another, and each file has its own
+  fake network. Put tests that wait long (e.g. for timeouts) in a file of their own.
 - The shared worker and Vue components are not covered; check them in a browser.
 - CI (`.github/workflows/check.yml`) runs only on pushes to `master` and `deploy`.
 

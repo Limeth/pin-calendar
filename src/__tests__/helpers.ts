@@ -81,6 +81,26 @@ export function device(
   return { adapter, docLocal, docEphemeral, peer: () => adapter.peer as unknown as Peer };
 }
 
+// The devices created by `started`, which `stopStartedDevices` stops.
+const startedDevices: Device[] = [];
+
+// A device, see `device`, which is stopped after the test, see `stopStartedDevices`.
+export function started(...args: Parameters<typeof device>): Device {
+  const created = device(...args);
+  startedDevices.push(created);
+  return created;
+}
+
+// Stop the devices created by `started`, to be called after each test that uses it.
+export function stopStartedDevices() {
+  for (const { adapter } of startedDevices.splice(0)) adapter.disconnect();
+}
+
+// A remote peer of a device, known by the given authentication key.
+export function remotePeer(authKeyId: string): RemotePeer {
+  return { deviceName: '', authKeyId };
+}
+
 export function isConnected(device: Device, peerJsPeerId: string): boolean {
   return device.adapter.connections[peerJsPeerId] !== undefined;
 }
