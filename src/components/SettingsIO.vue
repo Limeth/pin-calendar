@@ -254,6 +254,9 @@ function onClickCalendarDelete() {
     actionConfirm: async () => {
       const localStorageData = await localStorageDataStore.value.GetData();
 
+      // Disconnect from the calendar's peers, in whichever tab the connections are.
+      app.value!.shutDownWebRtc();
+
       const authKeyIds = Object.values(app.value!.docLocal.data.value.remotePeers).map(
         (remotePeer) => remotePeer.authKeyId,
       );

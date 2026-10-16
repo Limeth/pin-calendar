@@ -90,6 +90,9 @@ class Initialized {
   tabs: Tab[] = [];
   webRtcTab?: Tab;
   webRtcStarted: boolean = false;
+  // Whether WebRTC was shut down for good, see `ToSharedRepoMessageWebRtcShutdown`. Then, it is not
+  // started in any tab anymore.
+  webRtcShutDown: boolean = false;
 
   constructor(options: {
     docEphemeral: DocumentWrapper<EphemeralDocument>;
@@ -223,7 +226,7 @@ class SharedRepo {
       const repo = await GetSharedRepo(this.calendarId);
       const initialized = await repo.initialized!;
 
-      while (true) {
+      while (!initialized.webRtcShutDown) {
         const webRtcRunning =
           initialized.webRtcTab !== undefined &&
           (await (async () => {
@@ -247,6 +250,9 @@ class SharedRepo {
             initialized.webRtcTab.timedOut = true;
             return false;
           })());
+
+        // Shut down while the tab was being polled.
+        if (initialized.webRtcShutDown) break;
 
         if (!webRtcRunning) {
           initialized.webRtcTab = undefined;
@@ -397,6 +403,17 @@ async function onMessage(message: ToSharedRepoMessage, port: TabMessagePort) {
     }
     case 'webrtc-pollalive-acq': {
       // Handled elsewhere.
+      break;
+    }
+    case 'webrtc-shutdown': {
+      const repo = await GetSharedRepo(port.calendarId!);
+      const initialized = await repo.initialized!;
+
+      // Ends the task that keeps WebRTC running in one of the tabs.
+      initialized.webRtcShutDown = true;
+      initialized.webRtcTab?.port.postMessage({ type: 'webrtc-stop' });
+      initialized.webRtcTab = undefined;
+      console.log(`WebRTC was shut down for calendar ${port.calendarId}.`);
       break;
     }
   }

@@ -27,6 +27,9 @@ export type App = {
   readonly docEphemeral: DocumentWrapper<EphemeralDocument>;
   readonly docLocal: VersionedDocumentWrapper<LocalDocument>;
   readonly docShared: VersionedDocumentWrapper<SharedDocument>;
+  // Stop synchronizing the calendar with other devices for good, in all tabs, e.g. when it is
+  // deleted from this device.
+  shutDownWebRtc(): void;
 };
 
 async function LoadApp(calendarId: CalendarId): Promise<App> {
@@ -249,6 +252,9 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
       versionedData: dataSharedVersioned,
       data: dataShared,
       handle: handleShared,
+    },
+    shutDownWebRtc() {
+      sharedRepoWorker.postMessage({ type: 'webrtc-shutdown' });
     },
   };
 }
