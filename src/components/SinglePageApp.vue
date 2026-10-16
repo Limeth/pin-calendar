@@ -91,8 +91,8 @@ function isJoinOffered(inviterPairing: ModalInviteConfirmation['inviterPairing']
 // is no longer shared with it, see `checkInviterPairing`.
 const PAIRING_CHECK_TIMEOUT_MS = 10_000;
 
-// Join a calendar this device does not have yet, as a new device.
-async function joinNewCalendar(invite: HashArgsAddPeer): Promise<ErrorPacket | undefined> {
+// Join a calendar this device does not have yet, as a new device. Returns the calendar's ID.
+async function joinNewCalendar(invite: HashArgsAddPeer): Promise<CalendarId | ErrorPacket> {
   const result = await joinCalendar(invite, 10_000);
 
   if (result.kind === 'error') return result;
@@ -107,6 +107,8 @@ async function joinNewCalendar(invite: HashArgsAddPeer): Promise<ErrorPacket | u
         authKeyId: result.authKeyId,
       },
     };
+
+  return result.calendarId;
 }
 
 // TODO: Combine with ModalData in SharedApp and other dialogs in settings.
@@ -137,27 +139,24 @@ if (isHashValidAddPeer(currentHash.value)) {
       this.status = 'requesting-access';
       this.error = undefined;
 
-      const error =
-        this.existingCalendarId === undefined
+      const existingCalendarId = this.existingCalendarId;
+      // The ID of the joined calendar, or an error.
+      const result =
+        existingCalendarId === undefined
           ? await joinNewCalendar(currentHash.value.args)
-          : await joinExistingCalendar(
-              await appStore.value.GetApp(this.existingCalendarId),
+          : ((await joinExistingCalendar(
+              await appStore.value.GetApp(existingCalendarId),
               currentHash.value.args,
               30_000,
-            );
+            )) ?? existingCalendarId);
 
-      if (error === undefined) {
-        currentHash.value = {
-          path:
-            this.existingCalendarId === undefined
-              ? currentHash.value.path
-              : { calendar: { id: this.existingCalendarId } },
-          args: undefined,
-        };
+      if (typeof result === 'string') {
+        // Open the joined calendar.
+        currentHash.value = { path: { calendar: { id: result } }, args: undefined };
         modalData.value = undefined;
       } else {
-        console.error('Failed to join the calendar:', error.message);
-        this.error = error.message;
+        console.error('Failed to join the calendar:', result.message);
+        this.error = result.message;
       }
 
       this.status = 'idle';
