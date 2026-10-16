@@ -11,9 +11,10 @@ const registry = new Map<string, Peer>();
 const leakedIds = new Set<string>();
 
 // Tests can replace `tamper` to modify packets; returning `null` drops the packet and closes the
-// connection.
+// connection. `latency` delays a packet, in milliseconds; packets still arrive in order.
 export const network = {
   tamper: (packet: unknown): unknown => packet,
+  latency: (_packet: unknown): number => 0,
 };
 
 // Whether the signalling server can be reached, see `Peer.loseSignalling`.
@@ -23,6 +24,7 @@ export function resetNetwork() {
   registry.clear();
   leakedIds.clear();
   network.tamper = (packet) => packet;
+  network.latency = () => 0;
   signalling.reachable = true;
 }
 
@@ -37,6 +39,9 @@ export class DataConnection extends EventEmitter {
   connectionId: string;
   open = false;
   other!: DataConnection;
+  // When the last packet sent from this end arrives, so that packets arrive in order, like on a
+  // reliable data channel.
+  private lastArrival = 0;
   peerConnection?: {
     localDescription: { sdp: string };
     remoteDescription: { sdp: string };
@@ -56,12 +61,15 @@ export class DataConnection extends EventEmitter {
 
     if (delivered === null) return this.close();
 
+    const arrival = Math.max(Date.now() + network.latency(delivered), this.lastArrival);
+    this.lastArrival = arrival;
+
     setTimeout(() => {
       if (!this.other.open) return;
       // Like PeerJS, close when the close marker of `close({ flush: true })` arrives.
       if (isClosePacket(delivered)) return this.other.close();
       this.other.emit('data', delivered);
-    });
+    }, arrival - Date.now());
   }
 
   // Like PeerJS: with `flush`, a close marker is sent after the queued packets; otherwise, the

@@ -330,13 +330,16 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     const dataConnection = this.peer.connect(remotePeerPeerJsPeerId);
 
     this.pendingConnections[remotePeerPeerJsPeerId] = dataConnection;
-    this.attemptConnection(dataConnection).then((error) => {
+    this.attemptConnection(dataConnection).then((result) => {
       if (this.pendingConnections[remotePeerPeerJsPeerId] === dataConnection)
         delete this.pendingConnections[remotePeerPeerJsPeerId];
 
-      // On success, the connection was added by `onConnectionOpened`.
-      if (error === undefined) return;
+      if (result.kind === 'connect-accept') {
+        this.onConnectionOpened({ dataConnection, peerInfo: result.peerInfo });
+        return;
+      }
 
+      const error = result;
       console.error(`Connecting to peer ${remotePeerPeerJsPeerId} failed: ${error.message}`);
       closeConnection(dataConnection);
       this.scheduleConnectionRetry(remotePeerPeerJsPeerId);
@@ -345,7 +348,11 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
   // Open the connection and authenticate it, within a time limit. When the remote peer is not
   // reachable, PeerJS does not report it on the connection, so this is how such attempts end.
-  async attemptConnection(dataConnection: DataConnection): Promise<ErrorPacket | undefined> {
+  // Only the outcome of the race counts: a handshake that completes after the time limit is
+  // ignored, as its connection is already being closed.
+  async attemptConnection(
+    dataConnection: DataConnection,
+  ): Promise<ConnectAcceptPacket | ErrorPacket> {
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
     try {
@@ -520,10 +527,11 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       : undefined;
   }
 
-  // Authenticate a connection opened by this peer, as the initiator of the handshake.
+  // Authenticate a connection opened by this peer, as the initiator of the handshake. The connection
+  // is not added here, but by `connectToRemotePeer`, see `attemptConnection`.
   async authenticateOutboundConnection(
     dataConnection: DataConnection,
-  ): Promise<ErrorPacket | undefined> {
+  ): Promise<ConnectAcceptPacket | ErrorPacket> {
     // Looked up only now, rather than when connecting: document entries are snapshots, which are
     // replaced on every change, and the peer's key may have been replaced since, e.g. by joining
     // again, or the peer may have been forgotten.
@@ -545,14 +553,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       signature: handshake.signature,
       peerInfo: this.getLocalPeerInfo(),
     };
-    const connectAccept = await exchange<ConnectAcceptPacket>(dataConnection, connectAuth);
-
-    if (connectAccept.kind === 'error') return connectAccept;
-
-    this.onConnectionOpened({
-      dataConnection,
-      peerInfo: connectAccept.peerInfo,
-    });
+    return await exchange<ConnectAcceptPacket>(dataConnection, connectAuth);
   }
 
   // Authenticate a connection opened by a remote peer, as the responder of the handshake.
