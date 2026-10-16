@@ -149,6 +149,9 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   stopWatchers: WatchStopHandle[] = [];
   // Whether `disconnect` was called, after which no connections are attempted anymore.
   stopped = false;
+  // Whether the setup done once connected to the signalling server for the first time is done, see
+  // the `open` event in `createPeer`.
+  started = false;
   // Connections to remote peers that are being attempted, see `connectToRemotePeer`.
   pendingConnections: { [peerJsPeerId: string]: DataConnection } = {};
   // Retries of failed connections to remote peers, see `scheduleConnectionRetry`.
@@ -181,6 +184,17 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     this.peerId = peerId;
     this.peerMetadata = peerMetadata;
 
+    // Events after which connections that failed may succeed: the device is back online, or the
+    // user returns to the tab, e.g. after the device woke up from sleep.
+    window.addEventListener('online', this.onOnline);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+
+    this.createPeer();
+  }
+
+  // Create the PeerJS peer, which registers this device's peer ID with the signalling server. Also
+  // used to replace a peer that PeerJS destroyed, see `reconnectToSignallingServer`.
+  createPeer() {
     this.peer = new Peer(this.options.docLocal.value.localPeer.peerJsPeerId, {
       debug: 3,
       secure: true,
@@ -196,14 +210,14 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     });
 
     // Connecting to remote peers requires the signalling server, so reconnect to it once it is lost.
-    this.peer.on('disconnected', () => this.reconnectToSignallingServer());
+    // Deferred, because PeerJS also emits this event while destroying the peer, before marking it
+    // as destroyed. Reconnecting at that point would open a connection to the server that the peer
+    // then abandons, but which, if it registers, keeps the peer ID registered, so that it could not
+    // be used again, e.g. if the ID was released in the meantime.
+    this.peer.on('disconnected', () => queueMicrotask(() => this.reconnectToSignallingServer()));
 
-    // Events after which connections that failed may succeed: the device is back online, or the
-    // user returns to the tab, e.g. after the device woke up from sleep.
-    window.addEventListener('online', this.onOnline);
-    document.addEventListener('visibilitychange', this.onVisibilityChange);
-
-    let started = false;
+    // The peer was destroyed, see `reconnectToSignallingServer`.
+    this.peer.on('close', () => this.reconnectToSignallingServer());
 
     this.peer.on('open', async (id) => {
       // Invoked when a connection to the signaling server is established.
@@ -213,9 +227,9 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       this.connectToRemotePeers();
 
       // Reconnected to the signalling server, see `reconnectToSignallingServer`.
-      if (started) return;
+      if (this.started) return;
 
-      started = true;
+      this.started = true;
 
       // When an invite link is used for the first time, the automerge
       // document update that adds the inviter to remotePeers may arrive
@@ -377,11 +391,18 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   // Reconnect to the signalling server after the connection to it was lost. If it is still lost
   // after a delay, which doubles with every failure, try again.
   reconnectToSignallingServer() {
-    if (this.stopped || this.peer === undefined || this.peer.destroyed) return;
+    if (this.stopped || this.peer === undefined) return;
     if (this.signallingRetry.timer !== undefined) return;
 
-    // PeerJS only reconnects a disconnected peer; otherwise, it is still connecting.
-    if (this.peer.disconnected) {
+    if (this.peer.destroyed) {
+      // PeerJS destroys a peer whose first registration with the server fails, rather than
+      // disconnecting it, e.g. when its ID is still registered by the peer of the previous WebRTC
+      // host tab. A destroyed peer cannot reconnect, so it is replaced. Its connections were
+      // closed, and are attempted again once the new peer is registered, see the `open` event.
+      console.log('Replacing the destroyed peer.');
+      this.createPeer();
+    } else if (this.peer.disconnected) {
+      // PeerJS only reconnects a disconnected peer; otherwise, it is still connecting.
       console.log('Reconnecting to the signalling server.');
       this.peer.reconnect();
     }

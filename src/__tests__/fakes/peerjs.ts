@@ -7,6 +7,8 @@
 import { EventEmitter } from 'node:events';
 
 const registry = new Map<string, Peer>();
+// IDs held by connections to the signalling server that were left behind, see `Peer.destroy`.
+const leakedIds = new Set<string>();
 
 // Tests can replace `tamper` to modify packets; returning `null` drops the packet and closes the
 // connection.
@@ -19,6 +21,7 @@ export const signalling = { reachable: true };
 
 export function resetNetwork() {
   registry.clear();
+  leakedIds.clear();
   network.tamper = (packet) => packet;
   signalling.reachable = true;
 }
@@ -127,6 +130,10 @@ export class Peer extends EventEmitter {
   open = false;
   disconnected = false;
   destroyed = false;
+  // Like PeerJS, set once registered, or once disconnected. A peer whose registration fails before
+  // that is destroyed, see `register`.
+  private lastServerId: string | undefined;
+  private destroying = false;
   connections: DataConnection[] = [];
   // The IDs of the peers this peer attempted to connect to, in order.
   connectCalls: string[] = [];
@@ -138,28 +145,55 @@ export class Peer extends EventEmitter {
   }
 
   private register() {
+    // Like PeerJS, registering while being destroyed opens a connection to the server that is left
+    // behind, and keeps the ID registered.
+    const leaked = this.destroying;
+
     setTimeout(() => {
+      if (leaked) {
+        if (signalling.reachable && !registry.has(this.id)) leakedIds.add(this.id);
+        return;
+      }
+
       if (this.destroyed) return;
 
       if (!signalling.reachable) {
         // Like PeerJS, a failed (re)connection to the server ends in `disconnected`.
-        this.disconnected = true;
-        this.emit('disconnected', this.id);
+        this.disconnect();
+        return;
+      }
+
+      if (registry.has(this.id) || leakedIds.has(this.id)) {
+        this.emit(
+          'error',
+          Object.assign(new Error(`ID "${this.id}" is taken`), { type: 'unavailable-id' }),
+        );
+        // Like PeerJS's `_abort`, a peer that was never registered is destroyed.
+        if (this.lastServerId === undefined) this.destroy();
+        else this.disconnect();
         return;
       }
 
       registry.set(this.id, this);
+      this.lastServerId = this.id;
       this.open = true;
       this.emit('open', this.id);
     });
   }
 
-  // Like PeerJS: the connection to the signalling server is lost; existing connections stay.
-  loseSignalling() {
-    registry.delete(this.id);
+  private disconnect() {
+    if (this.disconnected) return;
+
+    if (registry.get(this.id) === this) registry.delete(this.id);
+    this.lastServerId = this.id;
     this.open = false;
     this.disconnected = true;
     this.emit('disconnected', this.id);
+  }
+
+  // Like PeerJS: the connection to the signalling server is lost; existing connections stay.
+  loseSignalling() {
+    this.disconnect();
   }
 
   reconnect() {
@@ -203,11 +237,17 @@ export class Peer extends EventEmitter {
     return local;
   }
 
+  // Like PeerJS: `disconnected` is emitted before the peer is marked as destroyed, and `close`
+  // after.
   destroy() {
-    this.destroyed = true;
-    this.open = false;
+    if (this.destroyed) return;
+
+    this.destroying = true;
+    this.disconnect();
     for (const connection of this.connections) connection.close();
-    registry.delete(this.id);
+    this.destroyed = true;
+    this.destroying = false;
+    this.emit('close');
   }
 }
 
