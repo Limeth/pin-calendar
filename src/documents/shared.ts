@@ -7,9 +7,20 @@ export const SHARED_DOCUMENT_SCHEMA_VERSION_CURRENT = 1;
 
 export type SharedDocument = {
   // account: Account,
+  // The calendar's name, shared with all of its devices. Unset for an unnamed calendar.
+  name?: string;
   pinCatalog: PinCatalog;
   pinCalendar: PinCalendar;
 };
+
+// Rename the calendar, or remove its name if the given one is blank. The name is replaced as a
+// whole, so that concurrent renames result in one of the names, rather than a merge of their text.
+export function SharedDocumentSetName(self: SharedDocument, name: string) {
+  const trimmed = name.trim();
+
+  if (trimmed.length === 0) delete self.name;
+  else if (self.name !== trimmed) self.name = trimmed;
+}
 
 export function SharedDocumentGetCurrentVersion(
   versioned: Rop<Versioned<SharedDocument>>,

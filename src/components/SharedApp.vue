@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch, type Ref } from 'vue';
+import { computed, markRaw, ref, watch, type Ref } from 'vue';
 import Calendar from './Calendar.vue';
 import Milestones from './Milestones.vue';
 import Settings from './Settings.vue';
+import CalendarName from './CalendarName.vue';
 import feather from 'feather-icons';
-import { appStore } from '../app';
+import { appStore, type App } from '../app';
 import QRCode from 'qrcode';
 import { computedAsync } from '@vueuse/core';
 import { decodeHash, encodeHash, type Hash, type HashAddPeer } from '@/hash';
@@ -13,6 +14,7 @@ import { changeSubtree } from 'automerge-diy-vue-hooks';
 import { LocalStorageDataAddCalendar, localStorageDataStore } from '@/localStorageData';
 import * as auth from '@/auth';
 import { forgetRemotePeer } from '@/peers';
+import { SharedDocumentSetName } from '@/documents/shared';
 
 // const app: Ref<App> = ref({
 //   pinCatalog: PinCatalog.loadFromLocalStorageOrDefault(),
@@ -226,7 +228,14 @@ type ModalAddDevice = {
   secretThumbprint: string;
 };
 
-type ModalData = ModalAddDevice;
+type ModalRename = {
+  kind: 'rename';
+  // The calendar being renamed, which stays the same if another calendar is opened meanwhile.
+  app: App;
+  name: string;
+};
+
+type ModalData = ModalAddDevice | ModalRename;
 
 const modalData: Ref<ModalData | undefined> = ref(undefined);
 // The state of the invite of the open invite dialog: waiting for a device, being used by a device
@@ -303,6 +312,30 @@ function closeAddDeviceDialog() {
 
   modalData.value = undefined;
 }
+
+function openRenameDialog() {
+  if (modalData.value !== undefined) return;
+  if (app.value === undefined) return;
+
+  modalData.value = {
+    kind: 'rename',
+    // Raw, as `modalData` is deeply reactive, which would unwrap the app's `Ref`s.
+    app: markRaw(app.value),
+    name: app.value.docShared.data.value.name ?? '',
+  };
+}
+
+function saveRenameDialog() {
+  if (modalData.value?.kind !== 'rename') return;
+
+  const { app, name } = modalData.value;
+
+  app.docShared.data.value[changeSubtree]((shared) => {
+    SharedDocumentSetName(shared, name);
+  });
+
+  modalData.value = undefined;
+}
 </script>
 
 <template>
@@ -353,8 +386,55 @@ function closeAddDeviceDialog() {
         <button class="btn btn-primary" @click="closeAddDeviceDialog">Close</button>
       </div>
     </div>
+    <form
+      v-if="modalData?.kind === 'rename'"
+      class="modal-box flex flex-col gap-2"
+      @submit.prevent="saveRenameDialog"
+    >
+      <h3 class="text-lg font-bold">Rename Calendar</h3>
+      <label class="flex flex-col gap-1">
+        <span class="label-text">Name</span>
+        <input
+          type="text"
+          v-model="modalData.name"
+          class="input w-full"
+          maxlength="100"
+          placeholder="Unnamed Calendar"
+        />
+        <span class="text-xs opacity-60">Shared with all devices of this calendar.</span>
+      </label>
+      <div class="modal-action">
+        <button type="button" class="btn" @click="modalData = undefined">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
   </div>
   <div class="drawer-content">
+    <!-- Fixed height, so that the page does not shift with the name's second line, and the loading
+    placeholder below can subtract it. -->
+    <header class="navbar h-16 bg-base-200 justify-center px-4">
+      <!-- The name is the rename button. The pencil only appears on hover. -->
+      <button
+        v-if="app !== undefined"
+        class="group btn btn-ghost h-full max-w-full gap-4 py-0 text-xl font-normal"
+        title="Rename calendar"
+        @click="openRenameDialog"
+      >
+        <span class="sr-only">Rename calendar</span>
+        <!-- Balances the pencil, so that the name is centered. -->
+        <span class="w-4 shrink-0" aria-hidden="true" />
+        <CalendarName
+          class="text-center"
+          :name="app.docShared.data.value.name"
+          :calendar-id="app.calendarId"
+        />
+        <span
+          class="shrink-0 opacity-0 group-hover:opacity-100"
+          aria-hidden="true"
+          v-html="feather.icons['edit-2'].toSvg({ width: 16, height: 16 })"
+        />
+      </button>
+    </header>
     <div class="pb-16" v-if="app !== undefined">
       <Calendar v-if="currentPage === Page.CALENDAR" v-model="app" />
       <Milestones v-if="currentPage === Page.MILESTONES" v-model="app" />
@@ -363,7 +443,11 @@ function closeAddDeviceDialog() {
     <div
       v-else
       class="flex flex-col items-center justify-center"
-      style="height: calc(100svh - var(--spacing) * 16); /* Full height excluding the menu bar */"
+      style="
+        height: calc(
+          100svh - var(--spacing) * 32
+        ); /* Full height excluding the header and the menu bar */
+      "
     >
       <div class="flex flex-col gap-2 items-center">
         <template v-if="appIsBeingLoaded">
