@@ -25,6 +25,8 @@ const LocalStorageDataCalendarSchema = Type.Object({
   documentIdEphemeral: Type.Optional(Type.String()),
   documentIdLocal: Type.Optional(Type.String()),
   invitation: Type.Optional(InvitationSchema),
+  // The calendar's alias on this device, shown alongside its shared name.
+  alias: Type.Optional(Type.String()),
 });
 
 export type LocalStorageDataCalendar = Static<typeof LocalStorageDataCalendarSchema>;
@@ -42,6 +44,22 @@ export function LocalStorageDataAddCalendar(self: LocalStorageData): CalendarId 
   const calendarId = uuid.v7();
   self.calendars[calendarId] = {};
   return calendarId;
+}
+
+// Set a calendar's alias, or remove it if the given one is blank. A calendar that is no longer listed,
+// e.g. because it was deleted in another tab, is not added back.
+export function LocalStorageDataSetCalendarAlias(
+  self: LocalStorageData,
+  calendarId: CalendarId,
+  alias: string,
+) {
+  if (!Object.hasOwn(self.calendars, calendarId)) return;
+
+  const calendar = self.calendars[calendarId]!;
+  const trimmed = alias.trim();
+
+  if (trimmed.length === 0) delete calendar.alias;
+  else if (calendar.alias !== trimmed) calendar.alias = trimmed;
 }
 
 export function LocalStorageDataSave(self: LocalStorageData) {

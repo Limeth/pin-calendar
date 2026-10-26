@@ -11,7 +11,11 @@ import { computedAsync } from '@vueuse/core';
 import { decodeHash, encodeHash, type Hash, type HashAddPeer } from '@/hash';
 import type { CalendarId } from '@/documents/local';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
-import { LocalStorageDataAddCalendar, localStorageDataStore } from '@/localStorageData';
+import {
+  LocalStorageDataAddCalendar,
+  LocalStorageDataSetCalendarAlias,
+  localStorageDataStore,
+} from '@/localStorageData';
 import * as auth from '@/auth';
 import { forgetRemotePeer } from '@/peers';
 import { SharedDocumentSetName } from '@/documents/shared';
@@ -233,6 +237,7 @@ type ModalRename = {
   // The calendar being renamed, which stays the same if another calendar is opened meanwhile.
   app: App;
   name: string;
+  alias: string;
 };
 
 type ModalData = ModalAddDevice | ModalRename;
@@ -322,17 +327,19 @@ function openRenameDialog() {
     // Raw, as `modalData` is deeply reactive, which would unwrap the app's `Ref`s.
     app: markRaw(app.value),
     name: app.value.docShared.data.value.name ?? '',
+    alias: localStorageData.value.calendars[app.value.calendarId]?.alias ?? '',
   };
 }
 
 function saveRenameDialog() {
   if (modalData.value?.kind !== 'rename') return;
 
-  const { app, name } = modalData.value;
+  const { app, name, alias } = modalData.value;
 
   app.docShared.data.value[changeSubtree]((shared) => {
     SharedDocumentSetName(shared, name);
   });
+  LocalStorageDataSetCalendarAlias(localStorageData.value, app.calendarId, alias);
 
   modalData.value = undefined;
 }
@@ -403,6 +410,13 @@ function saveRenameDialog() {
         />
         <span class="text-xs opacity-60">Shared with all devices of this calendar.</span>
       </label>
+      <label class="flex flex-col gap-1">
+        <span class="label-text">Alias</span>
+        <input type="text" v-model="modalData.alias" class="input w-full" maxlength="100" />
+        <span class="text-xs opacity-60">
+          Only on this device, shown alongside the name. Optional.
+        </span>
+      </label>
       <div class="modal-action">
         <button type="button" class="btn" @click="modalData = undefined">Cancel</button>
         <button type="submit" class="btn btn-primary">Save</button>
@@ -426,6 +440,7 @@ function saveRenameDialog() {
         <CalendarName
           class="text-center"
           :name="app.docShared.data.value.name"
+          :alias="localStorageData.calendars[app.calendarId]?.alias"
           :calendar-id="app.calendarId"
         />
         <span

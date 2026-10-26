@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { localStorageDataStore } from '@/localStorageData';
+import {
+  LocalStorageDataSetCalendarAlias,
+  localStorageDataStore,
+  type LocalStorageData,
+} from '@/localStorageData';
 import { CALENDAR_ID, OTHER_CALENDAR_ID, sleep } from './helpers';
 
 const KEY = 'pinCalendar';
@@ -43,5 +47,33 @@ describe('the calendar list in local storage', () => {
     expect(JSON.parse(localStorage.getItem(KEY)!).schemaVersion[1].leastRecentlyUsedCalendar).toBe(
       CALENDAR_ID,
     );
+  });
+});
+
+describe('the alias of a calendar', () => {
+  it('is trimmed, and removed when blank', () => {
+    const data: LocalStorageData = { calendars: { [CALENDAR_ID]: {} } };
+
+    LocalStorageDataSetCalendarAlias(data, CALENDAR_ID, '  Work  ');
+    expect(data.calendars[CALENDAR_ID]!.alias).toBe('Work');
+
+    LocalStorageDataSetCalendarAlias(data, CALENDAR_ID, '   ');
+    expect(data.calendars[CALENDAR_ID]).toEqual({});
+  });
+
+  it('does not add back a calendar that is no longer listed', () => {
+    const data: LocalStorageData = { calendars: {} };
+
+    LocalStorageDataSetCalendarAlias(data, CALENDAR_ID, 'Work');
+    expect(data.calendars).toEqual({});
+  });
+
+  it('is kept when the list is loaded from storage', async () => {
+    const data = await localStorageDataStore.value.GetData();
+
+    changeInAnotherTab(KEY, stored({ [CALENDAR_ID]: { alias: 'Work' } }));
+    await sleep(20);
+
+    expect(data.value.calendars[CALENDAR_ID]!.alias).toBe('Work');
   });
 });
