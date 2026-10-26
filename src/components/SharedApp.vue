@@ -145,6 +145,21 @@ const appAsync = computedAsync(
 // when switching from a loaded calendar to a not-yet-loaded calendar.
 const app = computed(() => (appIsBeingLoaded.value ? undefined : appAsync.value));
 
+// The open calendar, shown in the header. While it is loading, its name is the copy in local storage.
+const headerCalendar = computed(() => {
+  const calendarId = app.value?.calendarId ?? currentHash.value.path?.calendar.id;
+
+  if (calendarId === undefined) return undefined;
+
+  const calendar = localStorageData.value.calendars[calendarId];
+
+  return {
+    calendarId,
+    name: app.value !== undefined ? app.value.docShared.data.value.name : calendar?.cache?.name,
+    alias: calendar?.alias,
+  };
+});
+
 const drawerContent: Ref<undefined | 'calendars' | 'peers'> = ref(undefined);
 const connected = computed(() => {
   if (app.value === undefined) return 0;
@@ -428,10 +443,13 @@ function saveRenameDialog() {
     placeholder below can subtract it. -->
     <header class="navbar h-16 bg-base-200 justify-center px-4">
       <!-- The name is the rename button. The pencil only appears on hover. -->
+      <!-- Renaming needs the shared document, so it waits for the calendar to load. -->
       <button
-        v-if="app !== undefined"
+        v-if="headerCalendar !== undefined"
         class="group btn btn-ghost h-full max-w-full gap-4 py-0 text-xl font-normal"
+        :class="{ 'pointer-events-none': app === undefined }"
         title="Rename calendar"
+        :aria-disabled="app === undefined"
         @click="openRenameDialog"
       >
         <span class="sr-only">Rename calendar</span>
@@ -439,9 +457,9 @@ function saveRenameDialog() {
         <span class="w-4 shrink-0" aria-hidden="true" />
         <CalendarName
           class="text-center"
-          :name="app.docShared.data.value.name"
-          :alias="localStorageData.calendars[app.calendarId]?.alias"
-          :calendar-id="app.calendarId"
+          :name="headerCalendar.name"
+          :alias="headerCalendar.alias"
+          :calendar-id="headerCalendar.calendarId"
         />
         <span
           class="shrink-0 opacity-0 group-hover:opacity-100"
@@ -531,12 +549,17 @@ function saveRenameDialog() {
         <div class="text-2xl text-center">My Calendars</div>
         <div class="flex flex-col w-full mt-4 mb-4 gap-1">
           <button
-            v-for="calendarId of Object.keys(localStorageData.calendars)"
+            v-for="[calendarId, calendar] of Object.entries(localStorageData.calendars)"
             :key="calendarId"
             @click="openCalendar(calendarId)"
-            class="px-4 py-1 text-center btn btn-ghost btn-neutral"
+            class="h-auto min-h-10 px-4 py-1 text-center btn btn-ghost btn-neutral"
           >
-            {{ calendarId }}
+            <CalendarName
+              class="text-center"
+              :name="calendar.cache?.name"
+              :alias="calendar.alias"
+              :calendar-id="calendarId"
+            />
           </button>
         </div>
         <button @click="createNewCalendar" class="btn btn-sm btn-primary">

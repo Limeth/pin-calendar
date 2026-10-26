@@ -3,6 +3,7 @@ import { ref, watch, type Ref } from 'vue';
 import { decodeHash, encodeHash, type Hash, type HashAddPeer, type HashArgsAddPeer } from '@/hash';
 import { localStorageDataStore } from '@/localStorageData';
 import SharedApp from './SharedApp.vue';
+import CalendarName from './CalendarName.vue';
 import { joinCalendar } from '@/invite';
 import { checkInviterPairing, joinExistingCalendar, type InviterPairing } from '@/rejoin';
 import { appStore } from '@/app';
@@ -196,12 +197,17 @@ if (isHashValidAddPeer(currentHash.value)) {
   <div class="modal" :class="{ 'modal-open': modalData !== undefined }">
     <div v-if="modalData?.kind === 'invite-confirmation'" class="modal-box flex flex-col gap-2">
       <h3 class="text-lg font-bold">Join Calendar</h3>
-      <!-- The ID is only known for a calendar this device already has. For a new calendar, the invite
-      link only identifies it by a tag, see `auth.calendarIdTag`. -->
-      <!-- TODO: Display the calendar's name instead of its ID, once calendars have names. -->
-      <p v-if="modalData.existingCalendarId !== undefined">
-        Calendar: <span class="font-mono break-all">{{ modalData.existingCalendarId }}</span>
-      </p>
+      <!-- Only known for a calendar this device already has. For a new calendar, the invite link
+      only identifies it by a tag, see `auth.calendarIdTag`, and its name arrives with the shared
+      document after joining. -->
+      <div v-if="modalData.existingCalendarId !== undefined" class="flex items-baseline gap-1">
+        <span>Calendar:</span>
+        <CalendarName
+          :name="localStorageData.calendars[modalData.existingCalendarId]?.cache?.name"
+          :alias="localStorageData.calendars[modalData.existingCalendarId]?.alias"
+          :calendar-id="modalData.existingCalendarId"
+        />
+      </div>
       <template v-if="modalData.inviterPairing === 'checking'">
         <p>
           You have been invited to join a calendar, which you already have on this device. Checking

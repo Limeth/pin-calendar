@@ -21,12 +21,21 @@ const InvitationSchema = Type.Object({
 
 export type Invitation = Static<typeof InvitationSchema>;
 
+// Data derived from a calendar's documents, so that it can be shown without loading the calendar,
+// e.g. in the calendar list. It is updated whenever the calendar is loaded, so it may be outdated,
+// e.g. when another device renamed the calendar since.
+const LocalStorageDataCalendarCacheSchema = Type.Object({
+  // A copy of the calendar's shared name, see `SharedDocument`.
+  name: Type.Optional(Type.String()),
+});
+
 const LocalStorageDataCalendarSchema = Type.Object({
   documentIdEphemeral: Type.Optional(Type.String()),
   documentIdLocal: Type.Optional(Type.String()),
   invitation: Type.Optional(InvitationSchema),
   // The calendar's alias on this device, shown alongside its shared name.
   alias: Type.Optional(Type.String()),
+  cache: Type.Optional(LocalStorageDataCalendarCacheSchema),
 });
 
 export type LocalStorageDataCalendar = Static<typeof LocalStorageDataCalendarSchema>;
@@ -60,6 +69,26 @@ export function LocalStorageDataSetCalendarAlias(
 
   if (trimmed.length === 0) delete calendar.alias;
   else if (calendar.alias !== trimmed) calendar.alias = trimmed;
+}
+
+// Set the copy of a calendar's shared name, see `LocalStorageDataCalendarCacheSchema`. A calendar that
+// is no longer listed, e.g. because it was deleted in another tab, is not added back.
+export function LocalStorageDataSetCalendarName(
+  self: LocalStorageData,
+  calendarId: CalendarId,
+  name: string | undefined,
+) {
+  if (!Object.hasOwn(self.calendars, calendarId)) return;
+
+  const calendar = self.calendars[calendarId]!;
+
+  if (name !== undefined) {
+    if (calendar.cache?.name !== name) calendar.cache = { ...calendar.cache, name };
+  } else if (calendar.cache !== undefined) {
+    delete calendar.cache.name;
+
+    if (Object.keys(calendar.cache).length === 0) delete calendar.cache;
+  }
 }
 
 export function LocalStorageDataSave(self: LocalStorageData) {

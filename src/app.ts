@@ -1,4 +1,4 @@
-import { computed, shallowRef, toRaw, type Ref, type ShallowRef } from 'vue';
+import { computed, shallowRef, toRaw, watch, type Ref, type ShallowRef } from 'vue';
 import * as A from '@automerge/automerge-repo';
 import { makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 import { SYMBOL_IS_WEBRTC_NETWORK_ADAPTER, WebRtcNetworkAdapter } from './webrtc';
@@ -18,7 +18,11 @@ import { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-
 import SharedRepoWorker from './workers/sharedRepo?sharedworker';
 import { SharedDocumentGetCurrentVersion, type SharedDocument } from './documents/shared';
 import type { EphemeralDocument } from './documents/ephemeral';
-import { localStorageDataStore, type LocalStorageDataCalendar } from './localStorageData';
+import {
+  LocalStorageDataSetCalendarName,
+  localStorageDataStore,
+  type LocalStorageDataCalendar,
+} from './localStorageData';
 import type { DocumentWrapper, VersionedDocumentWrapper } from './documents/wrapper';
 import type { Versioned } from './versioned';
 
@@ -233,6 +237,13 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
 
   const dataSharedVersioned: Ref<Rop<Versioned<SharedDocument>>> = makeReactive(handleShared);
   const dataShared = computed(() => SharedDocumentGetCurrentVersion(dataSharedVersioned.value));
+
+  // Keep a copy of the name in local storage, to show it without loading the calendar.
+  watch(
+    () => dataShared.value.name,
+    (name) => LocalStorageDataSetCalendarName(localStorageData.value, calendarId, name),
+    { immediate: true },
+  );
 
   return {
     calendarId,

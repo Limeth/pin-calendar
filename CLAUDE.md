@@ -51,6 +51,14 @@ to be read later (e.g. a peer's key is looked up when a handshake needs it, not 
   is only applied when the local document is created.
 - The calendar list in local storage is synced between tabs via `storage` events.
 
+## Calendar names
+
+- A calendar's name is in the shared document, so it is the same on all of its devices. Its alias is
+  local to a device, in local storage.
+- Each calendar's `cache` in local storage holds data derived from its documents, such as a copy of
+  its name, so that it can be shown without loading the calendar, e.g. in the calendar list. It is
+  updated whenever the calendar is loaded (`LoadApp`), so it may be outdated.
+
 ## PeerJS behaviour relied upon
 
 - Close connections via `closeConnection` (`util/peerjs.ts`, enforced by lint): a plain `close()`

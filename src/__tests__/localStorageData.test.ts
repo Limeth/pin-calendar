@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   LocalStorageDataSetCalendarAlias,
+  LocalStorageDataSetCalendarName,
   localStorageDataStore,
   type LocalStorageData,
 } from '@/localStorageData';
@@ -75,5 +76,33 @@ describe('the alias of a calendar', () => {
     await sleep(20);
 
     expect(data.value.calendars[CALENDAR_ID]!.alias).toBe('Work');
+  });
+});
+
+describe("the copy of a calendar's name", () => {
+  it('is set, and removed with the cache when the calendar has no name', () => {
+    const data: LocalStorageData = { calendars: { [CALENDAR_ID]: {} } };
+
+    LocalStorageDataSetCalendarName(data, CALENDAR_ID, 'Family');
+    expect(data.calendars[CALENDAR_ID]!.cache).toEqual({ name: 'Family' });
+
+    LocalStorageDataSetCalendarName(data, CALENDAR_ID, undefined);
+    expect(data.calendars[CALENDAR_ID]).toEqual({});
+  });
+
+  it('does not add back a calendar that is no longer listed', () => {
+    const data: LocalStorageData = { calendars: {} };
+
+    LocalStorageDataSetCalendarName(data, CALENDAR_ID, 'Family');
+    expect(data.calendars).toEqual({});
+  });
+
+  it('is kept when the list is loaded from storage', async () => {
+    const data = await localStorageDataStore.value.GetData();
+
+    changeInAnotherTab(KEY, stored({ [CALENDAR_ID]: { cache: { name: 'Family' } } }));
+    await sleep(20);
+
+    expect(data.value.calendars[CALENDAR_ID]!.cache?.name).toBe('Family');
   });
 });
