@@ -2,8 +2,8 @@ import { Type, type Static } from '@sinclair/typebox';
 import { ref, shallowRef, watch, type Ref, type ShallowRef } from 'vue';
 import * as uuid from 'uuid';
 import { CalendarIdSchema, type CalendarId } from './documents/local';
-import { Value } from '@sinclair/typebox/value';
 import { getCurrentVersion, makeVersioned, Versioned } from './versioned';
+import { isObject, readProperty, readValue } from './validation';
 
 const LOCAL_STORAGE_KEY = 'pinCalendar';
 const LOCAL_STORAGE_KEY_BACKUP = 'pinCalendarBackup';
@@ -45,7 +45,13 @@ const LocalStorageDataSchema = Type.Object({
   calendars: Type.Record(CalendarIdSchema, LocalStorageDataCalendarSchema),
 });
 
-export type LocalStorageData = Static<typeof LocalStorageDataSchema>;
+// The calendars of the stored list that this version cannot read, e.g. damaged ones. They are not
+// listed, but kept as they are, and saved with the list, so that they are not lost.
+const UNREADABLE_CALENDARS = Symbol('unreadableCalendars');
+
+export type LocalStorageData = Static<typeof LocalStorageDataSchema> & {
+  [UNREADABLE_CALENDARS]?: Record<string, unknown>;
+};
 
 // Add a new, empty calendar, and return its ID. Always under a new ID: one that was used before may
 // belong to a deleted calendar, which the shared worker still remembers, see `webRtcShutDown`.
@@ -92,7 +98,9 @@ export function LocalStorageDataSetCalendarName(
 }
 
 export function LocalStorageDataSave(self: LocalStorageData) {
-  const string = JSON.stringify(makeVersioned(self, LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT));
+  // A calendar added under the ID of an unreadable one replaces it.
+  const data = { ...self, calendars: { ...self[UNREADABLE_CALENDARS], ...self.calendars } };
+  const string = JSON.stringify(makeVersioned(data, LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT));
 
   // Writing an unchanged value would only make the other tabs reload it, see
   // `localStorageDataStore`, which they would then save again.
@@ -116,28 +124,98 @@ function LocalStorageDataLoad(): LocalStorageData | undefined {
 
   if (string === null) return undefined;
 
-  const json = JSON.parse(string);
-  let versioned: Versioned<LocalStorageData>;
+  const localStorageData = LocalStorageDataParse(string);
+
+  // Returning `undefined` causes the default value to be created, which will overwrite the current
+  // value in local storage. In order to prevent data loss, we at least back up the original value.
+  if (localStorageData === undefined) localStorage.setItem(LOCAL_STORAGE_KEY_BACKUP, string);
+
+  return localStorageData;
+}
+
+// Read the stored data, keeping as much of it as can be read: a calendar that cannot be read is set
+// aside, see `UNREADABLE_CALENDARS`, rather than the whole list being discarded. Properties unknown to
+// this version are kept. `undefined` if not even the list can be read.
+export function LocalStorageDataParse(string: string): LocalStorageData | undefined {
+  let json: unknown;
 
   try {
-    versioned = Value.Parse(Versioned(LocalStorageDataSchema), json);
+    json = JSON.parse(string);
   } catch (error) {
-    console.error(error);
-    // Returning `undefined` causes the default value to be created, which will overwrite the current value in local storage.
-    // In order to prevent data loss, we at least back up the original value.
-    localStorage.setItem(LOCAL_STORAGE_KEY_BACKUP, string);
+    console.error('Failed to parse the data in local storage:', error);
     return undefined;
   }
 
-  const result = getCurrentVersion<LocalStorageData, Versioned<LocalStorageData>>(
+  const versioned = readValue(Versioned(Type.Object({})), json, 'local storage data');
+
+  if (versioned === undefined) return undefined;
+
+  const result = getCurrentVersion<object, Versioned<object>>(
     versioned,
     LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT,
     undefined,
   );
 
-  if (result.type === 'current') return result.current;
-  else if (result.type === 'unsupported')
+  if (result.type === 'unsupported')
     throw new Error(`Unsupported local storage data schema version: ${result.version}`);
+
+  if (result.type === 'none') return undefined;
+
+  const { calendars, ...rest }: { calendars?: unknown } = result.current;
+
+  if (!isObject(calendars)) {
+    console.error('Ignoring the data in local storage, as it has no calendar list.');
+    return undefined;
+  }
+
+  const readable: Record<CalendarId, LocalStorageDataCalendar> = {};
+  const unreadable: Record<string, unknown> = {};
+
+  for (const [calendarId, calendar] of Object.entries(calendars)) {
+    const read = LocalStorageDataCalendarParse(calendarId, calendar);
+
+    if (read !== undefined) readable[calendarId] = read;
+    else unreadable[calendarId] = calendar;
+  }
+
+  const data = { ...rest, calendars: readable };
+
+  // Only a preference, so an invalid one is dropped.
+  if (readProperty(LocalStorageDataSchema, data, 'leastRecentlyUsedCalendar') === undefined)
+    delete (data as { leastRecentlyUsedCalendar?: unknown }).leastRecentlyUsedCalendar;
+
+  const localStorageData: LocalStorageData | undefined = readValue(
+    LocalStorageDataSchema,
+    data,
+    'local storage data',
+  );
+
+  if (localStorageData !== undefined && Object.keys(unreadable).length > 0)
+    localStorageData[UNREADABLE_CALENDARS] = unreadable;
+
+  return localStorageData;
+}
+
+function LocalStorageDataCalendarParse(
+  calendarId: string,
+  calendar: unknown,
+): LocalStorageDataCalendar | undefined {
+  const description = `calendar ${calendarId} in local storage`;
+
+  if (readValue(CalendarIdSchema, calendarId, `ID of ${description}`) === undefined)
+    return undefined;
+
+  // The cache can be rebuilt, so an invalid one is dropped, rather than the whole calendar.
+  if (
+    isObject(calendar) &&
+    readProperty(LocalStorageDataCalendarSchema, calendar, 'cache', `cache of ${description}`) ===
+      undefined
+  ) {
+    const { cache: _, ...withoutCache } = calendar as { cache?: unknown };
+    calendar = withoutCache;
+  }
+
+  return readValue(LocalStorageDataCalendarSchema, calendar, description);
 }
 
 function LocalStorageDataDefault(): LocalStorageData {
