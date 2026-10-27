@@ -18,7 +18,7 @@ import {
 } from '@/localStorageData';
 import * as auth from '@/auth';
 import { forgetRemotePeer } from '@/peers';
-import { SharedDocumentSetName } from '@/documents/shared';
+import { SharedDocumentGetName, SharedDocumentSetName } from '@/documents/shared';
 
 // const app: Ref<App> = ref({
 //   pinCatalog: PinCatalog.loadFromLocalStorageOrDefault(),
@@ -155,7 +155,10 @@ const headerCalendar = computed(() => {
 
   return {
     calendarId,
-    name: app.value !== undefined ? app.value.docShared.data.value.name : calendar?.cache?.name,
+    name:
+      app.value !== undefined
+        ? SharedDocumentGetName(app.value.docShared.data.value)
+        : calendar?.cache?.name,
     alias: calendar?.alias,
   };
 });
@@ -341,7 +344,7 @@ function openRenameDialog() {
     kind: 'rename',
     // Raw, as `modalData` is deeply reactive, which would unwrap the app's `Ref`s.
     app: markRaw(app.value),
-    name: app.value.docShared.data.value.name ?? '',
+    name: SharedDocumentGetName(app.value.docShared.data.value) ?? '',
     alias: localStorageData.value.calendars[app.value.calendarId]?.alias ?? '',
   };
 }

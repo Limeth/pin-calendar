@@ -39,6 +39,10 @@ export const LocalDocumentSchema = Type.Object({
 
 export type LocalDocument = Static<typeof LocalDocumentSchema>;
 
+// The properties still read as if they had been checked, see `UncheckedRop`.
+// TODO: Read the local document via getters, too.
+export type LocalDocumentTrusted = keyof LocalDocument;
+
 export function LocalDocumentGetCurrentVersion(
   versioned: Rop<Versioned<LocalDocument>>,
   defaultPeerJsPeerId: undefined | PeerJsPeerId,

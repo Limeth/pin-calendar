@@ -4,6 +4,7 @@ import { makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 import { SYMBOL_IS_WEBRTC_NETWORK_ADAPTER, WebRtcNetworkAdapter } from './webrtc';
 import {
   type LocalDocument,
+  type LocalDocumentTrusted,
   type CalendarId,
   LocalDocumentGetCurrentVersion,
 } from './documents/local';
@@ -16,7 +17,12 @@ import {
 } from './workerMessages';
 import { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-messagechannel';
 import SharedRepoWorker from './workers/sharedRepo?sharedworker';
-import { SharedDocumentGetCurrentVersion, type SharedDocument } from './documents/shared';
+import {
+  SharedDocumentGetCurrentVersion,
+  SharedDocumentGetName,
+  type SharedDocument,
+  type SharedDocumentTrusted,
+} from './documents/shared';
 import type { EphemeralDocument } from './documents/ephemeral';
 import {
   LocalStorageDataSetCalendarName,
@@ -29,8 +35,8 @@ import type { Versioned } from './versioned';
 export type App = {
   readonly calendarId: CalendarId;
   readonly docEphemeral: DocumentWrapper<EphemeralDocument>;
-  readonly docLocal: VersionedDocumentWrapper<LocalDocument>;
-  readonly docShared: VersionedDocumentWrapper<SharedDocument>;
+  readonly docLocal: VersionedDocumentWrapper<LocalDocument, LocalDocumentTrusted>;
+  readonly docShared: VersionedDocumentWrapper<SharedDocument, SharedDocumentTrusted>;
   // Stop synchronizing the calendar with other devices for good, in all tabs, e.g. when it is
   // deleted from this device.
   shutDownWebRtc(): void;
@@ -65,7 +71,7 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
 
   type DataReadyLocal = {
     readonly docEphemeral: DocumentWrapper<EphemeralDocument>;
-    readonly docLocal: VersionedDocumentWrapper<LocalDocument>;
+    readonly docLocal: VersionedDocumentWrapper<LocalDocument, LocalDocumentTrusted>;
     readonly repoShared: A.Repo;
   };
 
@@ -240,7 +246,7 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
 
   // Keep a copy of the name in local storage, to show it without loading the calendar.
   watch(
-    () => dataShared.value.name,
+    () => SharedDocumentGetName(dataShared.value),
     (name) => LocalStorageDataSetCalendarName(localStorageData.value, calendarId, name),
     { immediate: true },
   );

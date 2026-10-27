@@ -96,7 +96,7 @@ export type PinCategoryTypeOf<
 
 const PIN_CATALOG_SCHEMA_VERSION_CURRENT = 1;
 
-const PinCatalogSchema = Type.Object({
+export const PinCatalogSchema = Type.Object({
   pins: Type.Record(IdKeySchema<PinId>(), PinDescriptorSchema),
   pinCategories: Type.Record(IdKeySchema<PinCategoryId>(), PinCategoryDescriptorSchema),
   /// Any elements that should be removed from all peers are added to this array.

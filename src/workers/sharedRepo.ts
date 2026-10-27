@@ -9,6 +9,7 @@ import {
   LocalDocumentGetCurrentVersion,
   type CalendarId,
   type LocalDocument,
+  type LocalDocumentTrusted,
 } from '@/documents/local';
 import { computed, type Ref } from 'vue';
 import {
@@ -85,7 +86,7 @@ function postReadyShared(tab: Tab) {
 
 class Initialized {
   docEphemeral: DocumentWrapper<EphemeralDocument>;
-  docLocal: VersionedDocumentWrapper<LocalDocument>;
+  docLocal: VersionedDocumentWrapper<LocalDocument, LocalDocumentTrusted>;
   documentSharedAvailableLocallyDuringInitialization: boolean;
   tabs: Tab[] = [];
   webRtcTab?: Tab;
@@ -96,7 +97,7 @@ class Initialized {
 
   constructor(options: {
     docEphemeral: DocumentWrapper<EphemeralDocument>;
-    docLocal: VersionedDocumentWrapper<LocalDocument>;
+    docLocal: VersionedDocumentWrapper<LocalDocument, LocalDocumentTrusted>;
     documentSharedAvailableLocally: boolean;
   }) {
     this.docEphemeral = options.docEphemeral;

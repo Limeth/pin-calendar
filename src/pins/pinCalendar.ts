@@ -19,7 +19,7 @@ const PinCalendarDaysSchema = Type.Record(
 
 export type PinCalendarDays = Static<typeof PinCalendarDaysSchema>;
 
-const PinCalendarSchema = Type.Object({
+export const PinCalendarSchema = Type.Object({
   days: PinCalendarDaysSchema,
 });
 

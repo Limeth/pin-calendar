@@ -1,17 +1,34 @@
-import { PinCalendarNew, type PinCalendar } from '@/pins/pinCalendar';
-import { PinCatalogDefault, type PinCatalog } from '@/pins/pinCatalog';
+import { PinCalendarNew, PinCalendarSchema } from '@/pins/pinCalendar';
+import { PinCatalogDefault, PinCatalogSchema } from '@/pins/pinCatalog';
 import { getCurrentVersionRop, type Versioned } from '@/versioned';
+import { readProperty, type Unchecked, type UncheckedRop } from '@/validation';
+import { Type, type Static } from '@sinclair/typebox';
 import type { Rop } from 'automerge-diy-vue-hooks';
 
 export const SHARED_DOCUMENT_SCHEMA_VERSION_CURRENT = 1;
 
-export type SharedDocument = {
+export const SharedDocumentSchema = Type.Object({
   // account: Account,
   // The calendar's name, shared with all of its devices. Unset for an unnamed calendar.
-  name?: string;
-  pinCatalog: PinCatalog;
-  pinCalendar: PinCalendar;
-};
+  name: Type.Optional(Type.String()),
+  pinCatalog: PinCatalogSchema,
+  pinCalendar: PinCalendarSchema,
+});
+
+// The shared document as this version writes it.
+export type SharedDocument = Static<typeof SharedDocumentSchema>;
+
+// The properties still read as if they had been checked, see `UncheckedRop`.
+// TODO: Read the pins via getters, too.
+export type SharedDocumentTrusted = 'pinCatalog' | 'pinCalendar';
+
+// The shared document as it is read: other devices may have written anything, see `Unchecked`.
+export type SharedDocumentRop = UncheckedRop<SharedDocument, SharedDocumentTrusted>;
+
+// The calendar's name, or `undefined` if it has none, or an invalid one.
+export function SharedDocumentGetName(self: Unchecked<SharedDocument>): string | undefined {
+  return readProperty(SharedDocumentSchema, self, 'name', 'calendar name');
+}
 
 // Rename the calendar, or remove its name if the given one is blank. The name is replaced as a
 // whole, so that concurrent renames result in one of the names, rather than a merge of their text.
@@ -24,7 +41,7 @@ export function SharedDocumentSetName(self: SharedDocument, name: string) {
 
 export function SharedDocumentGetCurrentVersion(
   versioned: Rop<Versioned<SharedDocument>>,
-): Rop<SharedDocument> {
+): SharedDocumentRop {
   const result = getCurrentVersionRop(
     versioned,
     SHARED_DOCUMENT_SCHEMA_VERSION_CURRENT,
