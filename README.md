@@ -11,7 +11,7 @@ A calendar-based activity tracking web app with multi-client synchronization.
 ## Running on Windows:
 
 ```ps1
-fnm env --use-on-cd | Out-String | Invoke-Expression && fnm use 24
+fnm env --use-on-cd | Out-String | Invoke-Expression && fnm use 26
 npm run dev
 ```
 
