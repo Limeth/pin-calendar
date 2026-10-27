@@ -1,3 +1,4 @@
+import '@/formats';
 import { Type, type Static } from '@sinclair/typebox';
 import { PIN_ID_SYMBOL, type Pin, type PinCatalog } from './pinCatalog';
 import { keyToId, type MaybeRo, type MaybeRop } from './util';

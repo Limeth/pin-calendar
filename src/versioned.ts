@@ -1,9 +1,6 @@
-import { FormatRegistry, Type, type TObject } from '@sinclair/typebox';
+import '@/formats';
+import { Type, type TObject } from '@sinclair/typebox';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
-
-FormatRegistry.Set('integer', (value) => {
-  return JSON.stringify(parseInt(value)) === value;
-});
 
 const VersionSchema = Type.String({ format: 'integer' });
 

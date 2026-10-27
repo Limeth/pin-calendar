@@ -1,17 +1,7 @@
-import { Temporal } from '@js-temporal/polyfill';
-import { FormatRegistry, Type, type Static, type TObject } from '@sinclair/typebox';
+import '@/formats';
+import { Type, type Static, type TObject } from '@sinclair/typebox';
 import type { Ro, Rop } from 'automerge-diy-vue-hooks';
 import * as uuid from 'uuid';
-
-FormatRegistry.Set('uuid', (value) => uuid.validate(value));
-FormatRegistry.Set('date', (value) => {
-  try {
-    Temporal.PlainDate.from(value);
-    return true;
-  } catch {
-    return false;
-  }
-});
 
 export type MaybeRop<T> = T | Rop<T>;
 export type MaybeRo<T> = T | Ro<T>;

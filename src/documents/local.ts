@@ -1,3 +1,4 @@
+import '@/formats';
 import { Type, type Static } from '@sinclair/typebox';
 import * as uuid from 'uuid';
 import { type Rop } from 'automerge-diy-vue-hooks';
