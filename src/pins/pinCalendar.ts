@@ -1,13 +1,20 @@
 import '@/formats';
 import { Type, type Static } from '@sinclair/typebox';
 import { PIN_ID_SYMBOL, type Pin, type PinCatalog } from './pinCatalog';
-import { keyToId, type MaybeRo, type MaybeRop } from './util';
+import { keyToId } from './util';
 import { toRef, type Ref } from 'vue';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import { Temporal } from '@js-temporal/polyfill';
 import { Value } from '@sinclair/typebox/value';
 import { PinDayAddPinById, PinDayNew, PinDaySchema, type PinDay } from './pinCalendarDay';
 import { getCurrentVersion, makeVersioned, Versioned } from '@/versioned';
+import {
+  isObject,
+  readEntry,
+  readEntryRop,
+  type Unchecked,
+  type UncheckedRopValue,
+} from '@/validation';
 
 const PIN_CALENDAR_SCHEMA_VERSION_CURRENT = 1;
 
@@ -36,67 +43,71 @@ export function PinCalendarClear(self: PinCalendar) {
   self.days = {};
 }
 
-function PinCalendarGetDayRefByKey(
-  self: Ref<Rop<PinCalendar>>,
+// The pin calendar of the shared document as it is read, see `UncheckedRop`.
+export type PinCalendarUncheckedRop = UncheckedRopValue<PinCalendar>;
+
+// The day under the key, or `undefined` if the calendar has none, or an invalid one.
+function PinCalendarGetDayByKey(
+  self: PinCalendarUncheckedRop,
   key: string,
-): Ref<Rop<PinDay>> | null {
-  if (key in self.value.days) return toRef(self.value.days, key);
-  else return null;
+): Rop<PinDay> | undefined {
+  if (!isObject(self)) return undefined;
+
+  return readEntryRop(PinCalendarDaysSchema, self.days, key, `calendar day ${key}`);
 }
 
-function PinCalendarGetDayByKey<P extends MaybeRop<PinCalendar>>(
-  self: P,
-  key: string,
-): P['days'][string] | null {
-  return (self.days[key] as P['days'][string] | undefined) ?? null;
+// The day to add pins to, added if the calendar has none, or `undefined` if it has an invalid one,
+// which is left as it is. For use within a change of the document.
+function PinCalendarGetOrAddDayByKey(self: PinCalendar, key: string): PinDay | undefined {
+  if (!isObject(self.days)) return undefined;
+
+  // Read back from the document, as changes to the added object itself would not be recorded.
+  if (!(key in self.days)) self.days[key] = PinDayNew();
+
+  return readEntry(PinCalendarDaysSchema, self.days, key, `calendar day ${key}`);
 }
 
-function PinCalendarGetOrDefaultDayByKey(self: PinCalendar, key: string): PinDay {
-  if (key in self.days) return self.days[key]!;
-  else {
-    const day = PinDayNew();
-    self.days[key] = day;
-    return day;
-  }
+function PinCalendarPrepareDayByKey(self: PinCalendarUncheckedRop, key: string): boolean {
+  // An invalid calendar or day is left as it is, so there is nothing to prepare.
+  if (!isObject(self) || !isObject(self.days) || key in self.days) return true;
+
+  self[changeSubtree]((pinCalendar: PinCalendar) => {
+    pinCalendar.days[key] = PinDayNew();
+  });
+  return false;
 }
 
-function PinCalendarPrepareDayByKey(self: Rop<PinCalendar>, key: string): boolean {
-  if (!(key in self.days)) {
-    self[changeSubtree]((pinCalendar: PinCalendar) => {
-      pinCalendar.days[key] = PinDayNew();
-    });
-    return false;
-  } else return true;
-}
-
+// The day, read anew from the calendar whenever the reference is read, or `null` if the calendar has
+// no valid day for it, see `PinCalendarPrepareDay`.
 export function PinCalendarGetDayRef(
-  self: Ref<Rop<PinCalendar>>,
+  self: Ref<PinCalendarUncheckedRop>,
   day: Temporal.PlainDate,
-): Ref<Rop<PinDay>> | null {
-  return PinCalendarGetDayRefByKey(self, PinCalendarDayToKey(day));
+): Readonly<Ref<Rop<PinDay> | undefined>> | null {
+  const key = PinCalendarDayToKey(day);
+
+  if (PinCalendarGetDayByKey(self.value, key) === undefined) return null;
+
+  return toRef(() => PinCalendarGetDayByKey(self.value, key));
 }
 
-export function PinCalendarGetDay<P extends MaybeRop<PinCalendar>>(
-  self: P,
+/// Returns `true` if the day was already prepared, or cannot be, as the calendar or the day is
+/// invalid. Otherwise, the document must be updated.
+export function PinCalendarPrepareDay(
+  self: PinCalendarUncheckedRop,
   day: Temporal.PlainDate,
-): P['days'][string] | null {
-  return PinCalendarGetDayByKey(self, PinCalendarDayToKey(day));
-}
-
-/// Returns `true` if the day was already prepared. Otherwise, the document must be updated.
-export function PinCalendarPrepareDay(self: Rop<PinCalendar>, day: Temporal.PlainDate): boolean {
+): boolean {
   return PinCalendarPrepareDayByKey(self, PinCalendarDayToKey(day));
 }
 
 export function PinCalendarGetPinsOnDay(
-  self: Rop<PinCalendar>,
+  self: PinCalendarUncheckedRop,
   catalog: Rop<PinCatalog>,
   day: Temporal.PlainDate,
 ): Set<Pin> {
   const result: Set<Pin> = new Set();
-  const pinDay = PinCalendarGetDay(self, day);
+  const pinDay = PinCalendarGetDayByKey(self, PinCalendarDayToKey(day));
 
-  if (pinDay !== null) {
+  if (pinDay !== undefined) {
     for (const pinIdKey of pinDay.pins) {
       const pin = catalog.pins[pinIdKey];
 
@@ -112,11 +123,11 @@ export function PinCalendarGetPinsOnDay(
   return result;
 }
 
-function PinCalendarAsJsonValue(self: MaybeRo<PinCalendar>): object {
+function PinCalendarAsJsonValue(self: Unchecked<PinCalendar>): object {
   return makeVersioned(self, PIN_CALENDAR_SCHEMA_VERSION_CURRENT);
 }
 
-export function PinCalendarSerialize(self: MaybeRo<PinCalendar>): string {
+export function PinCalendarSerialize(self: Unchecked<PinCalendar>): string {
   return JSON.stringify(PinCalendarAsJsonValue(self));
 }
 
@@ -157,7 +168,9 @@ export function PinCalendarKeyToDay(key: string): Temporal.PlainDate {
 
 export function PinCalendarCombine(target: PinCalendar, source: PinCalendar) {
   for (const [key, loadedDay] of Object.entries(source.days)) {
-    const day = PinCalendarGetOrDefaultDayByKey(target, key);
+    const day = PinCalendarGetOrAddDayByKey(target, key);
+
+    if (day === undefined) continue;
 
     for (const pinIdKey of loadedDay.pins) PinDayAddPinById(day, keyToId(pinIdKey, PIN_ID_SYMBOL));
   }

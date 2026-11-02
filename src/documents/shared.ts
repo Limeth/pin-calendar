@@ -19,8 +19,8 @@ export const SharedDocumentSchema = Type.Object({
 export type SharedDocument = Static<typeof SharedDocumentSchema>;
 
 // The properties still read as if they had been checked, see `UncheckedRop`.
-// TODO: Read the pins via getters, too.
-export type SharedDocumentTrusted = 'pinCatalog' | 'pinCalendar';
+// TODO: Read the pin catalog via getters, too.
+export type SharedDocumentTrusted = 'pinCatalog';
 
 // The shared document as it is read: other devices may have written anything, see `Unchecked`.
 export type SharedDocumentRop = UncheckedRop<SharedDocument, SharedDocumentTrusted>;

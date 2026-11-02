@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { Type } from '@sinclair/typebox';
-import { isObject, readProperty, readValue, type Unchecked } from '@/validation';
+import { isObject, readEntry, readProperty, readValue, type Unchecked } from '@/validation';
 import type { VersionedDocumentWrapper } from '@/documents/wrapper';
 
 const PointSchema = Type.Object({ x: Type.Number(), label: Type.Optional(Type.String()) });
@@ -87,5 +87,23 @@ describe('versioned documents', () => {
     expectTypeOf<
       VersionedDocumentWrapper<Document, 'value'>['data']['value']['value']
     >().toEqualTypeOf<string>();
+  });
+});
+
+describe('reading an entry of a record', () => {
+  const PointsSchema = Type.Record(Type.String(), PointSchema);
+
+  it('checks it against the schema of values', () => {
+    const points = { a: { x: 1 }, b: { x: 'one' } };
+
+    expect(readEntry(PointsSchema, points, 'a', 'point a')).toBe(points.a);
+    expect(readEntry(PointsSchema, points, 'b', 'point b')).toBeUndefined();
+  });
+
+  it('only finds entries of the record itself', () => {
+    expect(readEntry(PointsSchema, { a: { x: 1 } }, 'missing', 'missing point')).toBeUndefined();
+    // Inherited from `Object.prototype`.
+    expect(readEntry(PointsSchema, {}, 'toString', 'inherited point')).toBeUndefined();
+    expect(readEntry(PointsSchema, 'points', 'a', 'point of a string')).toBeUndefined();
   });
 });

@@ -36,7 +36,7 @@ const yearMonth = ref({
 const dayList: Ref<DayListDay[]> = ref(createDayList());
 const daySelected: Ref<DayListDay | null> = ref(null);
 const isDrawerOpen = ref(false);
-const pinDay: ShallowRef<Ref<Rop<PinDay>> | null> = shallowRef(null);
+const pinDay: ShallowRef<Readonly<Ref<Rop<PinDay> | undefined>> | null> = shallowRef(null);
 
 function addMonths(months: number) {
   if (yearMonth.value) {
@@ -55,7 +55,7 @@ function isSelected(day: DayListDay) {
 }
 
 function clickPinToggle(pin: Pin) {
-  if (pinDay.value !== null && pinDay.value.value !== null) {
+  if (pinDay.value !== null && pinDay.value.value !== undefined) {
     pinDay.value.value[changeSubtree]((pinDay: PinDay) => {
       PinDayTogglePin(pinDay, pin);
     });
@@ -214,7 +214,7 @@ app.value!.docShared.handle.on('change', () => {
         </div>
       </div>
     </div>
-    <div class="drawer-side w-full z-10" v-if="pinDay !== null">
+    <div class="drawer-side w-full z-10" v-if="pinDay !== null && pinDay.value !== undefined">
       <label for="calendar-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
       <div
         class="bg-base-200 text-base-content min-h-full w-80 p-4 shadow-[0_0_4rem_0px_rgba(0,0,0,0.3)] custom-drawer"

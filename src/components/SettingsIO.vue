@@ -23,10 +23,12 @@ import { changeSubtree } from 'automerge-diy-vue-hooks';
 import { LocalStorageDataAddCalendar, localStorageDataStore } from '@/localStorageData';
 import * as auth from '@/auth';
 import { keyToId } from '@/pins/util';
+import { isObject } from '@/validation';
 import {
   PinCalendarClear,
   PinCalendarCombine,
   PinCalendarDeserialize,
+  PinCalendarNew,
   PinCalendarSerialize,
   type PinCalendar,
 } from '@/pins/pinCalendar';
@@ -236,8 +238,10 @@ function onClickCalendarClear() {
       'Are you sure you want to clear all pins from the calendar? This action cannot be undone.',
     buttonConfirm: 'Clear Calendar',
     actionConfirm: () => {
-      pinCalendar.value![changeSubtree]((pinCalendar) => {
-        PinCalendarClear(pinCalendar);
+      docData.value[changeSubtree]((shared) => {
+        // Replaced if invalid, as it is cleared anyway.
+        if (isObject(shared.pinCalendar)) PinCalendarClear(shared.pinCalendar);
+        else shared.pinCalendar = PinCalendarNew();
       });
     },
   };
@@ -308,7 +312,15 @@ function onClickImportPinsConfirm(importPins: ImportPins) {
 }
 
 function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
-  pinCalendar.value![changeSubtree]((pinCalendar) => {
+  const calendar = pinCalendar.value;
+
+  // An invalid calendar is left as it is, rather than replaced.
+  if (!isObject(calendar)) {
+    console.error('Cannot import into the calendar, as it is invalid.');
+    return;
+  }
+
+  calendar[changeSubtree]((pinCalendar) => {
     PinCalendarCombine(pinCalendar, importCalendar.calendar);
   });
 }
