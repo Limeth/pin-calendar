@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, type Ref } from 'vue';
-import { decodeHash, encodeHash, type Hash, type HashAddPeer, type HashArgsAddPeer } from '@/hash';
+import { decodeHash, encodeHash, type Hash, type HashArgsAddPeer } from '@/hash';
 import { LocalStorageDataIsReadOnly, localStorageDataStore } from '@/localStorageData';
 import NewerVersionAlert from './NewerVersionAlert.vue';
 import SharedApp from './SharedApp.vue';
@@ -36,16 +36,6 @@ watch(
   },
   { deep: true },
 );
-
-function isHashValidAddPeer(hash: Hash): hash is HashAddPeer {
-  // TODO: Use schema validation
-  return (
-    hash.args?.action === 'addPeer' &&
-    typeof hash.args?.peerJsPeerId === 'string' &&
-    typeof hash.args?.secret === 'string' &&
-    typeof hash.args?.calendarIdTag === 'string'
-  );
-}
 
 // Find the calendar an invite is for among the calendars of this device, see `auth.calendarIdTag`.
 async function findInvitedCalendar(invite: HashArgsAddPeer): Promise<CalendarId | undefined> {
@@ -130,8 +120,7 @@ type ModalData = ModalInviteConfirmation;
 const modalData: Ref<ModalData | undefined> = ref(undefined);
 
 // Initialize the `currentHash.value.path` field, ensuring it's present.
-console.log('isHashValidAddPeer(currentHash.value)', isHashValidAddPeer(currentHash.value));
-if (isHashValidAddPeer(currentHash.value)) {
+if (currentHash.value.args?.action === 'addPeer') {
   const existingCalendarId = await findInvitedCalendar(currentHash.value.args);
 
   modalData.value = {
@@ -147,7 +136,7 @@ if (isHashValidAddPeer(currentHash.value)) {
       modalData.value = undefined;
     },
     async actionConfirm() {
-      if (!isHashValidAddPeer(currentHash.value)) return;
+      if (currentHash.value.args?.action !== 'addPeer') return;
       if (isJoinReadOnly(this)) return;
       if (this.existingCalendarId !== undefined && !isJoinOffered(this.inviterPairing)) return;
       if (
