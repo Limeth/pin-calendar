@@ -109,6 +109,20 @@ export function LocalDocumentGetRemotePeers(
   return remotePeers;
 }
 
+// Set the name of a remote peer, which the user gives it on this device, or clear it if the given
+// one is blank. An unknown or invalid peer is left as it is.
+export function LocalDocumentSetRemotePeerName(
+  self: LocalDocument,
+  peerJsPeerId: PeerJsPeerId,
+  deviceName: string,
+) {
+  const remotePeer = LocalDocumentGetRemotePeer(self, peerJsPeerId);
+  const trimmed = deviceName.trim();
+
+  if (remotePeer !== undefined && remotePeer.deviceName !== trimmed)
+    remotePeer.deviceName = trimmed;
+}
+
 // The PeerJS peer IDs of the invalid remote peers, so that they can be forgotten, see
 // `forgetRemotePeer`. None if the list of peers is invalid, which joining again replaces as a whole.
 export function LocalDocumentGetInvalidRemotePeerIds(

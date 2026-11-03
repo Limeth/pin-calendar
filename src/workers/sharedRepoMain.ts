@@ -151,7 +151,8 @@ class SharedRepo {
       if (message.invitation !== undefined) {
         localDocument.documentIdShared = message.invitation.documentIdShared;
         localDocument.remotePeers[message.invitation.invitedBy] = {
-          deviceName: '', // TODO
+          // Named by the user, see `LocalDocumentSetRemotePeerName`.
+          deviceName: '',
           authKeyId: message.invitation.authKeyId,
         };
       }

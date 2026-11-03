@@ -13,9 +13,12 @@ import {
   LocalDocumentGetAlias,
   LocalDocumentGetInvalidRemotePeerIds,
   LocalDocumentGetLocalPeer,
+  LocalDocumentGetRemotePeer,
   LocalDocumentGetRemotePeers,
   LocalDocumentSetAlias,
+  LocalDocumentSetRemotePeerName,
   type CalendarId,
+  type PeerJsPeerId,
 } from '@/documents/local';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 import {
@@ -208,6 +211,7 @@ const peers = computed(() => {
   for (const peerJsPeerId of invalidPeerJsPeerIds)
     result.push({
       peerJsPeerId,
+      deviceName: undefined,
       connected: false,
       invalid: true,
     });
@@ -219,6 +223,8 @@ const peers = computed(() => {
       result.push({
         ...connectedPeer,
         peerJsPeerId,
+        // Not known yet, so it cannot be named.
+        deviceName: undefined,
         connected: true,
         invalid: false,
       });
@@ -262,6 +268,36 @@ function createNewCalendar() {
   LocalStorageDataAddCalendar(localStorageData.value);
 }
 
+function openRenamePeerDialog(peerJsPeerId: PeerJsPeerId) {
+  if (modalData.value !== undefined) return;
+  if (app.value === undefined) return;
+
+  const remotePeer = LocalDocumentGetRemotePeer(app.value.docLocal.data.value, peerJsPeerId);
+
+  if (remotePeer === undefined) return;
+
+  modalData.value = {
+    kind: 'rename-peer',
+    // Raw, as `modalData` is deeply reactive, which would unwrap the app's `Ref`s.
+    app: markRaw(app.value),
+    peerJsPeerId,
+    deviceName: remotePeer.deviceName,
+  };
+}
+
+function saveRenamePeerDialog() {
+  if (modalData.value?.kind !== 'rename-peer') return;
+
+  const { app, peerJsPeerId, deviceName } = modalData.value;
+
+  if (!app.docLocal.readOnly.value)
+    app.docLocal.data.value[changeSubtree]((local) => {
+      LocalDocumentSetRemotePeerName(local, peerJsPeerId, deviceName);
+    });
+
+  modalData.value = undefined;
+}
+
 async function forgetPeer(peerJsPeerId: string) {
   if (app.value === undefined) return;
   if (app.value.docLocal.readOnly.value) return;
@@ -285,7 +321,15 @@ type ModalRename = {
   alias: string;
 };
 
-type ModalData = ModalAddDevice | ModalRename;
+type ModalRenamePeer = {
+  kind: 'rename-peer';
+  // The calendar of the peer, which stays the same if another calendar is opened meanwhile.
+  app: App;
+  peerJsPeerId: PeerJsPeerId;
+  deviceName: string;
+};
+
+type ModalData = ModalAddDevice | ModalRename | ModalRenamePeer;
 
 const modalData: Ref<ModalData | undefined> = ref(undefined);
 // The state of the invite of the open invite dialog: waiting for a device, being used by a device
@@ -482,6 +526,30 @@ function saveRenameDialog() {
         <span class="text-xs opacity-60">
           Only on this device, shown alongside the name. Optional.
         </span>
+      </label>
+      <div class="modal-action">
+        <button type="button" class="btn" @click="cancelDialog">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+    <form
+      v-if="modalData?.kind === 'rename-peer'"
+      class="modal-box flex flex-col gap-2"
+      @submit.prevent="saveRenamePeerDialog"
+    >
+      <h3 class="text-lg font-bold">Rename Device</h3>
+      <div class="text-xs opacity-60">{{ modalData.peerJsPeerId }}</div>
+      <label class="flex flex-col gap-1">
+        <span class="label-text">Name</span>
+        <input
+          type="text"
+          v-model="modalData.deviceName"
+          class="input w-full"
+          maxlength="100"
+          placeholder="Unnamed device"
+          :disabled="modalData.app.docLocal.readOnly.value"
+        />
+        <span class="text-xs opacity-60"> Only on this device, for this calendar. </span>
       </label>
       <div class="modal-action">
         <button type="button" class="btn" @click="cancelDialog">Cancel</button>
@@ -695,12 +763,23 @@ function saveRenameDialog() {
                     It cannot be connected to. Forget it, then add the device again.
                   </div>
                 </template>
-                <div v-else>PEER NAME (TODO)</div>
+                <div v-else :class="{ 'opacity-60': !peer.deviceName }">
+                  {{ peer.deviceName || 'Unnamed device' }}
+                </div>
                 <div class="text-xs">
                   {{ peer.peerJsPeerId }}
                 </div>
               </div>
               <div class="flex flex-col gap-1 items-stretch">
+                <button
+                  v-if="peer.deviceName !== undefined"
+                  class="btn btn-sm btn-neutral max-sm:btn-square"
+                  :disabled="app?.docLocal.readOnly.value"
+                  @click="openRenamePeerDialog(peer.peerJsPeerId)"
+                >
+                  <div v-html="feather.icons['edit-2'].toSvg()" />
+                  <div class="max-sm:hidden">Rename</div>
+                </button>
                 <button
                   class="btn btn-sm btn-neutral max-sm:btn-square"
                   :disabled="app?.docLocal.readOnly.value"

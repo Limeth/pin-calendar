@@ -9,6 +9,7 @@ import {
   LocalDocumentGetRemotePeer,
   LocalDocumentGetRemotePeers,
   LocalDocumentSetAlias,
+  LocalDocumentSetRemotePeerName,
   type LocalDocument,
   type LocalDocumentRop,
 } from '@/documents/local';
@@ -101,5 +102,32 @@ describe('the alias of a calendar', () => {
 
     LocalDocumentSetAlias(document, '   ');
     expect(document).not.toHaveProperty('alias');
+  });
+});
+
+describe('the name of a remote peer', () => {
+  it('is trimmed, and cleared when blank', () => {
+    const document = LocalDocumentDefault(peerId('laptop'));
+    const phone = peerId('phone');
+    document.remotePeers[phone] = { deviceName: '', authKeyId: 'key' };
+
+    LocalDocumentSetRemotePeerName(document, phone, '  Phone  ');
+    expect(document.remotePeers[phone]).toEqual({ deviceName: 'Phone', authKeyId: 'key' });
+
+    LocalDocumentSetRemotePeerName(document, phone, '   ');
+    expect(document.remotePeers[phone]!.deviceName).toBe('');
+  });
+
+  it('is not set for unknown or invalid peers', () => {
+    const document = LocalDocumentDefault(peerId('laptop'));
+    const phone = peerId('phone');
+    const invalid = { deviceName: 42, authKeyId: 'key' };
+    document.remotePeers[phone] = invalid as unknown as LocalDocument['remotePeers'][string];
+
+    LocalDocumentSetRemotePeerName(document, phone, 'Phone');
+    LocalDocumentSetRemotePeerName(document, peerId('tablet'), 'Tablet');
+    LocalDocumentSetRemotePeerName(document, 'toString', 'Inherited');
+
+    expect(document.remotePeers).toEqual({ [phone]: invalid });
   });
 });

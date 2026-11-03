@@ -29,7 +29,8 @@ export async function setRemotePeerKey(
     if (!isObject(local.remotePeers)) local.remotePeers = {};
 
     local.remotePeers[peerJsPeerId] = {
-      deviceName: previousRemotePeer?.deviceName ?? '', // TODO
+      // Named by the user, which a peer joining again keeps, see `LocalDocumentSetRemotePeerName`.
+      deviceName: previousRemotePeer?.deviceName ?? '',
       authKeyId,
     };
   });
