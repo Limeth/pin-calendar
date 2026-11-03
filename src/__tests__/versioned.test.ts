@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getCurrentVersionRop,
   hasNewerVersionRop,
   NewerVersionError,
+  parseCurrentVersion,
   type Versioned,
 } from '@/versioned';
+import { Type } from '@sinclair/typebox';
 import {
   SharedDocumentDefault,
   SharedDocumentGetCurrentVersion,
@@ -158,5 +160,46 @@ describe('the current version of a document', () => {
         undefined,
       ),
     ).toThrow(NewerVersionError);
+  });
+});
+
+describe('the current version of a file', () => {
+  beforeEach(() => {
+    // Invalid files are logged.
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const DataSchema = Type.Object({ value: Type.String() });
+
+  function parse(json: unknown) {
+    return parseCurrentVersion(DataSchema, json, 1, 'file');
+  }
+
+  it('is parsed', () => {
+    expect(parse({ schemaVersion: { 1: { value: 'a' } } })).toEqual({
+      type: 'current',
+      current: { value: 'a' },
+    });
+    // Also next to a newer version, like a document shown read-only.
+    expect(parse({ schemaVersion: { 1: { value: 'a' }, 2: 'newer' } })).toEqual({
+      type: 'current',
+      current: { value: 'a' },
+    });
+  });
+
+  it('is newer or outdated if there are only newer or older versions', () => {
+    expect(parse({ schemaVersion: { 2: 'newer' } })).toEqual({ type: 'newer', version: 2 });
+    expect(parse({ schemaVersion: { 0: {} } })).toEqual({ type: 'outdated', version: 0 });
+  });
+
+  it('is invalid without versions, or if the current one is invalid', () => {
+    expect(parse({ schemaVersion: {} })).toEqual({ type: 'invalid' });
+    expect(parse({ value: 'a' })).toEqual({ type: 'invalid' });
+    expect(parse({ schemaVersion: { 1: {} } })).toEqual({ type: 'invalid' });
+    expect(parse({ schemaVersion: { 1: 'not an object' } })).toEqual({ type: 'invalid' });
   });
 });

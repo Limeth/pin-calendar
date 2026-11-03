@@ -1,6 +1,5 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { Value } from '@sinclair/typebox/value';
-import { getCurrentVersion, makeVersioned, Versioned } from '@/versioned';
+import { makeVersioned, parseCurrentVersion } from '@/versioned';
 import {
   ArchivableSchema,
   generateId,
@@ -542,28 +541,21 @@ export function PinCatalogDefault(): PinCatalog {
   return pinCatalog;
 }
 
-export function PinCatalogFromJsonValue(json: unknown): PinCatalog | null {
-  let versioned;
+// A pin catalog file, e.g. exported by another device, see `parseCurrentVersion`.
+export function PinCatalogDeserialize(serialized: string) {
+  let json: unknown;
 
   try {
-    versioned = Value.Parse(Versioned(PinCatalogSchema), json);
+    json = JSON.parse(serialized);
   } catch (error) {
-    console.error(error);
-    return null;
+    console.error('Ignoring a pin catalog file that is not JSON:', error);
+    return { type: 'invalid' } as const;
   }
 
-  const currentVersion = getCurrentVersion(
-    versioned,
+  return parseCurrentVersion(
+    PinCatalogSchema,
+    json,
     PIN_CATALOG_SCHEMA_VERSION_CURRENT,
-    PinCatalogDefault,
+    'pin catalog',
   );
-
-  if (currentVersion.type === 'current') return currentVersion.current;
-  else if (currentVersion.type === 'unsupported')
-    console.error(`Unsupported catalog version: ${currentVersion.version}`);
-  return null;
-}
-
-export function PinCatalogDeserialize(serialized: string): PinCatalog | null {
-  return PinCatalogFromJsonValue(JSON.parse(serialized));
 }

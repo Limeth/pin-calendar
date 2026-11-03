@@ -10,9 +10,8 @@ import { keyToId } from './util';
 import { toRef, type Ref } from 'vue';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import { Temporal } from '@js-temporal/polyfill';
-import { Value } from '@sinclair/typebox/value';
 import { PinDayAddPinById, PinDayNew, PinDaySchema, type PinDay } from './pinCalendarDay';
-import { getCurrentVersion, makeVersioned, Versioned } from '@/versioned';
+import { makeVersioned, parseCurrentVersion } from '@/versioned';
 import {
   isObject,
   readEntry,
@@ -136,29 +135,6 @@ export function PinCalendarSerialize(self: Unchecked<PinCalendar>): string {
 //     localStorage.setItem(LOCAL_STORAGE_KEY_PIN_CALENDAR, this.serialize());
 // }
 
-function PinCalendarFromJsonValue(json: unknown): PinCalendar | null {
-  let versioned;
-
-  try {
-    versioned = Value.Parse(Versioned(PinCalendarSchema), json);
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
-
-  const currentVersion = getCurrentVersion(
-    versioned,
-    PIN_CALENDAR_SCHEMA_VERSION_CURRENT,
-    PinCalendarNew,
-  );
-
-  if (currentVersion.type === 'current') return currentVersion.current;
-  else if (currentVersion.type === 'unsupported')
-    console.error(`Unsupported calendar version: ${currentVersion.version}`);
-
-  return null;
-}
-
 export function PinCalendarDayToKey(day: Temporal.PlainDate): string {
   return day.toString();
 }
@@ -177,6 +153,21 @@ export function PinCalendarCombine(target: PinCalendar, source: PinCalendar) {
   }
 }
 
-export function PinCalendarDeserialize(serialized: string): PinCalendar | null {
-  return PinCalendarFromJsonValue(JSON.parse(serialized));
+// A calendar file, e.g. exported by another device, see `parseCurrentVersion`.
+export function PinCalendarDeserialize(serialized: string) {
+  let json: unknown;
+
+  try {
+    json = JSON.parse(serialized);
+  } catch (error) {
+    console.error('Ignoring a calendar file that is not JSON:', error);
+    return { type: 'invalid' } as const;
+  }
+
+  return parseCurrentVersion(
+    PinCalendarSchema,
+    json,
+    PIN_CALENDAR_SCHEMA_VERSION_CURRENT,
+    'calendar',
+  );
 }

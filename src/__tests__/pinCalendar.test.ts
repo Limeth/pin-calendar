@@ -6,9 +6,11 @@ import type { SharedDocument, SharedDocumentRop } from '@/documents/shared';
 import { PinCatalogDefault } from '@/pins/pinCatalog';
 import {
   PinCalendarCombine,
+  PinCalendarDeserialize,
   PinCalendarGetDayRef,
   PinCalendarGetPinsOnDay,
   PinCalendarPrepareDay,
+  PinCalendarSerialize,
 } from '@/pins/pinCalendar';
 import { PinDayAddPinById } from '@/pins/pinCalendarDay';
 import { PIN_ID_SYMBOL } from '@/pins/pinCatalog';
@@ -128,6 +130,37 @@ describe('importing a pin calendar', () => {
 
     expect(JSON.parse(JSON.stringify(document.value.pinCalendar))).toEqual({
       days: { [DAY.toString()]: invalid },
+    });
+  });
+});
+
+describe('importing a calendar file', () => {
+  beforeEach(() => {
+    // Invalid files are logged.
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('reads an exported calendar', () => {
+    const calendar = { days: { [DAY.toString()]: { pins: [PIN] } } };
+
+    expect(PinCalendarDeserialize(PinCalendarSerialize(calendar))).toEqual({
+      type: 'current',
+      current: calendar,
+    });
+  });
+
+  it('tells a file of a newer version from an invalid one', () => {
+    expect(PinCalendarDeserialize(JSON.stringify({ schemaVersion: { 2: {} } }))).toEqual({
+      type: 'newer',
+      version: 2,
+    });
+    expect(PinCalendarDeserialize('{')).toEqual({ type: 'invalid' });
+    expect(PinCalendarDeserialize(JSON.stringify({ schemaVersion: {} }))).toEqual({
+      type: 'invalid',
     });
   });
 });

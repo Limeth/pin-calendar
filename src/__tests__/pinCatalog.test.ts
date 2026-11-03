@@ -8,12 +8,14 @@ import {
   PinCatalogAddPin,
   PinCatalogChange,
   PinCatalogDefault,
+  PinCatalogDeserialize,
   PinCatalogGetPinById,
   PinCatalogGetPinCategories,
   PinCatalogGetPins,
   PinCatalogGetPinsInCategory,
   PinCatalogGetRootCategories,
   PinCatalogRemovePin,
+  PinCatalogSerialize,
   type PinCatalog,
 } from '@/pins/pinCatalog';
 import { PinCalendarGetPinsOnDay } from '@/pins/pinCalendar';
@@ -205,5 +207,36 @@ describe('changing the catalog', () => {
 
     expect(added).toBe(false);
     expect((stored(document) as PinCatalog).pins[jog]!.displayName).toBe('Go on a jog');
+  });
+});
+
+describe('importing a pin catalog file', () => {
+  beforeEach(() => {
+    // Invalid files are logged.
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('reads an exported catalog', () => {
+    const catalog = PinCatalogDefault();
+
+    expect(PinCatalogDeserialize(PinCatalogSerialize(catalog))).toEqual({
+      type: 'current',
+      current: catalog,
+    });
+  });
+
+  it('tells a file of a newer version from an invalid one', () => {
+    expect(PinCatalogDeserialize(JSON.stringify({ schemaVersion: { 2: {} } }))).toEqual({
+      type: 'newer',
+      version: 2,
+    });
+    expect(PinCatalogDeserialize('{')).toEqual({ type: 'invalid' });
+    expect(PinCatalogDeserialize(JSON.stringify({ schemaVersion: {} }))).toEqual({
+      type: 'invalid',
+    });
   });
 });

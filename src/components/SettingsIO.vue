@@ -59,7 +59,14 @@ type ModalImport = {
   import: Import;
 };
 
-type ModalData = ModalSimple | ModalImport;
+// Why a file could not be imported.
+type ModalError = {
+  kind: 'error';
+  title: string;
+  message: string;
+};
+
+type ModalData = ModalSimple | ModalImport | ModalError;
 
 type Download = {
   fileName: string;
@@ -150,14 +157,37 @@ function onClickPinsExport() {
   });
 }
 
+function showImportError(
+  title: string,
+  description: string,
+  result: { type: 'newer' | 'outdated' | 'invalid' },
+) {
+  modalData.value = {
+    kind: 'error',
+    title,
+    message:
+      result.type === 'newer'
+        ? 'This file was exported by a newer version of the app. Refresh the page to update the app, then import the file again.'
+        : result.type === 'outdated'
+          ? 'This file was exported by an older version of the app, which cannot be imported yet.'
+          : `This file is not a valid ${description}.`,
+  };
+  getSettingsIoModal().showModal();
+}
+
 function onClickPinsImport() {
   triggerUpload({
     onSuccess(fileContent: string) {
-      const loadedPinCatalog = PinCatalogDeserialize(fileContent);
+      const result = PinCatalogDeserialize(fileContent);
+
+      if (result.type !== 'current') {
+        showImportError('Pin Catalog Import', 'pin catalog', result);
+        return;
+      }
+
+      const loadedPinCatalog = result.current;
 
       console.log(loadedPinCatalog);
-
-      if (loadedPinCatalog === null) return;
 
       // Also invalid entries, which are replaced when overwriting.
       const catalog = pinCatalog.value;
@@ -229,11 +259,16 @@ function onClickCalendarExport() {
 function onClickCalendarImport() {
   triggerUpload({
     onSuccess(fileContent: string) {
-      const loadedPinCalendar = PinCalendarDeserialize(fileContent);
+      const result = PinCalendarDeserialize(fileContent);
+
+      if (result.type !== 'current') {
+        showImportError('Calendar Import', 'calendar', result);
+        return;
+      }
+
+      const loadedPinCalendar = result.current;
 
       console.log(loadedPinCalendar);
-
-      if (loadedPinCalendar === null) return;
 
       modalData.value = {
         kind: 'import',
@@ -360,6 +395,13 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
         <button class="btn btn-error flex-1" @click="modalData.actionConfirm">
           {{ modalData.buttonConfirm }}
         </button>
+      </form>
+    </div>
+    <div class="modal-box" v-if="modalData !== undefined && modalData.kind === 'error'">
+      <h3 class="text-lg font-bold">{{ modalData.title }}</h3>
+      <p class="py-4">{{ modalData.message }}</p>
+      <form method="dialog" class="modal-action">
+        <button class="btn btn-primary flex-1">Close</button>
       </form>
     </div>
     <div class="modal-box" v-if="modalData !== undefined && modalData.kind == 'import'">

@@ -1,19 +1,11 @@
-import '@/formats';
-import { Type, type TObject } from '@sinclair/typebox';
+import { Type, type Static, type TSchema } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { Ref } from 'vue';
 import { isObject, type UncheckedRop } from '@/validation';
 
-const VersionSchema = Type.String({ format: 'integer' });
-
 // The keys of versions: canonical integers. Any other key is ignored, as if it were not present.
 const VERSION_KEY_PATTERN = /^(0|[1-9][0-9]*)$/;
-
-export function Versioned<T extends TObject>(innerSchema: T) {
-  return Type.Object({
-    schemaVersion: Type.Record(VersionSchema, innerSchema),
-  });
-}
 
 // Only the container of the versions, see `Versioned`: each version is checked on its own, the
 // current one by its readers.
@@ -173,6 +165,46 @@ export function hasNewerVersionRop<R, T extends Versioned<R>>(
     isObject(schemaVersion) &&
     findCurrentVersion(schemaVersion, currentVersion).type === 'unsupported'
   );
+}
+
+// The current version of data that is not saved back as it was read, e.g. an imported file. It is
+// parsed, see `Value.Parse`, rather than read unchecked. `newer` and `outdated` if the data has no
+// current version, but newer or older ones, `invalid` if it has none, or an invalid current one.
+type ParseCurrentVersionResult<T> =
+  | { type: 'current'; current: T }
+  | { type: 'newer'; version: number }
+  | { type: 'outdated'; version: number }
+  | { type: 'invalid' };
+
+export function parseCurrentVersion<S extends TSchema>(
+  schema: S,
+  json: unknown,
+  currentVersion: number,
+  description: string,
+): ParseCurrentVersionResult<Static<S>> {
+  if (!Value.Check(VersionedSchema, json)) {
+    console.error(`Ignoring an invalid ${description}, as it has no schema versions.`);
+    return { type: 'invalid' };
+  }
+
+  const result = getCurrentVersion(json, currentVersion, undefined);
+
+  if (result.type === 'unsupported' && result.current === undefined)
+    return { type: 'newer', version: result.version };
+
+  if (result.type === 'outdated') return result;
+
+  if (result.type === 'none') {
+    console.error(`Ignoring an invalid ${description}, as it has no schema versions.`);
+    return { type: 'invalid' };
+  }
+
+  try {
+    return { type: 'current', current: Value.Parse(schema, result.current) };
+  } catch (error) {
+    console.error(`Ignoring an invalid ${description}:`, error);
+    return { type: 'invalid' };
+  }
 }
 
 export function makeVersioned<T>(currentVersion: T, currentVersionNumber: number): Versioned<T> {
