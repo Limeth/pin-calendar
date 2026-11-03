@@ -5,7 +5,7 @@ import * as auth from '@/auth';
 import { WebRtcNetworkAdapter } from '@/webrtc';
 import type { LocalDocument, RemotePeer } from '@/documents/local';
 import type { EphemeralDocument } from '@/documents/ephemeral';
-import type { HashArgsAddPeer } from '@/hash';
+import type { HashArgsInvite } from '@/hash';
 import type { Peer } from './fakes/peerjs';
 import * as uuid from 'uuid';
 
@@ -143,7 +143,7 @@ export function testTranscript(): auth.HandshakeTranscript {
 
 export type Invite = {
   secret: auth.InviteSecret;
-  args: HashArgsAddPeer;
+  args: HashArgsInvite;
 };
 
 // Create an invite on the inviting device, like the invite dialog does.
@@ -161,7 +161,7 @@ export async function createInvite(
   return {
     secret,
     args: {
-      action: 'addPeer',
+      action: 'invite',
       secret: secret.string,
       peerJsPeerId: inviterPeerJsPeerId,
       calendarIdTag: await auth.calendarIdTag(secret, calendarId),

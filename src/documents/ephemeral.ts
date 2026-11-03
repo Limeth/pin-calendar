@@ -1,5 +1,5 @@
 import type { PeerInfo } from '@/webrtc';
-import type { HashArgsAddPeer } from '@/hash';
+import type { HashArgsInvite } from '@/hash';
 import type { PeerJsPeerId } from './local';
 
 export type ConnectedPeers = {
@@ -9,7 +9,7 @@ export type ConnectedPeers = {
 // A request to join a calendar this device already has, see `EphemeralDocument::outgoingJoins`.
 export type OutgoingJoin = {
   // The arguments of the invite link, including the invite secret.
-  invite: HashArgsAddPeer;
+  invite: HashArgsInvite;
   status: 'requested' | 'joining' | 'joined' | 'failed';
   // Why joining failed, if it did.
   error?: string;

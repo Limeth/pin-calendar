@@ -4,7 +4,7 @@ import type { App } from './app';
 import { LocalDocumentGetLocalPeer, LocalDocumentGetRemotePeer } from './documents/local';
 import * as auth from './auth';
 import type { ErrorPacket } from './handshake';
-import type { HashArgsAddPeer } from './hash';
+import type { HashArgsInvite } from './hash';
 
 // Whether this device is paired with the inviter of a calendar it already has.
 // - 'own-invite': the invite was created by this device.
@@ -20,7 +20,7 @@ export type InviterPairing = 'own-invite' | 'paired' | 'forgotten-inviter' | 'un
 // Find out whether this device is paired with the inviter, see `InviterPairing`.
 export async function checkInviterPairing(
   app: App,
-  invite: HashArgsAddPeer,
+  invite: HashArgsInvite,
   timeoutMs: number,
 ): Promise<InviterPairing> {
   const local = app.docLocal.data.value;
@@ -60,7 +60,7 @@ export async function checkInviterPairing(
 // WebRTC network adapter, which may run in another tab, see `EphemeralDocument::outgoingJoins`.
 export async function joinExistingCalendar(
   app: App,
-  invite: HashArgsAddPeer,
+  invite: HashArgsInvite,
   timeoutMs: number,
 ): Promise<ErrorPacket | undefined> {
   const { thumbprint } = await auth.parseInviteSecret(invite.secret);

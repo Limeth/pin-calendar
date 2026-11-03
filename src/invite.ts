@@ -1,6 +1,6 @@
 import * as uuid from 'uuid';
 import Peer, { type DataConnection } from 'peerjs';
-import type { HashArgsAddPeer } from './hash';
+import type { HashArgsInvite } from './hash';
 import {
   LocalDocumentGetDocumentIdShared,
   type CalendarId,
@@ -66,10 +66,7 @@ export type JoinResult = JoinSuccess | ErrorPacket;
 
 // Join a calendar using an invite, as a new device, using a new peer that is destroyed afterwards.
 // To join a calendar this device already has, see `WebRtcNetworkAdapter.performOutgoingJoins`.
-export async function joinCalendar(
-  invite: HashArgsAddPeer,
-  timeoutMs: number,
-): Promise<JoinResult> {
+export async function joinCalendar(invite: HashArgsInvite, timeoutMs: number): Promise<JoinResult> {
   const peer = new Peer(uuid.v7(), {
     debug: 3,
     secure: true,
@@ -103,7 +100,7 @@ export type JoinOptions = {
 // other connections, and is not destroyed.
 export async function joinCalendarVia(
   peer: Peer,
-  invite: HashArgsAddPeer,
+  invite: HashArgsInvite,
   options: JoinOptions,
 ): Promise<JoinResult> {
   // Resolved when the inviter does not accept in time, or when joining is aborted. Errors of the
@@ -184,7 +181,7 @@ type JoinAccepted = {
 // Steps 1 to 4, as the invitee.
 async function runJoinHandshake(
   dataConnection: DataConnection,
-  invite: HashArgsAddPeer,
+  invite: HashArgsInvite,
   sharedDocumentId: string | undefined,
 ): Promise<JoinAccepted | ErrorPacket> {
   await asyncOnceOpen(dataConnection);

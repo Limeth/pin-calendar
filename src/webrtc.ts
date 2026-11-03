@@ -16,7 +16,7 @@ import {
   type CalendarId,
   type LocalDocumentRop,
 } from './documents/local';
-import type { HashArgsAddPeer } from './hash';
+import type { HashArgsInvite } from './hash';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { EphemeralDocument } from './documents/ephemeral';
 import { handleJoinRequest, joinCalendarVia, type JoinRequestPacket } from './invite';
@@ -504,7 +504,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     }
   }
 
-  async performOutgoingJoin(invite: HashArgsAddPeer): Promise<ErrorPacket | undefined> {
+  async performOutgoingJoin(invite: HashArgsInvite): Promise<ErrorPacket | undefined> {
     const secret = await auth.parseInviteSecret(invite.secret);
 
     // The join dialog only requests joins for the calendar of the invite, see `auth.calendarIdTag`.

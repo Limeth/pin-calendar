@@ -8,7 +8,7 @@ import feather from 'feather-icons';
 import { appStore, type App } from '../app';
 import QRCode from 'qrcode';
 import { computedAsync } from '@vueuse/core';
-import { decodeHash, encodeHash, type Hash, type HashAddPeer } from '@/hash';
+import { decodeHash, encodeHash, type Hash, type HashInvite } from '@/hash';
 import {
   LocalDocumentGetAlias,
   LocalDocumentGetInvalidRemotePeerIds,
@@ -336,10 +336,10 @@ async function createInviteUrl() {
   });
 
   const inviteUrl = URL.parse(window.location.href)!;
-  const hash: HashAddPeer = {
+  const hash: HashInvite = {
     path: undefined,
     args: {
-      action: 'addPeer',
+      action: 'invite',
       secret: secret.string,
       peerJsPeerId: localPeer.peerJsPeerId,
       calendarIdTag: await auth.calendarIdTag(secret, calendarId),

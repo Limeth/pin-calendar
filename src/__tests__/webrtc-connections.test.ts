@@ -252,7 +252,7 @@ describe('watchers', () => {
 
     docEphemeral.value.outgoingJoins[changeSubtree]((joins) => {
       joins.x = {
-        invite: { action: 'addPeer', secret: '', peerJsPeerId: '', calendarIdTag: '' },
+        invite: { action: 'invite', secret: '', peerJsPeerId: '', calendarIdTag: '' },
         status: 'joined',
       };
     });

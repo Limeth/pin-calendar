@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { App } from '@/app';
 import { checkInviterPairing } from '@/rejoin';
-import type { HashArgsAddPeer } from '@/hash';
+import type { HashArgsInvite } from '@/hash';
 import { pairedKeys, started, stopStartedDevices, type Device, peerId } from './helpers';
 
 afterEach(stopStartedDevices);
@@ -14,8 +14,8 @@ function app(of: Device): App {
   } as unknown as App;
 }
 
-function inviteFrom(peerJsPeerId: string): HashArgsAddPeer {
-  return { action: 'addPeer', secret: '', peerJsPeerId, calendarIdTag: '' };
+function inviteFrom(peerJsPeerId: string): HashArgsInvite {
+  return { action: 'invite', secret: '', peerJsPeerId, calendarIdTag: '' };
 }
 
 async function timed<T>(promise: Promise<T>): Promise<[T, number]> {

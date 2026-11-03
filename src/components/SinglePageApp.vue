@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, type Ref } from 'vue';
-import { decodeHash, encodeHash, type Hash, type HashArgsAddPeer } from '@/hash';
+import { decodeHash, encodeHash, type Hash, type HashArgsInvite } from '@/hash';
 import { LocalStorageDataIsReadOnly, localStorageDataStore } from '@/localStorageData';
 import NewerVersionAlert from './NewerVersionAlert.vue';
 import SharedApp from './SharedApp.vue';
@@ -38,7 +38,7 @@ watch(
 );
 
 // Find the calendar an invite is for among the calendars of this device, see `auth.calendarIdTag`.
-async function findInvitedCalendar(invite: HashArgsAddPeer): Promise<CalendarId | undefined> {
+async function findInvitedCalendar(invite: HashArgsInvite): Promise<CalendarId | undefined> {
   let secret;
 
   try {
@@ -95,7 +95,7 @@ function isJoinReadOnly(modal: ModalInviteConfirmation): boolean {
 const PAIRING_CHECK_TIMEOUT_MS = 10_000;
 
 // Join a calendar this device does not have yet, as a new device. Returns the calendar's ID.
-async function joinNewCalendar(invite: HashArgsAddPeer): Promise<CalendarId | ErrorPacket> {
+async function joinNewCalendar(invite: HashArgsInvite): Promise<CalendarId | ErrorPacket> {
   const result = await joinCalendar(invite, 10_000);
 
   if (result.kind === 'error') return result;
@@ -120,7 +120,7 @@ type ModalData = ModalInviteConfirmation;
 const modalData: Ref<ModalData | undefined> = ref(undefined);
 
 // Initialize the `currentHash.value.path` field, ensuring it's present.
-if (currentHash.value.args?.action === 'addPeer') {
+if (currentHash.value.args?.action === 'invite') {
   const existingCalendarId = await findInvitedCalendar(currentHash.value.args);
 
   modalData.value = {
@@ -136,7 +136,7 @@ if (currentHash.value.args?.action === 'addPeer') {
       modalData.value = undefined;
     },
     async actionConfirm() {
-      if (currentHash.value.args?.action !== 'addPeer') return;
+      if (currentHash.value.args?.action !== 'invite') return;
       if (isJoinReadOnly(this)) return;
       if (this.existingCalendarId !== undefined && !isJoinOffered(this.inviterPairing)) return;
       if (
@@ -209,7 +209,7 @@ if (currentHash.value.args?.action === 'addPeer') {
   <div class="drawer">
     <SharedApp
       v-if="
-        currentHash.args?.action !== 'addPeer' &&
+        currentHash.args?.action !== 'invite' &&
         !(
           LocalStorageDataIsReadOnly(localStorageData) &&
           Object.keys(localStorageData.calendars).length === 0
@@ -220,7 +220,7 @@ if (currentHash.value.args?.action === 'addPeer') {
   <!-- Otherwise shown by `SharedApp`, along with the calendar's. -->
   <NewerVersionAlert
     v-if="
-      currentHash.args?.action === 'addPeer' || Object.keys(localStorageData.calendars).length === 0
+      currentHash.args?.action === 'invite' || Object.keys(localStorageData.calendars).length === 0
     "
     :list="LocalStorageDataIsReadOnly(localStorageData)"
     :calendar="modalData?.kind === 'invite-confirmation' && modalData.existingCalendarReadOnly"
