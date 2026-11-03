@@ -4,10 +4,14 @@ import * as feather from 'feather-icons';
 import { ref, watch, computed, toRaw } from 'vue';
 import type { Ref } from 'vue';
 import {
+  PIN_CATEGORY_ID_SYMBOL,
+  PinCatalogAddPinToCategory,
   PinCatalogChange,
   PinCatalogCreateAndAddPinToCategory,
   PinCatalogCreateAndAddSubcategoryToCategory,
+  PinCatalogGetOrphanedPins,
   PinCatalogGetPinById,
+  PinCatalogGetPinCategories,
   PinCatalogGetPinCategoryById,
   PinCatalogGetRootCategories,
   PinCatalogRemovePin,
@@ -22,6 +26,8 @@ import {
 } from '../pins/pinCatalog';
 import emojiRegex from 'emoji-regex';
 import SettingsPinCategory, { type SettingsPinCategoryEvent } from './SettingsPinCategory.vue';
+import PinCard from './PinCard.vue';
+import { keyToId } from '@/pins/util';
 import * as R from 'ramda';
 import { changeSubtree, type Ro, type Rop } from 'automerge-diy-vue-hooks';
 import ValidatedInput from './ValidatedInput.vue';
@@ -192,6 +198,31 @@ function onClickDeletePin(pin: Pin) {
   });
 }
 
+const orphanedPins = computed(() => PinCatalogGetOrphanedPins(pinCatalog.value));
+// The categories that pins without a category can be moved to, by name.
+const categoriesToMoveTo = computed(() =>
+  PinCatalogGetPinCategories(pinCatalog.value)
+    .filter((pinCategory) => !pinCategory.value.archived)
+    .toSorted((a, b) => a.value.displayName.localeCompare(b.value.displayName)),
+);
+
+// Add a pin without a category to the category chosen in the event's `select`.
+function onChangeOrphanedPinCategory(pin: PinRop, event: Event) {
+  if (app.value!.docShared.readOnly.value) return;
+
+  const target = event.target;
+
+  if (!(target instanceof HTMLSelectElement) || target.value === '') return;
+
+  const pinCategoryId = keyToId(target.value, PIN_CATEGORY_ID_SYMBOL);
+
+  PinCatalogChange(pinCatalog.value, (pinCatalog) => {
+    const writablePin = PinCatalogGetPinById(pinCatalog, pin.id);
+
+    if (writablePin !== null) PinCatalogAddPinToCategory(pinCatalog, pinCategoryId, writablePin);
+  });
+}
+
 watch(editing, () => {
   isDrawerOpen.value = editing.value !== undefined;
 });
@@ -296,6 +327,69 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                   :pin-category="rootCategory"
                   :read-only="app!.docShared.readOnly.value"
                 />
+              </li>
+            </ul>
+          </li>
+          <!-- Pins are otherwise only shown among their categories. -->
+          <li v-if="orphanedPins.length > 0" class="w-full">
+            <div class="divider my-1">Pins Without a Category</div>
+            <ul class="flex flex-col">
+              <li
+                v-for="pin of orphanedPins"
+                :key="pin.id.key"
+                class="flex flex-row flex-wrap items-center gap-1 px-4 py-1 odd:bg-base-200"
+              >
+                <PinCard :pin="pin" :details="true" class="flex-1" />
+                <select
+                  class="select select-sm w-auto"
+                  aria-label="Move to category"
+                  :disabled="app!.docShared.readOnly.value"
+                  @change="onChangeOrphanedPinCategory(pin, $event)"
+                >
+                  <option value="" selected disabled>Move to…</option>
+                  <option
+                    v-for="pinCategory of categoriesToMoveTo"
+                    :key="pinCategory.id.key"
+                    :value="pinCategory.id.key"
+                  >
+                    {{ pinCategory.value.displayName }}
+                  </option>
+                </select>
+                <template v-if="!pin.value.archived">
+                  <button
+                    @click="onSettingsPinCategoryEvent({ kind: 'pinEdit', pin })"
+                    class="btn btn-sm btn-neutral max-sm:btn-square"
+                  >
+                    <div v-html="feather.icons['edit'].toSvg()" />
+                    <div class="max-sm:hidden">Edit</div>
+                  </button>
+                  <button
+                    :disabled="app!.docShared.readOnly.value"
+                    @click="onSettingsPinCategoryEvent({ kind: 'pinArchive', pin, archive: true })"
+                    class="btn btn-sm max-sm:btn-square btn-warning"
+                  >
+                    <div v-html="feather.icons['archive'].toSvg()" />
+                    <div class="max-sm:hidden">Archive</div>
+                  </button>
+                </template>
+                <template v-else>
+                  <button
+                    :disabled="app!.docShared.readOnly.value"
+                    @click="onSettingsPinCategoryEvent({ kind: 'pinArchive', pin, archive: false })"
+                    class="btn btn-sm max-sm:btn-square btn-neutral"
+                  >
+                    <div v-html="feather.icons['upload'].toSvg()" />
+                    <div class="max-sm:hidden">Restore</div>
+                  </button>
+                  <button
+                    :disabled="app!.docShared.readOnly.value"
+                    @click="onSettingsPinCategoryEvent({ kind: 'pinDelete', pin })"
+                    class="btn btn-sm max-sm:btn-square btn-error"
+                  >
+                    <div v-html="feather.icons['trash-2'].toSvg()" />
+                    <div class="max-sm:hidden">Delete</div>
+                  </button>
+                </template>
               </li>
             </ul>
           </li>

@@ -414,6 +414,16 @@ export function PinCatalogGetRootCategories<C extends PinCatalogReadable>(
   ) as PinCategoryOf<C>[];
 }
 
+// The valid pins that no valid category lists, e.g. after their category was deleted, so that they
+// are not shown among the categories.
+export function PinCatalogGetOrphanedPins<C extends PinCatalogReadable>(self: C): PinOf<C>[] {
+  const categorizedPins = new Set(
+    PinCatalogReadPinCategories(self).flatMap((pinCategory) => pinCategory.value.pins),
+  );
+
+  return PinCatalogReadPins(self).filter((pin) => !categorizedPins.has(pin.id.key)) as PinOf<C>[];
+}
+
 export function PinCatalogAsJsonValue(self: Unchecked<PinCatalog>): object {
   return makeVersioned(self, PIN_CATALOG_SCHEMA_VERSION_CURRENT);
 }

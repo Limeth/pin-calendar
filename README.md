@@ -4,7 +4,6 @@ A calendar-based activity tracking web app with multi-client synchronization.
 
 ## TODO:
 
-- Display orphaned pins in settings
 - Periodically clean up pins/categories in `PinCatalog::removed`
 
 ## Running on Windows:

@@ -9,12 +9,14 @@ import {
   PinCatalogChange,
   PinCatalogDefault,
   PinCatalogDeserialize,
+  PinCatalogGetOrphanedPins,
   PinCatalogGetPinById,
   PinCatalogGetPinCategories,
   PinCatalogGetPins,
   PinCatalogGetPinsInCategory,
   PinCatalogGetRootCategories,
   PinCatalogRemovePin,
+  PinCatalogRemovePinCategory,
   PinCatalogSerialize,
   type PinCatalog,
 } from '@/pins/pinCatalog';
@@ -139,6 +141,29 @@ describe('the pins and categories of the catalog', () => {
     );
 
     expect(displayNames([...pins])).toEqual(['Watch a movie']);
+  });
+
+  it('include the pins without a category, also when their category is invalid', () => {
+    const initial = catalog();
+    const hobbies = categoryKey(initial, 'Hobbies');
+    const mental = categoryKey(initial, 'Mental Health');
+
+    (initial.pinCategories[mental] as unknown as { displayName: unknown }).displayName = 42;
+
+    const document = sharedDocument(initial);
+
+    expect(displayNames(PinCatalogGetOrphanedPins(document.value.pinCatalog))).toEqual([
+      'Do some self-care',
+    ]);
+
+    PinCatalogChange(document.value.pinCatalog, (pinCatalog) => {
+      PinCatalogRemovePinCategory(pinCatalog, keyToId(hobbies, PIN_CATEGORY_ID_SYMBOL));
+    });
+
+    expect(displayNames(PinCatalogGetOrphanedPins(document.value.pinCatalog))).toEqual([
+      'Do some self-care',
+      'Watch a movie',
+    ]);
   });
 
   it('cannot be navigated before the catalog was confirmed to be an object', () => {
