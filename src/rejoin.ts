@@ -1,6 +1,7 @@
 import { watch } from 'vue';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 import type { App } from './app';
+import { LocalDocumentGetLocalPeer, LocalDocumentGetRemotePeer } from './documents/local';
 import * as auth from './auth';
 import type { ErrorPacket } from './handshake';
 import type { HashArgsAddPeer } from './hash';
@@ -24,8 +25,10 @@ export async function checkInviterPairing(
 ): Promise<InviterPairing> {
   const local = app.docLocal.data.value;
 
-  if (invite.peerJsPeerId === local.localPeer.peerJsPeerId) return 'own-invite';
-  if (!Object.hasOwn(local.remotePeers, invite.peerJsPeerId)) return 'forgotten-inviter';
+  if (invite.peerJsPeerId === LocalDocumentGetLocalPeer(local)?.peerJsPeerId) return 'own-invite';
+  // An invalid peer cannot be connected to, so it is as good as forgotten.
+  if (LocalDocumentGetRemotePeer(local, invite.peerJsPeerId) === undefined)
+    return 'forgotten-inviter';
 
   // The inviter cannot be asked whether it knows this device, but connecting to it answers that: a
   // connection is only established if both devices know each other, with the same key. The inviter

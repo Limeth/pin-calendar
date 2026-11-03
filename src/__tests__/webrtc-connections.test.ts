@@ -17,6 +17,7 @@ import {
   started,
   stopStartedDevices,
   until,
+  peerId,
 } from './helpers';
 
 // Adapters created by the tests themselves, rather than by `started`.
@@ -189,22 +190,28 @@ describe('spare connections', () => {
 describe('forgetting a peer', () => {
   it('disconnects both devices, and the forgotten one cannot reconnect', async () => {
     const [laptopKey, phoneKey] = await pairedKeys();
-    const laptop = started('laptop', { phone: remotePeer(laptopKey) });
-    const phone = started('phone', { laptop: remotePeer(phoneKey) });
-    expect(await until(() => isConnected(laptop, 'phone') && isConnected(phone, 'laptop'))).toBe(
-      true,
-    );
+    const laptop = started(peerId('laptop'), { [peerId('phone')]: remotePeer(laptopKey) });
+    const phone = started(peerId('phone'), { [peerId('laptop')]: remotePeer(phoneKey) });
+    expect(
+      await until(
+        () => isConnected(laptop, peerId('phone')) && isConnected(phone, peerId('laptop')),
+      ),
+    ).toBe(true);
 
-    await forgetRemotePeer(laptop.docLocal, 'phone');
+    await forgetRemotePeer(laptop.docLocal, peerId('phone'));
 
-    expect(await until(() => !isConnected(laptop, 'phone') && !isConnected(phone, 'laptop'))).toBe(
-      true,
-    );
-    expect(laptop.docEphemeral.value.connectedPeers.phone).toBeUndefined();
+    expect(
+      await until(
+        () => !isConnected(laptop, peerId('phone')) && !isConnected(phone, peerId('laptop')),
+      ),
+    ).toBe(true);
+    expect(laptop.docEphemeral.value.connectedPeers[peerId('phone')]).toBeUndefined();
 
-    phone.adapter.connectToRemotePeer('laptop');
+    phone.adapter.connectToRemotePeer(peerId('laptop'));
     await sleep(500);
-    expect(isConnected(laptop, 'phone') || isConnected(phone, 'laptop')).toBe(false);
+    expect(isConnected(laptop, peerId('phone')) || isConnected(phone, peerId('laptop'))).toBe(
+      false,
+    );
   });
 
   it('drops a connection whose handshake completes afterwards', () => {
@@ -219,7 +226,7 @@ describe('forgetting a peer', () => {
 
 describe('watchers', () => {
   it('are stopped when the adapter disconnects', async () => {
-    const docLocal = localDocument('laptop');
+    const docLocal = localDocument(peerId('laptop'));
     const docEphemeral = ephemeralDocument();
     const calls: number[] = [];
     const start = async (index: number) => {

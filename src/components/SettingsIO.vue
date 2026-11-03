@@ -26,6 +26,7 @@ import { LocalStorageDataAddCalendar, localStorageDataStore } from '@/localStora
 import * as auth from '@/auth';
 import { keyToId } from '@/pins/util';
 import { isObject, readKeys } from '@/validation';
+import { LocalDocumentGetRemotePeers } from '@/documents/local';
 import {
   PinCalendarClear,
   PinCalendarCombine,
@@ -269,9 +270,9 @@ function onClickCalendarDelete() {
       // Disconnect from the calendar's peers, in whichever tab the connections are.
       app.value!.shutDownWebRtc();
 
-      const authKeyIds = Object.values(app.value!.docLocal.data.value.remotePeers).map(
-        (remotePeer) => remotePeer.authKeyId,
-      );
+      const authKeyIds = Object.values(
+        LocalDocumentGetRemotePeers(app.value!.docLocal.data.value),
+      ).map((remotePeer) => remotePeer.authKeyId);
 
       // TODO: Implement proper deletion of all calendar data. This is just superficial.
       delete localStorageData.value.calendars[app.value!.calendarId];

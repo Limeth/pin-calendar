@@ -12,6 +12,7 @@ import {
   sleep,
   type Device,
   type Invite,
+  peerId,
 } from './helpers';
 
 const UNUSABLE_INVITE_MESSAGE =
@@ -25,10 +26,13 @@ afterEach(() => {
 });
 
 // The inviting device, with an invite, and a log of its errors.
-async function inviting(calendarId = CALENDAR_ID): Promise<[Invite, string[]]> {
-  inviter = device('inviter');
+async function inviting(
+  calendarId = CALENDAR_ID,
+  documentIdShared?: string,
+): Promise<[Invite, string[]]> {
+  inviter = device(peerId('inviter'), {}, { documentIdShared });
   await sleep(10);
-  const invite = await createInvite(inviter, 'inviter', calendarId);
+  const invite = await createInvite(inviter, peerId('inviter'), calendarId);
   const errors: string[] = [];
   vi.spyOn(console, 'error').mockImplementation((...data) => errors.push(data.join(' ')));
   return [invite, errors];
@@ -168,7 +172,7 @@ describe('unusable invites', () => {
       (packet as { kind?: string }).kind === 'join-request'
         ? { ...(packet as object), secretThumbprint: 'toString' }
         : packet;
-    const unknown = await join(await createInvite(inviter, 'inviter'));
+    const unknown = await join(await createInvite(inviter, peerId('inviter')));
 
     expect(used).toEqual({ kind: 'error', message: UNUSABLE_INVITE_MESSAGE });
     expect(unknown).toEqual(used);
@@ -176,6 +180,17 @@ describe('unusable invites', () => {
     expect(errors.some((error) => error.includes('invite already used by peer'))).toBe(true);
     expect(errors.some((error) => error.includes('unknown or expired invite'))).toBe(true);
     expect(errors.some((error) => error.includes('TypeError'))).toBe(false);
+  });
+
+  it('are rejected when the shared document ID is invalid', async () => {
+    const [invite, errors] = await inviting(CALENDAR_ID, 42 as never);
+
+    const result = await join(invite);
+
+    expect(result).toEqual({ kind: 'error', message: UNUSABLE_INVITE_MESSAGE });
+    expect(remotePeerIds()).toEqual([]);
+    // Only the inviter logs why.
+    expect(errors.some((error) => error.includes('shared document ID is invalid'))).toBe(true);
   });
 
   it('are rejected for a secret of the wrong length', async () => {

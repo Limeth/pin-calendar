@@ -9,6 +9,7 @@ import {
   started,
   stopStartedDevices,
   until,
+  peerId,
 } from './helpers';
 
 afterEach(stopStartedDevices);
@@ -23,9 +24,9 @@ describe('a peer whose ID is still taken', () => {
 
   it('is replaced once the ID is released', { timeout: 20_000 }, async () => {
     const [keyA, keyB] = await pairedKeys();
-    const holder = await holdId('a7');
-    const a = started('a7', { b7: remotePeer(keyA) });
-    const b = started('b7', { a7: remotePeer(keyB) }, { passive: true });
+    const holder = await holdId(peerId('a7'));
+    const a = started(peerId('a7'), { [peerId('b7')]: remotePeer(keyA) });
+    const b = started(peerId('b7'), { [peerId('a7')]: remotePeer(keyB) }, { passive: true });
     const first = a.peer();
     expect(await until(() => first.destroyed)).toBe(true);
 
@@ -33,12 +34,14 @@ describe('a peer whose ID is still taken', () => {
 
     expect(await until(() => a.peer().open, 6_000)).toBe(true);
     expect(a.peer()).not.toBe(first);
-    expect(await until(() => isConnected(a, 'b7') && isConnected(b, 'a7'), 3_000)).toBe(true);
+    expect(
+      await until(() => isConnected(a, peerId('b7')) && isConnected(b, peerId('a7')), 3_000),
+    ).toBe(true);
   });
 
   it('does not keep the ID registered while being destroyed', async () => {
-    const holder = await holdId('a10');
-    const a = started('a10');
+    const holder = await holdId(peerId('a10'));
+    const a = started(peerId('a10'));
     // The ID is released right as the peer is rejected, before it is destroyed.
     a.peer().once('error', () => holder.destroy());
 
@@ -46,8 +49,8 @@ describe('a peer whose ID is still taken', () => {
   });
 
   it('is replaced immediately when the device is back online', async () => {
-    const holder = await holdId('a8');
-    const a = started('a8');
+    const holder = await holdId(peerId('a8'));
+    const a = started(peerId('a8'));
     const first = a.peer();
     expect(await until(() => first.destroyed)).toBe(true);
     await sleep(100);
@@ -59,8 +62,8 @@ describe('a peer whose ID is still taken', () => {
   });
 
   it('is not replaced once the adapter is stopped', async () => {
-    const holder = await holdId('a9');
-    const stopping = device('a9');
+    const holder = await holdId(peerId('a9'));
+    const stopping = device(peerId('a9'));
     const first = stopping.peer();
     expect(await until(() => first.destroyed)).toBe(true);
 
@@ -70,7 +73,7 @@ describe('a peer whose ID is still taken', () => {
 
     expect(stopping.adapter.peer).toBeUndefined();
     // The ID is free for the next adapter.
-    const next = new Peer('a9');
+    const next = new Peer(peerId('a9'));
     expect(await until(() => next.open)).toBe(true);
     next.destroy();
   });

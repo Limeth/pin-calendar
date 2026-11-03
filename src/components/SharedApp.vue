@@ -9,7 +9,11 @@ import { appStore, type App } from '../app';
 import QRCode from 'qrcode';
 import { computedAsync } from '@vueuse/core';
 import { decodeHash, encodeHash, type Hash, type HashAddPeer } from '@/hash';
-import type { CalendarId } from '@/documents/local';
+import {
+  LocalDocumentGetLocalPeer,
+  LocalDocumentGetRemotePeers,
+  type CalendarId,
+} from '@/documents/local';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 import {
   LocalStorageDataAddCalendar,
@@ -171,7 +175,7 @@ const connected = computed(() => {
 const peers = computed(() => {
   if (app.value === undefined) return [];
 
-  const remotePeers = app.value.docLocal.data.value.remotePeers;
+  const remotePeers = LocalDocumentGetRemotePeers(app.value.docLocal.data.value);
   const connectedPeers = app.value.docEphemeral.data.value.connectedPeers;
   const result = [];
 
@@ -193,9 +197,10 @@ const peers = computed(() => {
       });
   }
 
-  // Include peers that we are connected to, but that aren't known.
+  // Include peers that we are connected to, but that aren't known. `hasOwn`, as the peer chooses its
+  // ID, and `remotePeers` is a plain copy, which Vue does not need to track.
   for (const [peerJsPeerId, connectedPeer] of Object.entries(connectedPeers))
-    if (!(peerJsPeerId in remotePeers))
+    if (!Object.hasOwn(remotePeers, peerJsPeerId))
       result.push({
         ...connectedPeer,
         peerJsPeerId,
@@ -277,8 +282,9 @@ async function createInviteUrl() {
   if (app.value === undefined) return undefined;
 
   const calendarId = currentHash.value.path?.calendar.id;
+  const localPeer = LocalDocumentGetLocalPeer(app.value.docLocal.data.value);
 
-  if (calendarId === undefined) return undefined;
+  if (calendarId === undefined || localPeer === undefined) return undefined;
 
   const secret = await auth.generateInviteSecret();
 
@@ -295,7 +301,7 @@ async function createInviteUrl() {
     args: {
       action: 'addPeer',
       secret: secret.string,
-      peerJsPeerId: app.value.docLocal.data.value.localPeer.peerJsPeerId,
+      peerJsPeerId: localPeer.peerJsPeerId,
       calendarIdTag: await auth.calendarIdTag(secret, calendarId),
     },
   };

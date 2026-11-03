@@ -4,9 +4,9 @@ import { makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 import { SYMBOL_IS_WEBRTC_NETWORK_ADAPTER, WebRtcNetworkAdapter } from './webrtc';
 import {
   type LocalDocument,
-  type LocalDocumentTrusted,
   type CalendarId,
   LocalDocumentGetCurrentVersion,
+  LocalDocumentGetDocumentIdShared,
 } from './documents/local';
 import {
   MessagePortWrapper,
@@ -34,7 +34,7 @@ import type { Versioned } from './versioned';
 export type App = {
   readonly calendarId: CalendarId;
   readonly docEphemeral: DocumentWrapper<EphemeralDocument>;
-  readonly docLocal: VersionedDocumentWrapper<LocalDocument, LocalDocumentTrusted>;
+  readonly docLocal: VersionedDocumentWrapper<LocalDocument>;
   readonly docShared: VersionedDocumentWrapper<SharedDocument>;
   // Stop synchronizing the calendar with other devices for good, in all tabs, e.g. when it is
   // deleted from this device.
@@ -70,7 +70,7 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
 
   type DataReadyLocal = {
     readonly docEphemeral: DocumentWrapper<EphemeralDocument>;
-    readonly docLocal: VersionedDocumentWrapper<LocalDocument, LocalDocumentTrusted>;
+    readonly docLocal: VersionedDocumentWrapper<LocalDocument>;
     readonly repoShared: A.Repo;
   };
 
@@ -100,7 +100,9 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
                 ? undefined
                 : {
                     timeoutMilliseconds: 10_000,
-                    documentId: dataReadyLocal.docLocal.data.value.documentIdShared as A.DocumentId,
+                    documentId: LocalDocumentGetDocumentIdShared(
+                      dataReadyLocal.docLocal.data.value,
+                    ) as A.DocumentId,
                     repo: dataReadyLocal.repoShared,
                   },
           });
@@ -229,15 +231,12 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
   await readyShared;
 
   let handleShared: A.DocHandle<Versioned<SharedDocument>>;
+  const documentIdShared = LocalDocumentGetDocumentIdShared(dataLocal.value);
 
-  if (A.isValidDocumentId(dataLocal.value.documentIdShared)) {
-    handleShared = await repoShared.find<Versioned<SharedDocument>>(
-      dataLocal.value.documentIdShared,
-    );
+  if (A.isValidDocumentId(documentIdShared)) {
+    handleShared = await repoShared.find<Versioned<SharedDocument>>(documentIdShared);
   } else {
-    throw new Error(
-      `Failed to open the shared document with ID: ${dataLocal.value.documentIdShared}`,
-    );
+    throw new Error(`Failed to open the shared document with ID: ${documentIdShared}`);
   }
 
   const dataSharedVersioned: Ref<Rop<Versioned<SharedDocument>>> = makeReactive(handleShared);

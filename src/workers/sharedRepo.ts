@@ -7,9 +7,9 @@ import {
   LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT,
   LocalDocumentDefault,
   LocalDocumentGetCurrentVersion,
+  LocalDocumentGetDocumentIdShared,
   type CalendarId,
   type LocalDocument,
-  type LocalDocumentTrusted,
 } from '@/documents/local';
 import { computed, type Ref } from 'vue';
 import {
@@ -86,7 +86,7 @@ function postReadyShared(tab: Tab) {
 
 class Initialized {
   docEphemeral: DocumentWrapper<EphemeralDocument>;
-  docLocal: VersionedDocumentWrapper<LocalDocument, LocalDocumentTrusted>;
+  docLocal: VersionedDocumentWrapper<LocalDocument>;
   documentSharedAvailableLocallyDuringInitialization: boolean;
   tabs: Tab[] = [];
   webRtcTab?: Tab;
@@ -97,7 +97,7 @@ class Initialized {
 
   constructor(options: {
     docEphemeral: DocumentWrapper<EphemeralDocument>;
-    docLocal: VersionedDocumentWrapper<LocalDocument, LocalDocumentTrusted>;
+    docLocal: VersionedDocumentWrapper<LocalDocument>;
     documentSharedAvailableLocally: boolean;
   }) {
     this.docEphemeral = options.docEphemeral;
@@ -189,6 +189,7 @@ class SharedRepo {
     );
 
     let documentSharedAvailableLocally;
+    const documentIdShared = LocalDocumentGetDocumentIdShared(docDataLocal.value);
 
     if (docDataLocal.value.documentIdShared === undefined) {
       const docHandleShared = this.repoShared.create<Versioned<SharedDocument>>(
@@ -201,21 +202,20 @@ class SharedRepo {
       console.log(
         `No shared document ID is set, created a new document with ID: ${docHandleShared.documentId}`,
       );
+    } else if (documentIdShared === undefined) {
+      // Not replaced by a new document, which would lose the calendar's data. It is not opened,
+      // see `LoadApp`.
+      console.error('The shared document ID is invalid.');
+      documentSharedAvailableLocally = false;
     } else {
       /// Attempt to find the document in the local database, before any network adapters are added to the repo.
       try {
-        console.log(
-          `Attempting to find shared document by ID ${docDataLocal.value.documentIdShared}`,
-        );
-        await this.repoShared.find<SharedDocument>(
-          docDataLocal.value.documentIdShared as DocumentId,
-        );
-        console.log(
-          `Successfully found shared document by ID ${docDataLocal.value.documentIdShared}`,
-        );
+        console.log(`Attempting to find shared document by ID ${documentIdShared}`);
+        await this.repoShared.find<SharedDocument>(documentIdShared as DocumentId);
+        console.log(`Successfully found shared document by ID ${documentIdShared}`);
         documentSharedAvailableLocally = true;
       } catch {
-        console.log(`Failed to find shared document by ID ${docDataLocal.value.documentIdShared}`);
+        console.log(`Failed to find shared document by ID ${documentIdShared}`);
         documentSharedAvailableLocally = false;
       }
     }

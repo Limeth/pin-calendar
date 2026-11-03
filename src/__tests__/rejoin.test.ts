@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { App } from '@/app';
 import { checkInviterPairing } from '@/rejoin';
 import type { HashArgsAddPeer } from '@/hash';
-import { pairedKeys, started, stopStartedDevices, type Device } from './helpers';
+import { pairedKeys, started, stopStartedDevices, type Device, peerId } from './helpers';
 
 afterEach(stopStartedDevices);
 
@@ -26,18 +26,18 @@ async function timed<T>(promise: Promise<T>): Promise<[T, number]> {
 
 describe('checking the pairing with the inviter', () => {
   it('recognizes an invite created by this device', async () => {
-    const laptop = started('laptop-1');
+    const laptop = started(peerId('laptop-1'));
 
-    expect(await checkInviterPairing(app(laptop), inviteFrom('laptop-1'), 1_500)).toBe(
+    expect(await checkInviterPairing(app(laptop), inviteFrom(peerId('laptop-1')), 1_500)).toBe(
       'own-invite',
     );
   });
 
   it('does not wait when the inviter is not a peer of this device', async () => {
-    const phone = started('phone-2');
+    const phone = started(peerId('phone-2'));
 
     const [pairing, ms] = await timed(
-      checkInviterPairing(app(phone), inviteFrom('inviter-2'), 1_500),
+      checkInviterPairing(app(phone), inviteFrom(peerId('inviter-2')), 1_500),
     );
 
     expect(pairing).toBe('forgotten-inviter');
@@ -46,11 +46,15 @@ describe('checking the pairing with the inviter', () => {
 
   it('finds the devices paired once they connect', async () => {
     const [inviterKey, phoneKey] = await pairedKeys();
-    started('inviter-3', { 'phone-3': { deviceName: '', authKeyId: inviterKey } });
-    const phone = started('phone-3', { 'inviter-3': { deviceName: '', authKeyId: phoneKey } });
+    started(peerId('inviter-3'), {
+      [peerId('phone-3')]: { deviceName: '', authKeyId: inviterKey },
+    });
+    const phone = started(peerId('phone-3'), {
+      [peerId('inviter-3')]: { deviceName: '', authKeyId: phoneKey },
+    });
 
     const [pairing, ms] = await timed(
-      checkInviterPairing(app(phone), inviteFrom('inviter-3'), 1_500),
+      checkInviterPairing(app(phone), inviteFrom(peerId('inviter-3')), 1_500),
     );
 
     expect(pairing).toBe('paired');
@@ -59,11 +63,13 @@ describe('checking the pairing with the inviter', () => {
 
   it('finds them unconnected when the inviter forgot this device', async () => {
     const [, phoneKey] = await pairedKeys();
-    started('inviter-4');
-    const phone = started('phone-4', { 'inviter-4': { deviceName: '', authKeyId: phoneKey } });
+    started(peerId('inviter-4'));
+    const phone = started(peerId('phone-4'), {
+      [peerId('inviter-4')]: { deviceName: '', authKeyId: phoneKey },
+    });
 
     const [pairing, ms] = await timed(
-      checkInviterPairing(app(phone), inviteFrom('inviter-4'), 1_500),
+      checkInviterPairing(app(phone), inviteFrom(peerId('inviter-4')), 1_500),
     );
 
     expect(pairing).toBe('unconnected-inviter');

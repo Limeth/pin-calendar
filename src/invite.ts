@@ -1,7 +1,11 @@
 import * as uuid from 'uuid';
 import Peer, { type DataConnection } from 'peerjs';
 import type { HashArgsAddPeer } from './hash';
-import type { CalendarId, PeerJsPeerId } from './documents/local';
+import {
+  LocalDocumentGetDocumentIdShared,
+  type CalendarId,
+  type PeerJsPeerId,
+} from './documents/local';
 import * as auth from './auth';
 import { asyncOnceOpen, closeConnection } from './util/peerjs';
 import { setRemotePeerKey } from './peers';
@@ -288,11 +292,18 @@ export async function handleJoinRequest(
     if (!isInviteReservedBy(options, joinRequest.secretThumbprint, dataConnection.peer))
       return await sendError(dataConnection, UNUSABLE_INVITE_MESSAGE);
 
+    const sharedDocumentId = LocalDocumentGetDocumentIdShared(options.docLocal.value);
+
+    if (sharedDocumentId === undefined) {
+      console.error('Cannot accept the join, as the shared document ID is invalid.');
+      return await sendError(dataConnection, UNUSABLE_INVITE_MESSAGE);
+    }
+
     const joinAccept: JoinAcceptPacket = {
       kind: 'join-accept',
       ecdhPublicKey: ecdhKeyPair.publicKeyRaw,
       calendarId: options.calendarId,
-      sharedDocumentId: options.docLocal.value.documentIdShared!,
+      sharedDocumentId,
     };
     const joinConfirm = await exchange<JoinConfirmPacket>(dataConnection, joinAccept);
 

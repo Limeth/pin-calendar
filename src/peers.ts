@@ -1,7 +1,12 @@
 import type { Ref } from 'vue';
-import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
+import { changeSubtree } from 'automerge-diy-vue-hooks';
 import * as auth from './auth';
-import type { LocalDocument, PeerJsPeerId } from './documents/local';
+import {
+  LocalDocumentGetRemotePeer,
+  type LocalDocumentRop,
+  type PeerJsPeerId,
+} from './documents/local';
+import { isObject } from './validation';
 
 // Managing the remote peers of a calendar, together with their authentication keys.
 
@@ -10,18 +15,20 @@ import type { LocalDocument, PeerJsPeerId } from './documents/local';
 // it joined again, in which case its previous key is deleted. Returns whether a known peer's key
 // was replaced.
 export async function setRemotePeerKey(
-  docLocal: Ref<Rop<LocalDocument>>,
+  docLocal: Ref<LocalDocumentRop>,
   peerJsPeerId: PeerJsPeerId,
   authKeyId: string,
 ): Promise<boolean> {
-  const remotePeers = docLocal.value.remotePeers;
-  // Read before the entry is overwritten below.
-  const previousRemotePeer = Object.hasOwn(remotePeers, peerJsPeerId)
-    ? { ...remotePeers[peerJsPeerId] }
-    : undefined;
+  // Copied before the entry is overwritten below. An invalid peer is replaced, and its key, which is
+  // not known, is left behind.
+  const remotePeer = LocalDocumentGetRemotePeer(docLocal.value, peerJsPeerId);
+  const previousRemotePeer = remotePeer === undefined ? undefined : { ...remotePeer };
 
-  remotePeers[changeSubtree]((remotePeers) => {
-    remotePeers[peerJsPeerId] = {
+  docLocal.value[changeSubtree]((local) => {
+    // Replaced if invalid, as none of its peers could be read anyway.
+    if (!isObject(local.remotePeers)) local.remotePeers = {};
+
+    local.remotePeers[peerJsPeerId] = {
       deviceName: previousRemotePeer?.deviceName ?? '', // TODO
       authKeyId,
     };
@@ -38,20 +45,21 @@ export async function setRemotePeerKey(
 
 // Forget a remote peer: remove it, and delete its authentication key. The WebRTC network adapter
 // then disconnects from it, see `WebRtcNetworkAdapter.disconnectFromRemotePeer`.
+// An invalid peer is removed, too, as it is removed on purpose.
 export async function forgetRemotePeer(
-  docLocal: Ref<Rop<LocalDocument>>,
+  docLocal: Ref<LocalDocumentRop>,
   peerJsPeerId: PeerJsPeerId,
 ) {
   const remotePeers = docLocal.value.remotePeers;
 
-  if (!Object.hasOwn(remotePeers, peerJsPeerId)) return;
+  if (!isObject(remotePeers) || !Object.hasOwn(remotePeers, peerJsPeerId)) return;
 
-  const authKeyId = remotePeers[peerJsPeerId].authKeyId;
+  const authKeyId = LocalDocumentGetRemotePeer(docLocal.value, peerJsPeerId)?.authKeyId;
 
   // Remove the peer first, so that its key can no longer be used to connect.
   remotePeers[changeSubtree]((remotePeers) => {
     delete remotePeers[peerJsPeerId];
   });
 
-  await auth.deleteAuthKey(authKeyId);
+  if (authKeyId !== undefined) await auth.deleteAuthKey(authKeyId);
 }

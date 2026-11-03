@@ -8,6 +8,7 @@ import {
   started,
   stopStartedDevices,
   until,
+  peerId,
 } from './helpers';
 
 // In a file of its own, as it waits for the connection attempt timeout. Test files run in
@@ -31,13 +32,13 @@ describe('connection attempts', () => {
 
       return __peerData !== undefined ? 1_000 : 0;
     };
-    const a = started('a12', { b12: remotePeer(keyA) });
+    const a = started(peerId('a12'), { [peerId('b12')]: remotePeer(keyA) });
     const events: string[] = [];
     a.adapter.on('peer-candidate', () => events.push('candidate'));
     a.adapter.on('peer-disconnected', () => events.push('disconnected'));
-    started('b12', { a12: remotePeer(keyB) }, { passive: true });
+    started(peerId('b12'), { [peerId('a12')]: remotePeer(keyB) }, { passive: true });
 
-    expect(await until(() => isConnected(a, 'b12'), 25_000)).toBe(true);
+    expect(await until(() => isConnected(a, peerId('b12')), 25_000)).toBe(true);
     await sleep(1_000);
 
     // Connected once, by the retry.

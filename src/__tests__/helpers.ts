@@ -7,9 +7,16 @@ import type { LocalDocument, RemotePeer } from '@/documents/local';
 import type { EphemeralDocument } from '@/documents/ephemeral';
 import type { HashArgsAddPeer } from '@/hash';
 import type { Peer } from './fakes/peerjs';
+import * as uuid from 'uuid';
 
 export const CALENDAR_ID = '01a14000-0000-7000-8000-000000000001';
 export const OTHER_CALENDAR_ID = '01a14000-0000-7000-8000-000000000002';
+
+// The PeerJS peer ID of a test device, derived from a readable name: a UUID, as in the app, as the
+// local document's schema requires one.
+export function peerId(name: string): string {
+  return uuid.v5(name, CALENDAR_ID);
+}
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

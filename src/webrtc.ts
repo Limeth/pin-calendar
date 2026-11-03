@@ -8,7 +8,14 @@ import {
 } from '@automerge/automerge-repo';
 import { type DataConnection, Peer } from 'peerjs';
 import { watch, type Ref, type WatchStopHandle } from 'vue';
-import { type CalendarId, type LocalDocument } from './documents/local';
+import {
+  LocalDocumentGetDocumentIdShared,
+  LocalDocumentGetLocalPeer,
+  LocalDocumentGetRemotePeer,
+  LocalDocumentGetRemotePeers,
+  type CalendarId,
+  type LocalDocumentRop,
+} from './documents/local';
 import type { HashArgsAddPeer } from './hash';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { EphemeralDocument } from './documents/ephemeral';
@@ -30,7 +37,7 @@ import {
 export type WebRtcNetworkAdapterOptions = {
   calendarId: CalendarId;
   docEphemeral: Ref<Rop<EphemeralDocument>>;
-  docLocal: Ref<Rop<LocalDocument>>;
+  docLocal: Ref<LocalDocumentRop>;
   attemptToWaitForDocumentAvailability:
     | undefined
     | {
@@ -195,7 +202,14 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   // Create the PeerJS peer, which registers this device's peer ID with the signalling server. Also
   // used to replace a peer that PeerJS destroyed, see `reconnectToSignallingServer`.
   createPeer() {
-    this.peer = new Peer(this.options.docLocal.value.localPeer.peerJsPeerId, {
+    const localPeer = LocalDocumentGetLocalPeer(this.options.docLocal.value);
+
+    if (localPeer === undefined)
+      throw new Error(
+        `Cannot connect, as the local peer of calendar ${this.options.calendarId} is invalid.`,
+      );
+
+    this.peer = new Peer(localPeer.peerJsPeerId, {
       debug: 3,
       secure: true,
     });
@@ -239,8 +253,9 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       // would never initiate the outbound connection, the adapter would
       // finish "ready" with zero peers, and the shared document would
       // remain unavailable forever.
+      // A new object on every change of the local document, so no deep watching is needed.
       const stopWatchingRemotePeers = watch(
-        () => this.options.docLocal.value.remotePeers,
+        () => LocalDocumentGetRemotePeers(this.options.docLocal.value),
         (newPeers, oldPeers) => {
           if (!this.peer) return;
 
@@ -260,7 +275,6 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
           for (const peerJsPeerId of oldKeys)
             if (!newKeys.includes(peerJsPeerId)) this.disconnectFromRemotePeer(peerJsPeerId);
         },
-        { deep: true },
       );
 
       // Joins requested by the join dialog, possibly in another tab. Those already requested were
@@ -307,7 +321,9 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   connectToRemotePeers() {
-    for (const remotePeerPeerJsPeerId of Object.keys(this.options.docLocal.value.remotePeers))
+    for (const remotePeerPeerJsPeerId of Object.keys(
+      LocalDocumentGetRemotePeers(this.options.docLocal.value),
+    ))
       this.connectToRemotePeer(remotePeerPeerJsPeerId);
   }
 
@@ -379,7 +395,10 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   // apart from a temporary failure, so retrying continues, at least every `RETRY_MAX_DELAY_MS`.
   scheduleConnectionRetry(remotePeerPeerJsPeerId: string) {
     if (this.stopped) return;
-    if (!Object.hasOwn(this.options.docLocal.value.remotePeers, remotePeerPeerJsPeerId)) return;
+    if (
+      LocalDocumentGetRemotePeer(this.options.docLocal.value, remotePeerPeerJsPeerId) === undefined
+    )
+      return;
     if (this.connections[remotePeerPeerJsPeerId] !== undefined) return;
 
     const retry = (this.connectionRetries[remotePeerPeerJsPeerId] ??= {
@@ -494,7 +513,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
     const result = await joinCalendarVia(this.peer!, invite, {
       timeoutMs: OUTGOING_JOIN_TIMEOUT_MS,
-      sharedDocumentId: this.options.docLocal.value.documentIdShared,
+      sharedDocumentId: LocalDocumentGetDocumentIdShared(this.options.docLocal.value),
     });
 
     if (result.kind === 'error') return result;
@@ -519,12 +538,11 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
   // Load the authentication key of a remote peer, if the peer is known and its key exists.
   async loadRemotePeerKey(peerJsPeerId: string): Promise<CryptoKey | undefined> {
-    const remotePeers = this.options.docLocal.value.remotePeers;
-    // `hasOwn`, because the remote peer chooses its own PeerJS peer ID, which could otherwise match
-    // an inherited property, such as `constructor`.
-    return Object.hasOwn(remotePeers, peerJsPeerId)
-      ? await auth.loadAuthKey(remotePeers[peerJsPeerId].authKeyId)
-      : undefined;
+    // The remote peer chooses its own PeerJS peer ID, which could match an inherited property, such
+    // as `constructor`, which `LocalDocumentGetRemotePeer` does not count as a peer.
+    const remotePeer = LocalDocumentGetRemotePeer(this.options.docLocal.value, peerJsPeerId);
+
+    return remotePeer !== undefined ? await auth.loadAuthKey(remotePeer.authKeyId) : undefined;
   }
 
   // Authenticate a connection opened by this peer, as the initiator of the handshake. The connection
@@ -632,7 +650,8 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     // The peer may have been forgotten while the handshake was in progress, after its key was
     // looked up, in which case `disconnectFromRemotePeer` did not see this connection yet.
     if (
-      !Object.hasOwn(this.options.docLocal.value.remotePeers, connectedPeer.dataConnection.peer)
+      LocalDocumentGetRemotePeer(this.options.docLocal.value, connectedPeer.dataConnection.peer) ===
+      undefined
     ) {
       console.log(`Dropping a connection to forgotten peer ${connectedPeer.dataConnection.peer}.`);
       closeConnection(connectedPeer.dataConnection);
