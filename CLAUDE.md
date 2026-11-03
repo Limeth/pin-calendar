@@ -44,8 +44,18 @@ replaced or deleted.
   read, e.g. invite links and imported files, may be parsed.
 - Every module defining a schema with a string format imports `formats.ts`.
 
-## Data of a newer schema version is read-only (`versioned.ts`)
+## Schema versions (`versioned.ts`)
 
+- Documents, local storage and exported files hold their data by schema version:
+  `{ schemaVersion: { "<n>": ... } }`. This container is permanent, so that every version of the app
+  recognizes it. `VersionedSchema` checks only the container; readers check the current version.
+- Version keys are canonical integers. Any other key is ignored.
+- Versions are never removed from synchronized storage (documents, and local storage, which tabs
+  share), as other devices or tabs running older versions of the app may still use them.
+- The current version is only created (`init`) when there are no versions at all. When there are
+  only older versions (`outdated`), they are to be migrated from; see its TODO for the process that
+  migrating a shared document requires.
+- Data that is not saved back as it was read, e.g. imported files, is read via `parseCurrentVersion`.
 - When data has a schema version newer than this version of the app, the app is outdated: it shows
   the data's current version, if there is one, read-only, so that it stays as other devices or tabs
   running this version left it, and asks the user to refresh the page (`NewerVersionAlert`).

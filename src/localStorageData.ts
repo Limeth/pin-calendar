@@ -210,7 +210,7 @@ export function LocalStorageDataParse(string: string): LocalStorageData | undefi
     return localStorageData;
   }
 
-  // TODO: Migrate from older versions.
+  // TODO: Migrate from older versions, see `getCurrentVersion`.
   if (result.type === 'none' || result.type === 'outdated') return undefined;
 
   return LocalStorageDataParseCurrent(result.current);

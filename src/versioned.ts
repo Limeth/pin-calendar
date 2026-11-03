@@ -29,7 +29,11 @@ type GetCurrentVersionResult<R> =
       type: 'none';
     }
   | {
-      // There are only older versions, the newest of which is given.
+      // There are only older versions, the newest of which is given, to be migrated from.
+      // TODO: Migrating a shared document requires a process in which all of the calendar's devices
+      // are connected to each other, so that they all know of the new version being created, and two
+      // migrations cannot happen simultaneously: versions created concurrently on several devices
+      // would conflict in Automerge, and only one of them would be kept.
       type: 'outdated';
       version: number;
     }
@@ -89,7 +93,7 @@ export function getCurrentVersion<R, T extends Versioned<R>>(
 ): GetCurrentVersionResult<R> {
   const result = findCurrentVersion(versioned.schemaVersion, currentVersion);
 
-  // TODO: Migrate from older versions.
+  // TODO: Migrate from older versions, see `outdated`.
 
   if (result.type === 'none' && typeof init === 'function') {
     const versionKey = String(currentVersion);
@@ -135,7 +139,7 @@ export function getCurrentVersionRop<R, T extends Versioned<R>>(
       ? { type: 'unsupported', version: result.version, current: result.current as UncheckedRop<R> }
       : { type: 'unsupported', version: result.version };
 
-  // TODO: Migrate from older versions.
+  // TODO: Migrate from older versions, see `outdated`.
 
   if (result.type === 'none' && typeof init === 'function') {
     const versionKey = String(currentVersion);
