@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { PinDayHasPin, type PinDay } from '@/pins/pinCalendarDay';
-import { type Pin, type PinCatalog, type PinTypeOf } from '../pins/pinCatalog';
+import { type Pin, type PinRop } from '../pins/pinCatalog';
 import PinCard from './PinCard.vue';
 import type { Rop } from 'automerge-diy-vue-hooks';
 
 const { depth, pin, pinDay } = defineProps<{
   depth: number;
-  pin: PinTypeOf<Rop<PinCatalog>>;
+  pin: PinRop;
   pinDay: Rop<PinDay>;
 }>();
 

@@ -4,56 +4,55 @@ import { ref } from 'vue';
 import {
   PinCatalogGetPinsInCategory,
   PinCatalogGetSubcategoriesInCategory,
-  type PinCatalog,
-  type PinCategoryTypeOf,
-  type PinTypeOf,
+  type PinCatalogUncheckedRop,
+  type PinCategoryRop,
+  type PinRop,
 } from '../pins/pinCatalog';
 import PinCard from './PinCard.vue';
 import * as R from 'ramda';
-import type { Rop } from 'automerge-diy-vue-hooks';
 import CollapsibleText from './CollapsibleText.vue';
 
 const { depth, pinCategory, predecessorArchived } = defineProps<{
   depth: number;
   predecessorArchived?: boolean;
-  pinCatalog: Rop<PinCatalog>;
-  pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>;
+  pinCatalog: PinCatalogUncheckedRop;
+  pinCategory: PinCategoryRop;
 }>();
 
 export type SettingsPinCategoryEvent =
   | {
       kind: 'pinAdd';
-      parent: PinCategoryTypeOf<Rop<PinCatalog>>;
+      parent: PinCategoryRop;
     }
   | {
       kind: 'pinEdit';
-      pin: PinTypeOf<Rop<PinCatalog>>;
+      pin: PinRop;
     }
   | {
       kind: 'pinArchive';
-      pin: PinTypeOf<Rop<PinCatalog>>;
+      pin: PinRop;
       archive: boolean;
     }
   | {
       kind: 'pinDelete';
-      pin: PinTypeOf<Rop<PinCatalog>>;
+      pin: PinRop;
     }
   | {
       kind: 'categoryAdd';
-      parent?: PinCategoryTypeOf<Rop<PinCatalog>>;
+      parent?: PinCategoryRop;
     }
   | {
       kind: 'categoryEdit';
-      pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>;
+      pinCategory: PinCategoryRop;
     }
   | {
       kind: 'categoryArchive';
-      pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>;
+      pinCategory: PinCategoryRop;
       archive: boolean;
     }
   | {
       kind: 'categoryDelete';
-      pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>;
+      pinCategory: PinCategoryRop;
     };
 
 const emit = defineEmits<{

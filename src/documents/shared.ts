@@ -18,12 +18,8 @@ export const SharedDocumentSchema = Type.Object({
 // The shared document as this version writes it.
 export type SharedDocument = Static<typeof SharedDocumentSchema>;
 
-// The properties still read as if they had been checked, see `UncheckedRop`.
-// TODO: Read the pin catalog via getters, too.
-export type SharedDocumentTrusted = 'pinCatalog';
-
 // The shared document as it is read: other devices may have written anything, see `Unchecked`.
-export type SharedDocumentRop = UncheckedRop<SharedDocument, SharedDocumentTrusted>;
+export type SharedDocumentRop = UncheckedRop<SharedDocument>;
 
 // The calendar's name, or `undefined` if it has none, or an invalid one.
 export function SharedDocumentGetName(self: Unchecked<SharedDocument>): string | undefined {

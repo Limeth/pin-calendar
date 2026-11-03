@@ -7,7 +7,9 @@ import {
   type PinCatalog,
   PinCatalogSerialize,
   PinCatalogDeserialize,
+  PinCatalogChange,
   PinCatalogClear,
+  PinCatalogNew,
   PinCatalogRemovePinCategory,
   type PinCategoryId,
   type PinId,
@@ -23,7 +25,7 @@ import { changeSubtree } from 'automerge-diy-vue-hooks';
 import { LocalStorageDataAddCalendar, localStorageDataStore } from '@/localStorageData';
 import * as auth from '@/auth';
 import { keyToId } from '@/pins/util';
-import { isObject } from '@/validation';
+import { isObject, readKeys } from '@/validation';
 import {
   PinCalendarClear,
   PinCalendarCombine,
@@ -149,8 +151,12 @@ function onClickPinsImport() {
 
       if (loadedPinCatalog === null) return;
 
+      // Also invalid entries, which are replaced when overwriting.
+      const catalog = pinCatalog.value;
+      const existingPinIdKeys = isObject(catalog) ? readKeys(catalog.pins) : [];
+      const existingPinCategoryIdKeys = isObject(catalog) ? readKeys(catalog.pinCategories) : [];
       const conflictingPinIdKeys = new Set(Object.keys(loadedPinCatalog.pins)).intersection(
-        new Set(Object.keys(pinCatalog.value.pins)),
+        new Set(existingPinIdKeys),
       );
       const conflictingPinIds: PinId[] = [];
 
@@ -159,7 +165,7 @@ function onClickPinsImport() {
 
       const conflictingPinCategoryIdKeys = new Set(
         Object.keys(loadedPinCatalog.pinCategories),
-      ).intersection(new Set(Object.keys(pinCatalog.value.pinCategories)));
+      ).intersection(new Set(existingPinCategoryIdKeys));
       const conflictingPinCategoryIds: PinCategoryId[] = [];
 
       for (const conflictingIdKey of conflictingPinCategoryIdKeys)
@@ -191,8 +197,10 @@ function onClickPinsClear() {
       'Are you sure you want to delete all pin definitions from the pin catalog? This action cannot be undone.',
     buttonConfirm: 'Delete All Pins',
     actionConfirm: () => {
-      pinCatalog.value[changeSubtree]((pinCatalog) => {
-        PinCatalogClear(pinCatalog);
+      docData.value[changeSubtree]((shared) => {
+        // Replaced if invalid, as it is cleared anyway.
+        if (isObject(shared.pinCatalog)) PinCatalogClear(shared.pinCatalog);
+        else shared.pinCatalog = PinCatalogNew();
       });
     },
   };
@@ -281,7 +289,7 @@ function onClickCalendarDelete() {
 }
 
 function onClickImportPinsConfirm(importPins: ImportPins) {
-  pinCatalog.value![changeSubtree]((pinCatalog) => {
+  PinCatalogChange(pinCatalog.value, (pinCatalog) => {
     if (importPins.overwrite) {
       // Remove conflicting elements
       for (const pinCategoryId of importPins.conflicts.pinCategories)

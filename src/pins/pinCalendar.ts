@@ -1,6 +1,11 @@
 import '@/formats';
 import { Type, type Static } from '@sinclair/typebox';
-import { PIN_ID_SYMBOL, type Pin, type PinCatalog } from './pinCatalog';
+import {
+  PIN_ID_SYMBOL,
+  PinCatalogGetPinById,
+  type PinCatalogUncheckedRop,
+  type PinRop,
+} from './pinCatalog';
 import { keyToId } from './util';
 import { toRef, type Ref } from 'vue';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
@@ -99,24 +104,20 @@ export function PinCalendarPrepareDay(
   return PinCalendarPrepareDayByKey(self, PinCalendarDayToKey(day));
 }
 
+// The valid pins on the day.
 export function PinCalendarGetPinsOnDay(
   self: PinCalendarUncheckedRop,
-  catalog: Rop<PinCatalog>,
+  catalog: PinCatalogUncheckedRop,
   day: Temporal.PlainDate,
-): Set<Pin> {
-  const result: Set<Pin> = new Set();
+): Set<PinRop> {
+  const result: Set<PinRop> = new Set();
   const pinDay = PinCalendarGetDayByKey(self, PinCalendarDayToKey(day));
 
   if (pinDay !== undefined) {
     for (const pinIdKey of pinDay.pins) {
-      const pin = catalog.pins[pinIdKey];
+      const pin = PinCatalogGetPinById(catalog, keyToId(pinIdKey, PIN_ID_SYMBOL));
 
-      if (pin !== undefined) {
-        result.add({
-          id: keyToId(pinIdKey, PIN_ID_SYMBOL),
-          value: pin,
-        });
-      }
+      if (pin !== null) result.add(pin);
     }
   }
 

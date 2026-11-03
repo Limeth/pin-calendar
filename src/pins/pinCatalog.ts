@@ -10,11 +10,17 @@ import {
   keyToId,
   type RegistryId,
   Variant,
-  type IdKey,
-  type MaybeRo,
-  type MaybeRop,
   type Registered,
 } from './util';
+import {
+  isObject,
+  readEntry,
+  readKeys,
+  readProperty,
+  type Unchecked,
+  type UncheckedRopValue,
+} from '@/validation';
+import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 
 export const PIN_ID_SYMBOL: unique symbol = Symbol.for('pinId');
 export const PIN_CATEGORY_ID_SYMBOL: unique symbol = Symbol.for('pinCategoryId');
@@ -84,16 +90,6 @@ export function generatePinCategoryId(): PinCategoryId {
   return generateId(PIN_CATEGORY_ID_SYMBOL);
 }
 
-export type PinDescriptorTypeOf<T extends { pins: { [id: IdKey<PinId>]: unknown } }> =
-  T['pins'][IdKey<PinId>];
-export type PinTypeOf<T extends { pins: { [id: IdKey<PinId>]: unknown } }> = Registered<
-  PinId,
-  PinDescriptorTypeOf<T>
->;
-export type PinCategoryTypeOf<
-  T extends { pinCategories: { [id: IdKey<PinCategoryId>]: unknown } },
-> = Registered<PinCategoryId, T['pinCategories'][IdKey<PinCategoryId>]>;
-
 const PIN_CATALOG_SCHEMA_VERSION_CURRENT = 1;
 
 export const PinCatalogSchema = Type.Object({
@@ -104,6 +100,19 @@ export const PinCatalogSchema = Type.Object({
 });
 
 export type PinCatalog = Static<typeof PinCatalogSchema>;
+
+// The pin catalog of the shared document as it is read, see `UncheckedRop`.
+export type PinCatalogUncheckedRop = UncheckedRopValue<PinCatalog>;
+
+// A pin or category read from the pin catalog of the shared document: its document proxy, checked.
+export type PinRop = Registered<PinId, Rop<PinDescriptor>>;
+export type PinCategoryRop = Registered<PinCategoryId, Rop<PinCategoryDescriptor>>;
+
+// A catalog to read pins and categories from, which are checked: the pin catalog of the shared
+// document, read as document proxies, or a catalog written within a change, or read from a file.
+type PinCatalogReadable = PinCatalog | PinCatalogUncheckedRop;
+type PinOf<C> = C extends PinCatalog ? Pin : PinRop;
+type PinCategoryOf<C> = C extends PinCatalog ? PinCategory : PinCategoryRop;
 
 export function PinCatalogNew(): PinCatalog {
   return {
@@ -118,36 +127,86 @@ export function PinCatalogClear(self: PinCatalog) {
   self.pinCategories = {};
 }
 
-export function PinCatalogGetPinById<T extends MaybeRop<PinCatalog>>(
-  self: T,
-  pinId: PinId,
-): PinTypeOf<T> | null {
-  const pinDescriptor = self.pins[pinId.key];
-
-  if (pinDescriptor === undefined) {
-    return null;
+// Change the catalog of the shared document, unless it is invalid. Whether it was changed.
+export function PinCatalogChange(
+  self: PinCatalogUncheckedRop,
+  change: (pinCatalog: PinCatalog) => void,
+): boolean {
+  if (!isObject(self)) {
+    console.error('Cannot change the pin catalog, as it is invalid.');
+    return false;
   }
 
-  return {
-    id: pinId,
-    value: pinDescriptor,
-  } as PinTypeOf<T>;
+  self[changeSubtree](change);
+  return true;
 }
 
-export function PinCatalogGetPinCategoryById<T extends MaybeRop<PinCatalog>>(
-  self: T,
+function PinCatalogGetPinsRecord(self: PinCatalogReadable): unknown {
+  return isObject(self) ? self.pins : undefined;
+}
+
+function PinCatalogGetPinCategoriesRecord(self: PinCatalogReadable): unknown {
+  return isObject(self) ? self.pinCategories : undefined;
+}
+
+// The pin, typed as in a catalog written within a change, see `PinOf` for the actual type.
+function PinCatalogReadPin(self: PinCatalogReadable, pinId: PinId): Pin | null {
+  const value = readEntry(
+    PinCatalogSchema.properties.pins,
+    PinCatalogGetPinsRecord(self),
+    pinId.key,
+    `pin ${pinId.key}`,
+  );
+
+  return value === undefined ? null : { id: pinId, value };
+}
+
+// The category, typed as in a catalog written within a change, see `PinCategoryOf` for the actual
+// type.
+function PinCatalogReadPinCategory(
+  self: PinCatalogReadable,
   pinCategoryId: PinCategoryId,
-): PinCategoryTypeOf<T> | null {
-  const pinCategoryDescriptor = self.pinCategories[pinCategoryId.key];
+): PinCategory | null {
+  const value = readEntry(
+    PinCatalogSchema.properties.pinCategories,
+    PinCatalogGetPinCategoriesRecord(self),
+    pinCategoryId.key,
+    `pin category ${pinCategoryId.key}`,
+  );
 
-  if (pinCategoryDescriptor === undefined) {
-    return null;
-  }
+  return value === undefined ? null : { id: pinCategoryId, value };
+}
 
-  return {
-    id: pinCategoryId,
-    value: pinCategoryDescriptor,
-  } as PinCategoryTypeOf<T>;
+function PinCatalogReadPins(self: PinCatalogReadable): Pin[] {
+  return readKeys(PinCatalogGetPinsRecord(self)).flatMap((key) => {
+    const pin = PinCatalogReadPin(self, keyToId(key, PIN_ID_SYMBOL));
+
+    return pin === null ? [] : [pin];
+  });
+}
+
+function PinCatalogReadPinCategories(self: PinCatalogReadable): PinCategory[] {
+  return readKeys(PinCatalogGetPinCategoriesRecord(self)).flatMap((key) => {
+    const pinCategory = PinCatalogReadPinCategory(self, keyToId(key, PIN_CATEGORY_ID_SYMBOL));
+
+    return pinCategory === null ? [] : [pinCategory];
+  });
+}
+
+// The pin, or `null` if the catalog has none, or an invalid one.
+export function PinCatalogGetPinById<C extends PinCatalogReadable>(
+  self: C,
+  pinId: PinId,
+): PinOf<C> | null {
+  return PinCatalogReadPin(self, pinId) as PinOf<C> | null;
+}
+
+// The category, or `null` if the catalog has none, or an invalid one.
+export function PinCatalogGetPinCategoryById<C extends PinCatalogReadable>(
+  self: C,
+  pinCategoryId: PinCategoryId,
+): PinCategoryOf<C> | null {
+  return PinCatalogReadPinCategory(self, pinCategoryId) as PinCategoryOf<C> | null;
 }
 
 function PinCategoryAddPinById(self: PinCategory, pinId: PinId): boolean {
@@ -177,8 +236,15 @@ export function PinCategoryRemoveSubcategory(
   return idSetRemove(self.subcategories, pinCategoryId);
 }
 
+// Ensure that the pin or category is deleted from peers in the future, unless the list is invalid.
+function PinCatalogAddRemoved<S extends symbol>(self: PinCatalog, id: RegistryId<S>) {
+  const removed = readProperty(PinCatalogSchema, self, 'removed', 'removed pins and categories');
+
+  if (removed !== undefined) idSetAdd(removed, id);
+}
+
 export function PinCatalogAddPin(self: PinCatalog, pin: Pin): boolean {
-  if (pin.id.key in self.pinCategories) return false;
+  if (!isObject(self.pins) || pin.id.key in self.pins) return false;
   else {
     self.pins[pin.id.key] = pin.value;
     return true;
@@ -221,25 +287,25 @@ export function PinCatalogCreateAndAddPinToCategory(
   return PinCatalogAddPinToCategory(self, categoryId, pin);
 }
 
+// Remove the pin, even an invalid one, as it is removed on purpose.
 export function PinCatalogRemovePin(self: PinCatalog, id: PinId): Pin | null {
   const previousValue = PinCatalogGetPinById(self, id);
 
-  if (previousValue !== null) {
+  if (isObject(self.pins) && Object.hasOwn(self.pins, id.key)) {
     // Delete from parents
-    for (const parent of Object.values(self.pinCategories)) PinCategoryRemovePin(parent, id);
+    for (const parent of PinCatalogReadPinCategories(self)) PinCategoryRemovePin(parent.value, id);
 
     // Delete from map
     delete self.pins[id.key];
   }
 
-  // Ensure it is deleted from peers in the future.
-  idSetAdd(self.removed, id);
+  PinCatalogAddRemoved(self, id);
 
   return previousValue;
 }
 
 export function PinCatalogAddPinCategory(self: PinCatalog, pinCategory: PinCategory): boolean {
-  if (pinCategory.id.key in self.pinCategories) return false;
+  if (!isObject(self.pinCategories) || pinCategory.id.key in self.pinCategories) return false;
   else {
     self.pinCategories[pinCategory.id.key] = pinCategory.value;
     return true;
@@ -302,148 +368,107 @@ export function PinCatalogRemoveSubcategoryFromCategory(
 //   const previousValue = PinCatalogRemovePinCategory(self, pinCategory.id);
 // }
 
+// Remove the category, even an invalid one, as it is removed on purpose.
 export function PinCatalogRemovePinCategory(
   self: PinCatalog,
   id: PinCategoryId,
 ): PinCategory | undefined {
   const previousValue = PinCatalogGetPinCategoryById(self, id);
 
-  if (previousValue !== null) {
+  if (isObject(self.pinCategories) && Object.hasOwn(self.pinCategories, id.key)) {
     // Delete from parents
-    for (const parent of Object.values(self.pinCategories))
-      PinCategoryRemoveSubcategory(parent, id);
+    for (const parent of PinCatalogReadPinCategories(self))
+      PinCategoryRemoveSubcategory(parent.value, id);
 
     // Delete from map
     delete self.pinCategories[id.key];
   }
 
-  // Ensure it is deleted from peers in the future.
-  idSetAdd(self.removed, id);
+  PinCatalogAddRemoved(self, id);
 
   return previousValue ?? undefined;
 }
 
-export function PinCatalogGetPins<T extends MaybeRop<PinCatalog>>(self: T): PinTypeOf<T>[] {
-  const pins: PinTypeOf<T>[] = [];
-
-  for (const [key, pin] of Object.entries(self.pins))
-    pins.push({
-      id: keyToId(key, PIN_ID_SYMBOL),
-      value: pin,
-    } as PinTypeOf<T>); // TODO: Why is type assertion here necessary while unnecessary in PinCatalogGetPinCategories?
-
-  return pins;
+// The valid pins of the catalog.
+export function PinCatalogGetPins<C extends PinCatalogReadable>(self: C): PinOf<C>[] {
+  return PinCatalogReadPins(self) as PinOf<C>[];
 }
 
-export function PinCatalogGetPinCategories<T extends MaybeRop<PinCatalog>>(
-  self: T,
-): PinCategoryTypeOf<T>[] {
-  const pinCategories: PinCategoryTypeOf<T>[] = [];
-
-  for (const [key, category] of Object.entries(self.pinCategories))
-    pinCategories.push({
-      id: keyToId(key, PIN_CATEGORY_ID_SYMBOL),
-      value: category,
-    });
-
-  return pinCategories;
+// The valid categories of the catalog.
+export function PinCatalogGetPinCategories<C extends PinCatalogReadable>(
+  self: C,
+): PinCategoryOf<C>[] {
+  return PinCatalogReadPinCategories(self) as PinCategoryOf<C>[];
 }
 
-export function PinCatalogGetRootCategories<T extends MaybeRop<PinCatalog>>(
-  self: T,
-): PinCategoryTypeOf<T>[] {
-  const nonRootCategories = new Set();
+// The valid categories that are no valid category's subcategory.
+export function PinCatalogGetRootCategories<C extends PinCatalogReadable>(
+  self: C,
+): PinCategoryOf<C>[] {
+  const pinCategories = PinCatalogReadPinCategories(self);
+  const nonRootCategories = new Set(
+    pinCategories.flatMap((pinCategory) => pinCategory.value.subcategories),
+  );
 
-  for (const pinCategory of Object.values(self.pinCategories))
-    for (const subcategoryIdKey of pinCategory.subcategories)
-      nonRootCategories.add(subcategoryIdKey);
-
-  const rootCategories: PinCategoryTypeOf<T>[] = [];
-
-  for (const [key, category] of Object.entries(self.pinCategories))
-    if (!nonRootCategories.has(key))
-      rootCategories.push({
-        id: keyToId(key, PIN_CATEGORY_ID_SYMBOL),
-        value: category,
-      });
-
-  return rootCategories;
+  return pinCategories.filter(
+    (pinCategory) => !nonRootCategories.has(pinCategory.id.key),
+  ) as PinCategoryOf<C>[];
 }
 
-export function PinCatalogAsJsonValue(self: MaybeRo<PinCatalog>): object {
+export function PinCatalogAsJsonValue(self: Unchecked<PinCatalog>): object {
   return makeVersioned(self, PIN_CATALOG_SCHEMA_VERSION_CURRENT);
 }
 
-export function PinCatalogSerialize(self: MaybeRo<PinCatalog>): string {
+export function PinCatalogSerialize(self: Unchecked<PinCatalog>): string {
   return JSON.stringify(PinCatalogAsJsonValue(self));
 }
 
 export function PinCatalogGetPinIdsInCategory(
-  self: MaybeRop<PinCatalog>,
+  self: PinCatalogReadable,
   pinCategoryId: PinCategoryId,
 ): PinId[] {
-  const pinCategory = PinCatalogGetPinCategoryById(self, pinCategoryId);
+  const pinCategory = PinCatalogReadPinCategory(self, pinCategoryId);
 
   if (pinCategory === null) return [];
 
-  const keySet = new Set<IdKey<PinId>>();
-
-  for (const pinIdKey of pinCategory.value.pins) keySet.add(pinIdKey);
-
-  const result: PinId[] = [];
-
-  for (const pinIdKey of keySet) result.push(keyToId(pinIdKey, PIN_ID_SYMBOL));
-
-  return Array.from(result);
+  return [...new Set(pinCategory.value.pins)].map((key) => keyToId(key, PIN_ID_SYMBOL));
 }
 
-export function PinCatalogGetPinsInCategory<T extends MaybeRop<PinCatalog>>(
-  self: T,
+// The valid pins of the category, in its order.
+export function PinCatalogGetPinsInCategory<C extends PinCatalogReadable>(
+  self: C,
   pinCategoryId: PinCategoryId,
-): PinTypeOf<T>[] {
-  const result: PinTypeOf<T>[] = [];
+): PinOf<C>[] {
+  return PinCatalogGetPinIdsInCategory(self, pinCategoryId).flatMap((pinId) => {
+    const pin = PinCatalogReadPin(self, pinId);
 
-  for (const pinId of PinCatalogGetPinIdsInCategory(self, pinCategoryId)) {
-    const pin = PinCatalogGetPinById(self, pinId);
-
-    if (pin !== null) result.push(pin);
-  }
-
-  return result;
+    return pin === null ? [] : [pin];
+  }) as PinOf<C>[];
 }
 
 export function PinCatalogGetSubcategoryIdsInCategory(
-  self: MaybeRop<PinCatalog>,
+  self: PinCatalogReadable,
   pinCategoryId: PinCategoryId,
 ): PinCategoryId[] {
-  const pinCategory = PinCatalogGetPinCategoryById(self, pinCategoryId);
+  const pinCategory = PinCatalogReadPinCategory(self, pinCategoryId);
 
   if (pinCategory === null) return [];
 
-  const keySet = new Set<IdKey<PinId>>();
-
-  for (const subcategoryIdKey of pinCategory.value.subcategories) keySet.add(subcategoryIdKey);
-
-  const result: PinCategoryId[] = [];
-
-  for (const pinIdKey of keySet) result.push(keyToId(pinIdKey, PIN_CATEGORY_ID_SYMBOL));
-
-  return Array.from(result);
+  return [...new Set(pinCategory.value.subcategories)].map((key) =>
+    keyToId(key, PIN_CATEGORY_ID_SYMBOL),
+  );
 }
 
-export function PinCatalogGetSubcategoriesInCategory<T extends MaybeRop<PinCatalog>>(
-  self: T,
+// The valid subcategories of the category, in its order.
+export function PinCatalogGetSubcategoriesInCategory<C extends PinCatalogReadable>(
+  self: C,
   pinCategoryId: PinCategoryId,
-): PinCategoryTypeOf<T>[] {
-  const result: PinCategoryTypeOf<T>[] = [];
+): PinCategoryOf<C>[] {
+  return PinCatalogGetSubcategoryIdsInCategory(self, pinCategoryId).flatMap((subcategoryId) => {
+    const subcategory = PinCatalogReadPinCategory(self, subcategoryId);
 
-  for (const subcategoryId of PinCatalogGetSubcategoryIdsInCategory(self, pinCategoryId)) {
-    const subcategory = PinCatalogGetPinCategoryById(self, subcategoryId);
-
-    if (subcategory !== null) result.push(subcategory);
-  }
-
-  return result;
+    return subcategory === null ? [] : [subcategory];
+  }) as PinCategoryOf<C>[];
 }
 
 // export function PinCatalogSaveToLocalStorage(self: PinCatalog) {

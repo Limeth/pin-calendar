@@ -21,7 +21,6 @@ import {
   SharedDocumentGetCurrentVersion,
   SharedDocumentGetName,
   type SharedDocument,
-  type SharedDocumentTrusted,
 } from './documents/shared';
 import type { EphemeralDocument } from './documents/ephemeral';
 import {
@@ -36,7 +35,7 @@ export type App = {
   readonly calendarId: CalendarId;
   readonly docEphemeral: DocumentWrapper<EphemeralDocument>;
   readonly docLocal: VersionedDocumentWrapper<LocalDocument, LocalDocumentTrusted>;
-  readonly docShared: VersionedDocumentWrapper<SharedDocument, SharedDocumentTrusted>;
+  readonly docShared: VersionedDocumentWrapper<SharedDocument>;
   // Stop synchronizing the calendar with other devices for good, in all tabs, e.g. when it is
   // deleted from this device.
   shutDownWebRtc(): void;

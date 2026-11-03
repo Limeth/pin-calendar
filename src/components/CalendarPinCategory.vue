@@ -4,9 +4,9 @@ import { ref } from 'vue';
 import {
   type Pin,
   PinCatalogGetPinsInCategory,
-  type PinCatalog,
+  type PinCatalogUncheckedRop,
   PinCatalogGetSubcategoriesInCategory,
-  type PinCategoryTypeOf,
+  type PinCategoryRop,
 } from '../pins/pinCatalog';
 import * as R from 'ramda';
 import CalendarPinButton from './CalendarPinButton.vue';
@@ -16,8 +16,8 @@ import CollapsibleText from './CollapsibleText.vue';
 
 const { depth, pinCategory, pinDay } = defineProps<{
   depth: number;
-  pinCatalog: Rop<PinCatalog>;
-  pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>;
+  pinCatalog: PinCatalogUncheckedRop;
+  pinCategory: PinCategoryRop;
   pinDay: Rop<PinDay>;
 }>();
 

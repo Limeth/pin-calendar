@@ -1,10 +1,6 @@
 import '@/formats';
 import { Type, type Static, type TObject } from '@sinclair/typebox';
-import type { Ro, Rop } from 'automerge-diy-vue-hooks';
 import * as uuid from 'uuid';
-
-export type MaybeRop<T> = T | Rop<T>;
-export type MaybeRo<T> = T | Ro<T>;
 
 export const LocalStorageSerializableSchema = Type.Object({
   version: Type.Integer(),

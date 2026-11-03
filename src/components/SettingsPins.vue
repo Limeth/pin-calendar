@@ -4,6 +4,7 @@ import * as feather from 'feather-icons';
 import { ref, watch, computed, toRaw } from 'vue';
 import type { Ref } from 'vue';
 import {
+  PinCatalogChange,
   PinCatalogCreateAndAddPinToCategory,
   PinCatalogCreateAndAddSubcategoryToCategory,
   PinCatalogGetPinById,
@@ -12,13 +13,12 @@ import {
   PinCatalogRemovePin,
   PinCatalogRemovePinCategory,
   type Pin,
-  type PinCatalog,
   type PinCategoryDescriptor,
   type PinCategoryId,
-  type PinCategoryTypeOf,
+  type PinCategoryRop,
   type PinDescriptor,
   type PinId,
-  type PinTypeOf,
+  type PinRop,
 } from '../pins/pinCatalog';
 import emojiRegex from 'emoji-regex';
 import SettingsPinCategory, { type SettingsPinCategoryEvent } from './SettingsPinCategory.vue';
@@ -101,18 +101,18 @@ function editPin(pinId: PinId, pin: Rop<PinDescriptor> | undefined) {
   }
 }
 
-function onClickEditPinCategory(pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>) {
+function onClickEditPinCategory(pinCategory: PinCategoryRop) {
   editPinCategory(pinCategory.id, pinCategory.value);
 }
 
-function onClickEditPin(pin: PinTypeOf<Rop<PinCatalog>>) {
+function onClickEditPin(pin: PinRop) {
   editPin(pin.id, pin.value);
 }
 
-function onClickAddPinCategory(parent: PinCategoryTypeOf<Rop<PinCatalog>> | undefined) {
+function onClickAddPinCategory(parent: PinCategoryRop | undefined) {
   let id: PinCategoryId | undefined;
 
-  pinCatalog.value[changeSubtree]((pinCatalog) => {
+  PinCatalogChange(pinCatalog.value, (pinCatalog) => {
     const pinCategory = PinCatalogCreateAndAddSubcategoryToCategory(
       pinCatalog,
       parent?.id ?? null,
@@ -129,10 +129,10 @@ function onClickAddPinCategory(parent: PinCategoryTypeOf<Rop<PinCatalog>> | unde
   if (id !== undefined) editPinCategory(id, undefined);
 }
 
-function onClickAddPin(parent: PinCategoryTypeOf<Rop<PinCatalog>>) {
+function onClickAddPin(parent: PinCategoryRop) {
   let id: PinId | undefined;
 
-  pinCatalog.value[changeSubtree]((pinCatalog) => {
+  PinCatalogChange(pinCatalog.value, (pinCatalog) => {
     // prettier-ignore
     const DEFAULT_EMOJIS = [
       '🎀', '🎗️', '🥼', '🦺', '👔', '👟', '💎', '🎵', '📖', '📒', '📓', '🔖', '🏷️', '✏️', '🖊️', '💼', '💸', '💳', '🧶', '🪚', '🧪', '🔭', '🛏️', '♻️', '🧭', '🏕️', '🏖️', '🚲', '🛹', '🛼', '⚽', '⚾', '🥎', '🏀', '🏐', '🏈', '🏉', '🎾', '🥏', '🎳', '🏏', '🏑', '🏒', '🥍', '🏓', '🏸', '🥊', '🥋', '🥅', '⛳', '⛸️', '🎣', '🤿', '🎿', '🛷', '🥌', '🎯', '🏹', '🪀', '🪁', '🪄', '🎮', '🕹️', '🎲', '🧩', '♟️', '🃏', '🀄', '🎴', '🎭', '🖼️', '🎨', '🍳', '🥘', '🍲', '🥗', '🍱', '🍜', '🍻', '🥂', '🍽️', '☀️', '🌙', '⭐', '🌈', '⚡', '❄️', '🔥', '💧', '✍️', '💅', '💪', '🧠', '🐈', '🐕', '🐱', '🐶', '🐰', '🐾', '🐹', '🐇', '🐈‍⬛', '🦎', '🦔', '🐠', '🐦',
@@ -179,14 +179,14 @@ function onClickEditClose() {
   editing.value = undefined;
 }
 
-function onClickDeletePinCategory(pinCategory: PinCategoryTypeOf<Rop<PinCatalog>>) {
-  pinCatalog.value[changeSubtree]((pinCatalog) => {
+function onClickDeletePinCategory(pinCategory: PinCategoryRop) {
+  PinCatalogChange(pinCatalog.value, (pinCatalog) => {
     PinCatalogRemovePinCategory(pinCatalog, pinCategory.id);
   });
 }
 
 function onClickDeletePin(pin: Pin) {
-  pinCatalog.value[changeSubtree]((pinCatalog) => {
+  PinCatalogChange(pinCatalog.value, (pinCatalog) => {
     PinCatalogRemovePin(pinCatalog, pin.id);
   });
 }

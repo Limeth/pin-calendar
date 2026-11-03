@@ -111,3 +111,8 @@ export function readEntryRop<V extends TSchema>(
 ): Rop<Static<V>> | undefined {
   return readEntry(schema, record, key, description) as Rop<Static<V>> | undefined;
 }
+
+// The keys of an unchecked record, also of entries that are invalid.
+export function readKeys(record: unknown): string[] {
+  return isObject(record) ? Object.keys(record) : [];
+}
