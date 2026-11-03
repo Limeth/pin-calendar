@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  LocalStorageDataIsReadOnly,
   LocalStorageDataLoadOrDefault,
   LocalStorageDataParse,
   LocalStorageDataSave,
@@ -190,17 +191,74 @@ describe('reading the calendar list from storage', () => {
     expect(LocalStorageDataParse(storedData({ calendars: 'none' }))).toBeUndefined();
   });
 
-  it('refuses data of a newer version', () => {
-    expect(() =>
-      LocalStorageDataParse(JSON.stringify({ schemaVersion: { 2: { calendars: {} } } })),
-    ).toThrow('Unsupported');
-  });
-
   it('backs up data that cannot be read, before replacing it', () => {
     localStorage.setItem(KEY, '{');
 
     expect(LocalStorageDataLoadOrDefault()).toEqual({ calendars: {} });
     expect(localStorage.getItem('pinCalendarBackup')).toBe('{');
     expect(savedData()).toEqual({ calendars: {} });
+  });
+});
+
+describe('calendar list data of a newer version', () => {
+  beforeEach(() => {
+    // The newer version is logged.
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Whatever a newer version stores, its version need not be an object.
+  const newer = JSON.stringify({
+    schemaVersion: { 1: { calendars: { [CALENDAR_ID]: { alias: 'Work' } } }, 2: 'newer' },
+  });
+  const onlyNewer = JSON.stringify({ schemaVersion: { 2: 'newer' } });
+
+  it('is read from the current version, read-only', () => {
+    const data = LocalStorageDataParse(newer)!;
+
+    expect(data.calendars).toEqual({ [CALENDAR_ID]: { alias: 'Work' } });
+    expect(LocalStorageDataIsReadOnly(data)).toBe(true);
+  });
+
+  it('is an empty, read-only list without the current version', () => {
+    const data = LocalStorageDataParse(onlyNewer)!;
+
+    expect(data.calendars).toEqual({});
+    expect(LocalStorageDataIsReadOnly(data)).toBe(true);
+  });
+
+  it('is neither replaced nor backed up when loaded', () => {
+    for (const string of [newer, onlyNewer]) {
+      localStorage.removeItem('pinCalendarBackup');
+      localStorage.setItem(KEY, string);
+
+      expect(LocalStorageDataIsReadOnly(LocalStorageDataLoadOrDefault())).toBe(true);
+      expect(localStorage.getItem(KEY)).toBe(string);
+      expect(localStorage.getItem('pinCalendarBackup')).toBeNull();
+    }
+  });
+
+  it('is not saved', () => {
+    localStorage.setItem(KEY, stored({}));
+    const data = LocalStorageDataParse(newer)!;
+    data.leastRecentlyUsedCalendar = CALENDAR_ID;
+    LocalStorageDataSave(data);
+
+    expect(localStorage.getItem(KEY)).toBe(stored({}));
+  });
+
+  it('is not overwritten by a list loaded before it was stored, e.g. by another tab', () => {
+    localStorage.setItem(KEY, stored({ [CALENDAR_ID]: {} }));
+    const data = LocalStorageDataLoadOrDefault();
+
+    for (const string of [newer, onlyNewer]) {
+      localStorage.setItem(KEY, string);
+      LocalStorageDataSave(data);
+
+      expect(localStorage.getItem(KEY)).toBe(string);
+    }
   });
 });

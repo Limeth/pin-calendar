@@ -1,8 +1,9 @@
 import { Type, type Static } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value';
 import { ref, shallowRef, watch, type Ref, type ShallowRef } from 'vue';
 import * as uuid from 'uuid';
 import { CalendarIdSchema, type CalendarId } from './documents/local';
-import { getCurrentVersion, makeVersioned, Versioned } from './versioned';
+import { getCurrentVersion, makeVersioned, VersionedSchema, type Versioned } from './versioned';
 import { isObject, readProperty, readValue } from './validation';
 
 const LOCAL_STORAGE_KEY = 'pinCalendar';
@@ -49,9 +50,21 @@ const LocalStorageDataSchema = Type.Object({
 // listed, but kept as they are, and saved with the list, so that they are not lost.
 const UNREADABLE_CALENDARS = Symbol('unreadableCalendars');
 
+// The newest schema version of the stored data, if it is newer than this version of the app: the
+// data is then not saved, so that the newer version is not overwritten, and the list cannot be edited.
+// The calendars are those of the current version, if the stored data still has one.
+const NEWER_VERSION = Symbol('newerVersion');
+
 export type LocalStorageData = Static<typeof LocalStorageDataSchema> & {
   [UNREADABLE_CALENDARS]?: Record<string, unknown>;
+  [NEWER_VERSION]?: number;
 };
+
+// Whether the list cannot be edited, as it was written by a newer version of the app, see
+// `NEWER_VERSION`.
+export function LocalStorageDataIsReadOnly(self: LocalStorageData): boolean {
+  return self[NEWER_VERSION] !== undefined;
+}
 
 // Add a new, empty calendar, and return its ID. Always under a new ID: one that was used before may
 // belong to a deleted calendar, which the shared worker still remembers, see `webRtcShutDown`.
@@ -98,13 +111,24 @@ export function LocalStorageDataSetCalendarName(
 }
 
 export function LocalStorageDataSave(self: LocalStorageData) {
+  if (LocalStorageDataIsReadOnly(self)) return;
+
+  const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+
+  // Another tab may have written a newer version since this one loaded the data, before this tab
+  // was notified of it, see `localStorageDataStore`.
+  if (stored !== null && storedNewerVersion(stored) !== undefined) {
+    console.warn('Not saving the data in local storage, as a newer version of the app changed it.');
+    return;
+  }
+
   // A calendar added under the ID of an unreadable one replaces it.
   const data = { ...self, calendars: { ...self[UNREADABLE_CALENDARS], ...self.calendars } };
   const string = JSON.stringify(makeVersioned(data, LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT));
 
   // Writing an unchanged value would only make the other tabs reload it, see
   // `localStorageDataStore`, which they would then save again.
-  if (localStorage.getItem(LOCAL_STORAGE_KEY) === string) return;
+  if (stored === string) return;
 
   localStorage.setItem(LOCAL_STORAGE_KEY, string);
 }
@@ -117,6 +141,23 @@ export function LocalStorageDataLoadOrDefault(): LocalStorageData {
   localStorageData = LocalStorageDataDefault();
   LocalStorageDataSave(localStorageData);
   return localStorageData;
+}
+
+// The newest version of the stored data, if it is newer than this version of the app.
+function storedNewerVersion(string: string): number | undefined {
+  let json: unknown;
+
+  try {
+    json = JSON.parse(string);
+  } catch {
+    return undefined;
+  }
+
+  if (!Value.Check(VersionedSchema, json)) return undefined;
+
+  const result = getCurrentVersion(json, LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT, undefined);
+
+  return result.type === 'unsupported' ? result.version : undefined;
 }
 
 function LocalStorageDataLoad(): LocalStorageData | undefined {
@@ -135,7 +176,8 @@ function LocalStorageDataLoad(): LocalStorageData | undefined {
 
 // Read the stored data, keeping as much of it as can be read: a calendar that cannot be read is set
 // aside, see `UNREADABLE_CALENDARS`, rather than the whole list being discarded. Properties unknown to
-// this version are kept. `undefined` if not even the list can be read.
+// this version are kept. `undefined` if not even the list can be read. Data of a newer version is
+// read-only, see `NEWER_VERSION`.
 export function LocalStorageDataParse(string: string): LocalStorageData | undefined {
   let json: unknown;
 
@@ -146,23 +188,41 @@ export function LocalStorageDataParse(string: string): LocalStorageData | undefi
     return undefined;
   }
 
-  const versioned = readValue(Versioned(Type.Object({})), json, 'local storage data');
+  const versioned = readValue(VersionedSchema, json, 'local storage data');
 
   if (versioned === undefined) return undefined;
 
-  const result = getCurrentVersion<object, Versioned<object>>(
+  const result = getCurrentVersion<unknown, Versioned<unknown>>(
     versioned,
     LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT,
     undefined,
   );
 
-  if (result.type === 'unsupported')
-    throw new Error(`Unsupported local storage data schema version: ${result.version}`);
+  if (result.type === 'unsupported') {
+    console.warn(
+      `The data in local storage has a newer schema version, ${result.version}, so it is read-only.`,
+    );
+
+    const localStorageData =
+      (result.current !== undefined ? LocalStorageDataParseCurrent(result.current) : undefined) ??
+      LocalStorageDataDefault();
+    localStorageData[NEWER_VERSION] = result.version;
+    return localStorageData;
+  }
 
   // TODO: Migrate from older versions.
   if (result.type === 'none' || result.type === 'outdated') return undefined;
 
-  const { calendars, ...rest }: { calendars?: unknown } = result.current;
+  return LocalStorageDataParseCurrent(result.current);
+}
+
+function LocalStorageDataParseCurrent(current: unknown): LocalStorageData | undefined {
+  if (!isObject(current)) {
+    console.error('Ignoring the data in local storage, as it is not an object.');
+    return undefined;
+  }
+
+  const { calendars, ...rest }: { calendars?: unknown } = current;
 
   if (!isObject(calendars)) {
     console.error('Ignoring the data in local storage, as it has no calendar list.');

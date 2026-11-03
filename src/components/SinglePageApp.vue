@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, type Ref } from 'vue';
 import { decodeHash, encodeHash, type Hash, type HashAddPeer, type HashArgsAddPeer } from '@/hash';
-import { localStorageDataStore } from '@/localStorageData';
+import { LocalStorageDataIsReadOnly, localStorageDataStore } from '@/localStorageData';
+import NewerVersionAlert from './NewerVersionAlert.vue';
 import SharedApp from './SharedApp.vue';
 import CalendarName from './CalendarName.vue';
 import { joinCalendar } from '@/invite';
@@ -135,6 +136,7 @@ if (isHashValidAddPeer(currentHash.value)) {
     },
     async actionConfirm() {
       if (!isHashValidAddPeer(currentHash.value)) return;
+      if (LocalStorageDataIsReadOnly(localStorageData.value)) return;
       if (this.existingCalendarId !== undefined && !isJoinOffered(this.inviterPairing)) return;
 
       this.status = 'requesting-access';
@@ -191,9 +193,23 @@ if (isHashValidAddPeer(currentHash.value)) {
 </script>
 
 <template>
+  <!-- Without calendars to show, a read-only list would make the app create one, which could not be
+  saved, see `SharedApp`. -->
   <div class="drawer">
-    <SharedApp v-if="currentHash.args?.action !== 'addPeer'" />
+    <SharedApp
+      v-if="
+        currentHash.args?.action !== 'addPeer' &&
+        !(
+          LocalStorageDataIsReadOnly(localStorageData) &&
+          Object.keys(localStorageData.calendars).length === 0
+        )
+      "
+    />
   </div>
+  <NewerVersionAlert
+    v-if="LocalStorageDataIsReadOnly(localStorageData)"
+    message="The list of calendars was changed by a newer version of the app. Refresh the page to update the app. Until then, the list cannot be changed."
+  />
   <div class="modal" :class="{ 'modal-open': modalData !== undefined }">
     <div v-if="modalData?.kind === 'invite-confirmation'" class="modal-box flex flex-col gap-2">
       <h3 class="text-lg font-bold">Join Calendar</h3>
@@ -313,7 +329,7 @@ if (isHashValidAddPeer(currentHash.value)) {
         <button
           v-if="isJoinOffered(modalData.inviterPairing)"
           class="btn btn-primary"
-          :disabled="modalData.status !== 'idle'"
+          :disabled="modalData.status !== 'idle' || LocalStorageDataIsReadOnly(localStorageData)"
           @click="modalData.actionConfirm"
         >
           <template v-if="modalData.status === 'idle'">

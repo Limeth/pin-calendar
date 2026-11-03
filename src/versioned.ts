@@ -15,6 +15,12 @@ export function Versioned<T extends TObject>(innerSchema: T) {
   });
 }
 
+// Only the container of the versions, see `Versioned`: each version is checked on its own, the
+// current one by its readers.
+export const VersionedSchema = Type.Object({
+  schemaVersion: Type.Record(Type.String(), Type.Unknown()),
+});
+
 // Data in several schema versions, by version number. Versions are never removed from synchronized
 // storage (documents, and local storage, which tabs share), as other devices or tabs, running older
 // versions of the app, may still be using them.

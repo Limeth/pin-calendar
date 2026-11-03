@@ -17,6 +17,7 @@ import {
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 import {
   LocalStorageDataAddCalendar,
+  LocalStorageDataIsReadOnly,
   LocalStorageDataSetCalendarAlias,
   localStorageDataStore,
 } from '@/localStorageData';
@@ -127,7 +128,10 @@ watch(
     }
 
     // No calendars are left, so create one, as on startup. Deleting the last calendar already
-    // creates one, so this is only a fallback, e.g. for when the site data was cleared.
+    // creates one, so this is only a fallback, e.g. for when the site data was cleared. Not in a
+    // read-only list, which this component is not shown for without calendars, see `SinglePageApp`.
+    if (LocalStorageDataIsReadOnly(localStorageData.value)) return;
+
     openCalendar(LocalStorageDataAddCalendar(localStorageData.value));
   },
 );
@@ -238,6 +242,8 @@ function useInviteLink() {
 }
 
 function createNewCalendar() {
+  if (LocalStorageDataIsReadOnly(localStorageData.value)) return;
+
   LocalStorageDataAddCalendar(localStorageData.value);
 }
 
@@ -363,7 +369,8 @@ function saveRenameDialog() {
   app.docShared.data.value[changeSubtree]((shared) => {
     SharedDocumentSetName(shared, name);
   });
-  LocalStorageDataSetCalendarAlias(localStorageData.value, app.calendarId, alias);
+  if (!LocalStorageDataIsReadOnly(localStorageData.value))
+    LocalStorageDataSetCalendarAlias(localStorageData.value, app.calendarId, alias);
 
   modalData.value = undefined;
 }
@@ -436,7 +443,13 @@ function saveRenameDialog() {
       </label>
       <label class="flex flex-col gap-1">
         <span class="label-text">Alias</span>
-        <input type="text" v-model="modalData.alias" class="input w-full" maxlength="100" />
+        <input
+          type="text"
+          v-model="modalData.alias"
+          class="input w-full"
+          maxlength="100"
+          :disabled="LocalStorageDataIsReadOnly(localStorageData)"
+        />
         <span class="text-xs opacity-60">
           Only on this device, shown alongside the name. Optional.
         </span>
@@ -571,7 +584,11 @@ function saveRenameDialog() {
             />
           </button>
         </div>
-        <button @click="createNewCalendar" class="btn btn-sm btn-primary">
+        <button
+          @click="createNewCalendar"
+          class="btn btn-sm btn-primary"
+          :disabled="LocalStorageDataIsReadOnly(localStorageData)"
+        >
           <div v-html="feather.icons['plus'].toSvg()" />
           <div class="max-sm:hidden">Create New Calendar</div>
         </button>

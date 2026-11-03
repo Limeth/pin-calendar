@@ -22,7 +22,11 @@ import {
   PinCatalogAddPin,
 } from '../pins/pinCatalog';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
-import { LocalStorageDataAddCalendar, localStorageDataStore } from '@/localStorageData';
+import {
+  LocalStorageDataAddCalendar,
+  LocalStorageDataIsReadOnly,
+  localStorageDataStore,
+} from '@/localStorageData';
 import * as auth from '@/auth';
 import { keyToId } from '@/pins/util';
 import { isObject, readKeys } from '@/validation';
@@ -84,6 +88,7 @@ type ImportCalendar = {
 type Import = ImportPins | ImportCalendar;
 
 const app = defineModel<App>();
+const localStorageData = await localStorageDataStore.value.GetData();
 const docData = computed(() => app.value!.docShared.data.value);
 const pinCalendar = computed(() => docData.value!.pinCalendar);
 const pinCatalog = computed(() => docData.value!.pinCatalog);
@@ -265,7 +270,7 @@ function onClickCalendarDelete() {
       'Are you sure you want to delete this calendar from this device? This action cannot be undone.',
     buttonConfirm: 'Delete Calendar From This Device',
     actionConfirm: async () => {
-      const localStorageData = await localStorageDataStore.value.GetData();
+      if (LocalStorageDataIsReadOnly(localStorageData.value)) return;
 
       // Disconnect from the calendar's peers, in whichever tab the connections are.
       app.value!.shutDownWebRtc();
@@ -505,7 +510,11 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
         </button>
       </div>
       <div class="flex flex-row gap-2">
-        <button @click="onClickCalendarDelete" class="btn btn-error flex-1">
+        <button
+          @click="onClickCalendarDelete"
+          class="btn btn-error flex-1"
+          :disabled="LocalStorageDataIsReadOnly(localStorageData)"
+        >
           <div v-html="feather.icons['trash-2'].toSvg()" />
           <div>Delete calendar from this device only</div>
         </button>
