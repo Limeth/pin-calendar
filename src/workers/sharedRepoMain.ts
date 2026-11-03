@@ -32,7 +32,7 @@ import {
 } from '@/documents/shared';
 import type { EphemeralDocument } from '@/documents/ephemeral';
 import type { DocumentWrapper, VersionedDocumentWrapper } from '@/documents/wrapper';
-import { hasNewerVersionRop, makeVersioned, type Versioned } from '@/versioned';
+import { hasNewerVersionRop, makeVersioned, NewerVersionError, type Versioned } from '@/versioned';
 
 export function EphemeralDocumentDefault(): EphemeralDocument {
   return {
@@ -168,9 +168,9 @@ class SharedRepo {
     );
 
     let documentSharedAvailableLocally;
-    // TODO: A local document with only newer versions throws a `NewerVersionError` here, which the tab
-    // is not told about: it keeps loading, rather than asking to refresh. Only a newer version of the
-    // app on this device could cause it, by removing the current version, which it must not.
+    // A local document with only newer versions throws a `NewerVersionError` here, which is reported
+    // to the tabs, see `init-failed`. Only a newer version of the app on this device could cause it,
+    // by removing the current version, which it must not.
     const documentIdShared = LocalDocumentGetDocumentIdShared(docDataLocal.value);
 
     if (docDataLocal.value.documentIdShared === undefined) {
@@ -351,7 +351,22 @@ async function onMessage(message: ToSharedRepoMessage, port: TabMessagePort) {
     case 'init': {
       port.calendarId = message.calendarId;
       const repo = await GetSharedRepo(port.calendarId);
-      const initialized = await repo.initialize(message);
+      let initialized;
+
+      try {
+        initialized = await repo.initialize(message);
+      } catch (error) {
+        // The tab shows why the calendar cannot be loaded. The failed initialization is kept, so
+        // that every tab of the calendar is told, until the page is refreshed.
+        console.error(`Failed to initialize calendar ${port.calendarId}:`, error);
+        port.postMessage({
+          type: 'init-failed',
+          newerVersion: error instanceof NewerVersionError,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        break;
+      }
+
       const tab = await repo.addTab(message, port);
 
       port.postMessage({

@@ -13,6 +13,7 @@ import {
 import {
   MessagePortWrapper,
   type FromSharedRepoMessage,
+  type FromSharedRepoMessageInitFailed,
   type FromSharedRepoMessageReadyLocal,
   type FromSharedRepoMessageReadyShared,
   type ToSharedRepoMessage,
@@ -32,7 +33,7 @@ import {
   type LocalStorageDataCalendar,
 } from './localStorageData';
 import type { DocumentWrapper, VersionedDocumentWrapper } from './documents/wrapper';
-import { hasNewerVersionRop, type Versioned } from './versioned';
+import { hasNewerVersionRop, NewerVersionError, type Versioned } from './versioned';
 
 export type App = {
   readonly calendarId: CalendarId;
@@ -143,8 +144,8 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
   });
 
   const readyLocal = sharedRepoWorker.onceAsync(
-    (msg) => msg.type === 'ready-local',
-  ) as Promise<FromSharedRepoMessageReadyLocal>;
+    (msg) => msg.type === 'ready-local' || msg.type === 'init-failed',
+  ) as Promise<FromSharedRepoMessageReadyLocal | FromSharedRepoMessageInitFailed>;
   const readyShared = sharedRepoWorker.onceAsync(
     (msg) => msg.type === 'ready-shared',
   ) as Promise<FromSharedRepoMessageReadyShared>;
@@ -169,6 +170,12 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
 
   /// Wait for the emphemeral and local documents to become available.
   const msgReadyLocal = await readyLocal;
+
+  // E.g. shown as a calendar that a newer version of the app changed, see `SharedApp`.
+  if (msgReadyLocal.type === 'init-failed')
+    throw msgReadyLocal.newerVersion
+      ? new NewerVersionError(msgReadyLocal.message)
+      : new Error(msgReadyLocal.message);
 
   calendarData.documentIdLocal = msgReadyLocal.documentIdLocal;
 

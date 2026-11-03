@@ -43,6 +43,14 @@ export type FromSharedRepoMessageReadyLocal = {
   documentIdLocal: DocumentId;
 };
 
+/// Sent instead of `ready-local` when the calendar's documents cannot be loaded, e.g. as the local
+/// document only has newer versions (`NewerVersionError`).
+export type FromSharedRepoMessageInitFailed = {
+  type: 'init-failed';
+  newerVersion: boolean;
+  message: string;
+};
+
 /// Sent when the shared documents are ready to be found.
 export type FromSharedRepoMessageReadyShared = {
   type: 'ready-shared';
@@ -63,6 +71,7 @@ export type FromSharedRepoMessageWebRtcPollAlive = {
 
 export type FromSharedRepoMessage =
   | FromSharedRepoMessageReadyLocal
+  | FromSharedRepoMessageInitFailed
   | FromSharedRepoMessageReadyShared
   | FromSharedRepoMessageWebRtcStart
   | FromSharedRepoMessageWebRtcStop
