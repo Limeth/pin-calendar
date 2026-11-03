@@ -200,6 +200,59 @@ describe('reading the calendar list from storage', () => {
   });
 });
 
+describe('saving the calendar list', () => {
+  beforeEach(() => {
+    // Problems with the data are logged.
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('only replaces the current version, keeping the others', () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({
+        addedByNewerVersion: 1,
+        schemaVersion: { 0: 'older', 1: { calendars: {} }, unknown: 'ignored' },
+      }),
+    );
+    const data = LocalStorageDataLoadOrDefault();
+    data.leastRecentlyUsedCalendar = CALENDAR_ID;
+    LocalStorageDataSave(data);
+
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({
+      addedByNewerVersion: 1,
+      schemaVersion: {
+        0: 'older',
+        1: { calendars: {}, leastRecentlyUsedCalendar: CALENDAR_ID },
+        unknown: 'ignored',
+      },
+    });
+  });
+
+  it('keeps older versions when there is no current version', () => {
+    localStorage.setItem(KEY, JSON.stringify({ schemaVersion: { 0: 'older' } }));
+
+    expect(LocalStorageDataLoadOrDefault()).toEqual({ calendars: {} });
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({
+      schemaVersion: { 0: 'older', 1: { calendars: {} } },
+    });
+  });
+
+  it('replaces stored data that is not versioned', () => {
+    for (const string of ['{', JSON.stringify({ calendars: {} })]) {
+      localStorage.setItem(KEY, string);
+      LocalStorageDataSave({ calendars: {} });
+
+      expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({
+        schemaVersion: { 1: { calendars: {} } },
+      });
+    }
+  });
+});
+
 describe('calendar list data of a newer version', () => {
   beforeEach(() => {
     // The newer version is logged.

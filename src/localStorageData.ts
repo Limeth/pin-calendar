@@ -114,17 +114,34 @@ export function LocalStorageDataSave(self: LocalStorageData) {
   if (LocalStorageDataIsReadOnly(self)) return;
 
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+  const storedVersioned = stored !== null ? readStoredVersioned(stored) : undefined;
 
   // Another tab may have written a newer version since this one loaded the data, before this tab
   // was notified of it, see `localStorageDataStore`.
-  if (stored !== null && storedNewerVersion(stored) !== undefined) {
+  if (
+    storedVersioned !== undefined &&
+    getCurrentVersion(storedVersioned, LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT, undefined)
+      .type === 'unsupported'
+  ) {
     console.warn('Not saving the data in local storage, as a newer version of the app changed it.');
     return;
   }
 
   // A calendar added under the ID of an unreadable one replaces it.
   const data = { ...self, calendars: { ...self[UNREADABLE_CALENDARS], ...self.calendars } };
-  const string = JSON.stringify(makeVersioned(data, LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT));
+  // Only the current version is replaced: the other versions are kept, see `Versioned`. Stored data
+  // that is not versioned was backed up when it was loaded, see `LocalStorageDataLoad`.
+  const versioned =
+    storedVersioned !== undefined
+      ? {
+          ...storedVersioned,
+          schemaVersion: {
+            ...storedVersioned.schemaVersion,
+            [String(LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT)]: data,
+          },
+        }
+      : makeVersioned(data, LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT);
+  const string = JSON.stringify(versioned);
 
   // Writing an unchanged value would only make the other tabs reload it, see
   // `localStorageDataStore`, which they would then save again.
@@ -143,8 +160,8 @@ export function LocalStorageDataLoadOrDefault(): LocalStorageData {
   return localStorageData;
 }
 
-// The newest version of the stored data, if it is newer than this version of the app.
-function storedNewerVersion(string: string): number | undefined {
+// The versions of the stored data, or `undefined` if it is not versioned.
+function readStoredVersioned(string: string): Static<typeof VersionedSchema> | undefined {
   let json: unknown;
 
   try {
@@ -153,11 +170,7 @@ function storedNewerVersion(string: string): number | undefined {
     return undefined;
   }
 
-  if (!Value.Check(VersionedSchema, json)) return undefined;
-
-  const result = getCurrentVersion(json, LOCAL_STORAGE_DATA_SCHEMA_VERSION_CURRENT, undefined);
-
-  return result.type === 'unsupported' ? result.version : undefined;
+  return Value.Check(VersionedSchema, json) ? json : undefined;
 }
 
 function LocalStorageDataLoad(): LocalStorageData | undefined {
@@ -167,8 +180,9 @@ function LocalStorageDataLoad(): LocalStorageData | undefined {
 
   const localStorageData = LocalStorageDataParse(string);
 
-  // Returning `undefined` causes the default value to be created, which will overwrite the current
-  // value in local storage. In order to prevent data loss, we at least back up the original value.
+  // Returning `undefined` causes the default value to be created, which will replace the current
+  // version in local storage, or the whole value, if it is not versioned. In order to prevent data
+  // loss, we at least back up the original value.
   if (localStorageData === undefined) localStorage.setItem(LOCAL_STORAGE_KEY_BACKUP, string);
 
   return localStorageData;
@@ -210,7 +224,8 @@ export function LocalStorageDataParse(string: string): LocalStorageData | undefi
     return localStorageData;
   }
 
-  // TODO: Migrate from older versions, see `getCurrentVersion`.
+  // TODO: Migrate from older versions, see `outdated`. Until then, a default current version is saved
+  // alongside them. There are no older versions yet, as this is the first one.
   if (result.type === 'none' || result.type === 'outdated') return undefined;
 
   return LocalStorageDataParseCurrent(result.current);
