@@ -69,8 +69,8 @@ class Initialized {
   tabs: Tab[] = [];
   webRtcTab?: Tab;
   webRtcStarted: boolean = false;
-  // Whether WebRTC was shut down for good, see `ToSharedRepoMessageWebRtcShutdown`. Then, it is not
-  // started in any tab anymore.
+  // Whether WebRTC was shut down for good, as the calendar was deleted, see `SharedRepo.delete`.
+  // Then, it is not started in any tab anymore.
   webRtcShutDown: boolean = false;
 
   constructor(options: {
@@ -318,6 +318,53 @@ class SharedRepo {
 
     return initialized.tabs[initialized.tabs.length - 1];
   }
+
+  // Delete the calendar's documents from storage, see `ToSharedRepoMessageDeleteCalendar`.
+  async delete() {
+    const initialized = await this.initialized!;
+
+    // Ends the task that keeps WebRTC running in one of the tabs.
+    initialized.webRtcShutDown = true;
+    initialized.webRtcTab?.port.postMessage({ type: 'webrtc-stop' });
+    initialized.webRtcTab = undefined;
+
+    // Disconnected first, so that the tabs' copies of the documents are not synchronized back, which
+    // would store them again.
+    for (const tab of initialized.tabs) {
+      this.repoEphemeral.networkSubsystem.removeNetworkAdapter(tab.adapterEphemeral);
+      this.repoLocal.networkSubsystem.removeNetworkAdapter(tab.adapterLocal);
+      this.repoShared.networkSubsystem.removeNetworkAdapter(tab.adapterShared);
+    }
+
+    initialized.tabs = [];
+
+    const documentIdShared = LocalDocumentGetDocumentIdShared(initialized.docLocal.data.value);
+
+    await Promise.all([
+      documentIdShared !== undefined && isValidDocumentId(documentIdShared)
+        ? deleteDocument(this.repoShared, documentIdShared)
+        : undefined,
+      deleteDocument(this.repoLocal, initialized.docLocal.handle.documentId),
+      deleteDocument(this.repoEphemeral, initialized.docEphemeral.handle.documentId),
+    ]);
+  }
+}
+
+// Longer than the repo waits before saving a changed document (`saveDebounceRate`, 100 ms by
+// default), and for the save to finish.
+const DOCUMENT_SAVE_DELAY_MS = 1_000;
+
+// Delete a document, also from storage.
+//
+// Works around a bug in automerge-repo (2.5.5, and still in 2.6.0-alpha.5): `Repo.delete` removes
+// the document from storage, but does not cancel its pending throttled save, which then stores it
+// again. Saves are pending for changes made just before, and for the deletion itself, which empties
+// the document (`A.init()`) before removing it. So the document is removed again once these saves
+// are done, as it cannot change anymore. Only `Repo.delete` is needed once this is fixed.
+async function deleteDocument(repo: Repo, documentId: DocumentId) {
+  repo.delete(documentId);
+  await new Promise((resolve) => setTimeout(resolve, DOCUMENT_SAVE_DELAY_MS));
+  await repo.storageSubsystem?.removeDoc(documentId);
 }
 
 const sharedRepoByCalendarId: {
@@ -330,6 +377,16 @@ function GetSharedRepo(calendarId: CalendarId): Promise<SharedRepo> {
   sharedRepoByCalendarId[calendarId] = Promise.resolve(new SharedRepo(calendarId));
 
   return sharedRepoByCalendarId[calendarId];
+}
+
+// The repo of the tab's calendar, if the tab initialized it, and it was not deleted since.
+async function GetInitializedSharedRepo(port: TabMessagePort): Promise<SharedRepo | undefined> {
+  if (port.calendarId === undefined || !Object.hasOwn(sharedRepoByCalendarId, port.calendarId))
+    return undefined;
+
+  const repo = await sharedRepoByCalendarId[port.calendarId]!;
+
+  return repo.initialized !== undefined ? repo : undefined;
 }
 
 export function onConnect(eventConnect: MessageEvent) {
@@ -380,8 +437,11 @@ async function onMessage(message: ToSharedRepoMessage, port: TabMessagePort) {
       break;
     }
     case 'webrtc-start-success': {
+      const repo = await GetInitializedSharedRepo(port);
+
+      if (repo === undefined) break;
+
       // Notify all tabs that WebRTC is ready.
-      const repo = await GetSharedRepo(port.calendarId!);
       const initialized = await repo.initialized!;
       initialized.webRtcStarted = true;
 
@@ -393,15 +453,16 @@ async function onMessage(message: ToSharedRepoMessage, port: TabMessagePort) {
       // Handled elsewhere.
       break;
     }
-    case 'webrtc-shutdown': {
-      const repo = await GetSharedRepo(port.calendarId!);
-      const initialized = await repo.initialized!;
+    case 'delete-calendar': {
+      const repo = await GetInitializedSharedRepo(port);
 
-      // Ends the task that keeps WebRTC running in one of the tabs.
-      initialized.webRtcShutDown = true;
-      initialized.webRtcTab?.port.postMessage({ type: 'webrtc-stop' });
-      initialized.webRtcTab = undefined;
-      console.log(`WebRTC was shut down for calendar ${port.calendarId}.`);
+      if (repo === undefined) break;
+
+      // Forgotten right away, so that messages from the calendar's other tabs are ignored, and
+      // joining the calendar again initializes it anew.
+      delete sharedRepoByCalendarId[repo.calendarId];
+      await repo.delete();
+      console.log(`Calendar ${repo.calendarId} was deleted from this device.`);
       break;
     }
   }

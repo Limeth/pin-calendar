@@ -343,14 +343,13 @@ function onClickCalendarDelete() {
     actionConfirm: async () => {
       if (LocalStorageDataIsReadOnly(localStorageData.value)) return;
 
-      // Disconnect from the calendar's peers, in whichever tab the connections are.
-      app.value!.shutDownWebRtc();
-
+      // Read before the documents are deleted.
       const authKeyIds = Object.values(
         LocalDocumentGetRemotePeers(app.value!.docLocal.data.value),
       ).map((remotePeer) => remotePeer.authKeyId);
 
-      // TODO: Implement proper deletion of all calendar data. This is just superficial.
+      // Also disconnects from the calendar's peers, in whichever tab the connections are.
+      app.value!.deleteDocuments();
       delete localStorageData.value.calendars[app.value!.calendarId];
 
       // The keys authenticate this device's connections with the calendar's peers.

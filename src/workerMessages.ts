@@ -24,9 +24,10 @@ export type ToSharedRepoMessageWebRtcPollAliveAcq = {
   type: 'webrtc-pollalive-acq';
 };
 
-/// Sent when WebRTC must not run for the calendar anymore, e.g. when it is deleted from this device.
-export type ToSharedRepoMessageWebRtcShutdown = {
-  type: 'webrtc-shutdown';
+/// Sent when the calendar is deleted from this device: WebRTC is shut down for it, and its
+/// documents are deleted from storage.
+export type ToSharedRepoMessageDeleteCalendar = {
+  type: 'delete-calendar';
 };
 
 export type ToSharedRepoMessage =
@@ -34,7 +35,7 @@ export type ToSharedRepoMessage =
   | ToSharedRepoMessageWebRtcStartSuccess
   | ToSharedRepoMessageWebRtcStopSuccess
   | ToSharedRepoMessageWebRtcPollAliveAcq
-  | ToSharedRepoMessageWebRtcShutdown;
+  | ToSharedRepoMessageDeleteCalendar;
 
 /// Sent when the ephemeral and local documents are ready to be found.
 export type FromSharedRepoMessageReadyLocal = {

@@ -67,8 +67,8 @@ export function LocalStorageDataIsReadOnly(self: LocalStorageData): boolean {
   return self[NEWER_VERSION] !== undefined;
 }
 
-// Add a new, empty calendar, and return its ID. Always under a new ID: one that was used before may
-// belong to a deleted calendar, which the shared worker still remembers, see `webRtcShutDown`.
+// Add a new, empty calendar, and return its ID. Always under a new ID: one that was used before
+// belongs to another calendar, e.g. a deleted one that other devices still have.
 export function LocalStorageDataAddCalendar(self: LocalStorageData): CalendarId {
   const calendarId = uuid.v7();
   self.calendars[calendarId] = {};

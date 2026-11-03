@@ -40,9 +40,9 @@ export type App = {
   readonly docEphemeral: DocumentWrapper<EphemeralDocument>;
   readonly docLocal: VersionedDocumentWrapper<LocalDocument>;
   readonly docShared: VersionedDocumentWrapper<SharedDocument>;
-  // Stop synchronizing the calendar with other devices for good, in all tabs, e.g. when it is
-  // deleted from this device.
-  shutDownWebRtc(): void;
+  // Delete the calendar's documents from this device: stop synchronizing it with other devices, in
+  // all tabs, and delete the documents from storage. Other devices keep their copies.
+  deleteDocuments(): void;
 };
 
 async function LoadApp(calendarId: CalendarId): Promise<App> {
@@ -284,8 +284,10 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
       readOnly: readOnlyShared,
       handle: handleShared,
     },
-    shutDownWebRtc() {
-      sharedRepoWorker.postMessage({ type: 'webrtc-shutdown' });
+    deleteDocuments() {
+      sharedRepoWorker.postMessage({ type: 'delete-calendar' });
+      // So that the calendar is loaded anew if it is joined again.
+      delete appStore.value.refMap[calendarId];
     },
   };
 }
