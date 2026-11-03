@@ -203,7 +203,7 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
   // but using `toRef` instead would break the reactivity, for some reason.
   // This affects `dataShared` and `docDataLocal` in `sharedRepo.ts`, too.
   const dataLocal = computed(() =>
-    LocalDocumentGetCurrentVersion(dataLocalVersioned.value, calendarData.invitation?.localPeerId),
+    LocalDocumentGetCurrentVersion(dataLocalVersioned, calendarData.invitation?.localPeerId),
   );
 
   console.log('dataLocal: ', dataLocal.value);
@@ -240,7 +240,7 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
   }
 
   const dataSharedVersioned: Ref<Rop<Versioned<SharedDocument>>> = makeReactive(handleShared);
-  const dataShared = computed(() => SharedDocumentGetCurrentVersion(dataSharedVersioned.value));
+  const dataShared = computed(() => SharedDocumentGetCurrentVersion(dataSharedVersioned));
 
   // Keep a copy of the name in local storage, to show it without loading the calendar.
   watch(

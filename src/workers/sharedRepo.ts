@@ -185,7 +185,7 @@ class SharedRepo {
 
     const docDataLocalVersioned: Ref<Rop<Versioned<LocalDocument>>> = makeReactive(docHandleLocal);
     const docDataLocal = computed(() =>
-      LocalDocumentGetCurrentVersion(docDataLocalVersioned.value, message.invitation?.localPeerId),
+      LocalDocumentGetCurrentVersion(docDataLocalVersioned, message.invitation?.localPeerId),
     );
 
     let documentSharedAvailableLocally;

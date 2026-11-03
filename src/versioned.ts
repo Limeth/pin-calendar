@@ -1,6 +1,7 @@
 import '@/formats';
 import { Type, type TObject } from '@sinclair/typebox';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
+import type { Ref } from 'vue';
 import { isObject, type UncheckedRop } from '@/validation';
 
 const VersionSchema = Type.String({ format: 'integer' });
@@ -106,7 +107,8 @@ export function getCurrentVersion<R, T extends Versioned<R>>(
 
 // The current version of a document, which other devices or versions of the app may have written:
 // `invalid` if its versions, or the current one, are not objects. The current version is read
-// unchecked, see `UncheckedRop`.
+// unchecked, see `UncheckedRop`. The document is read from its `Ref`, so that a current version that
+// is created is read from the changed document.
 type GetCurrentVersionRopResult<R> =
   | GetCurrentVersionResult<UncheckedRop<R>>
   | {
@@ -114,11 +116,11 @@ type GetCurrentVersionRopResult<R> =
     };
 
 export function getCurrentVersionRop<R, T extends Versioned<R>>(
-  versioned: Rop<T>,
+  versioned: Ref<Rop<T>>,
   currentVersion: number,
   init: undefined | (() => R),
 ): GetCurrentVersionRopResult<R> {
-  const schemaVersion: unknown = versioned.schemaVersion;
+  const schemaVersion: unknown = versioned.value.schemaVersion;
 
   if (!isObject(schemaVersion)) return { type: 'invalid' };
 
@@ -139,13 +141,10 @@ export function getCurrentVersionRop<R, T extends Versioned<R>>(
 
   if (result.type === 'none' && typeof init === 'function') {
     const versionKey = String(currentVersion);
-    versioned[changeSubtree]((versioned) => {
+    versioned.value[changeSubtree]((versioned) => {
       (versioned.schemaVersion[versionKey] as R) = init();
     });
-    return {
-      type: 'current',
-      current: versioned.schemaVersion[versionKey] as UncheckedRop<R>,
-    };
+    return getCurrentVersionRop(versioned, currentVersion, undefined);
   }
 
   return result;

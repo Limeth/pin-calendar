@@ -4,6 +4,7 @@ import { getCurrentVersionRop, type Versioned } from '@/versioned';
 import { readProperty, type Unchecked, type UncheckedRop } from '@/validation';
 import { Type, type Static } from '@sinclair/typebox';
 import type { Rop } from 'automerge-diy-vue-hooks';
+import type { Ref } from 'vue';
 
 export const SHARED_DOCUMENT_SCHEMA_VERSION_CURRENT = 1;
 
@@ -36,7 +37,7 @@ export function SharedDocumentSetName(self: SharedDocument, name: string) {
 }
 
 export function SharedDocumentGetCurrentVersion(
-  versioned: Rop<Versioned<SharedDocument>>,
+  versioned: Ref<Rop<Versioned<SharedDocument>>>,
 ): SharedDocumentRop {
   const result = getCurrentVersionRop(
     versioned,

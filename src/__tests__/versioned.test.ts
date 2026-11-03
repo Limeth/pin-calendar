@@ -17,7 +17,7 @@ function init(): Data {
 describe('the current version of a document', () => {
   it('is read', () => {
     const result = getCurrentVersionRop(
-      versioned({ schemaVersion: { 1: { value: 'a' } } }).value,
+      versioned({ schemaVersion: { 1: { value: 'a' } } }),
       1,
       init,
     );
@@ -29,13 +29,16 @@ describe('the current version of a document', () => {
   it('is created if there is none', () => {
     const document = versioned({ schemaVersion: {} });
 
-    expect(getCurrentVersionRop(document.value, 1, init).type).toBe('current');
+    const result = getCurrentVersionRop(document, 1, init);
+
+    expect(result.type).toBe('current');
+    expect(result.type === 'current' && result.current.value).toBe('new');
     expect(JSON.parse(JSON.stringify(document.value))).toEqual({ schemaVersion: { 1: init() } });
   });
 
   it('is unsupported if a newer one exists, but still read', () => {
     const result = getCurrentVersionRop(
-      versioned({ schemaVersion: { 1: { value: 'a' }, 2: {}, 10: {} } }).value,
+      versioned({ schemaVersion: { 1: { value: 'a' }, 2: {}, 10: {} } }),
       1,
       init,
     );
@@ -48,7 +51,7 @@ describe('the current version of a document', () => {
   it('is unsupported and not created if only a newer one exists', () => {
     const document = versioned({ schemaVersion: { 2: {} } });
 
-    expect(getCurrentVersionRop(document.value, 1, init)).toEqual({
+    expect(getCurrentVersionRop(document, 1, init)).toEqual({
       type: 'unsupported',
       version: 2,
     });
@@ -58,12 +61,12 @@ describe('the current version of a document', () => {
   it('ignores keys that are no version numbers', () => {
     for (const key of ['next', '1.5', '01', '-1', '']) {
       const document = versioned({ schemaVersion: { [key]: {}, 1: { value: 'a' } } });
-      const result = getCurrentVersionRop(document.value, 1, init);
+      const result = getCurrentVersionRop(document, 1, init);
 
       expect(result.type).toBe('current');
       expect(result.type === 'current' && result.current.value).toBe('a');
       expect(
-        getCurrentVersionRop(versioned({ schemaVersion: { [key]: {} } }).value, 1, undefined),
+        getCurrentVersionRop(versioned({ schemaVersion: { [key]: {} } }), 1, undefined),
       ).toEqual({
         type: 'none',
       });
@@ -73,7 +76,7 @@ describe('the current version of a document', () => {
   it('is outdated and not created if only older ones exist', () => {
     const document = versioned({ schemaVersion: { 0: {}, 1: { value: 'a' } } });
 
-    expect(getCurrentVersionRop(document.value, 2, init)).toEqual({
+    expect(getCurrentVersionRop(document, 2, init)).toEqual({
       type: 'outdated',
       version: 1,
     });
@@ -85,8 +88,8 @@ describe('the current version of a document', () => {
   it('is invalid if it is not an object, and left as it is', () => {
     const document = versioned({ schemaVersion: { 1: 'not an object' } });
 
-    expect(getCurrentVersionRop(document.value, 1, init)).toEqual({ type: 'invalid' });
-    expect(getCurrentVersionRop(versioned({ schemaVersion: 'none' }).value, 1, init)).toEqual({
+    expect(getCurrentVersionRop(document, 1, init)).toEqual({ type: 'invalid' });
+    expect(getCurrentVersionRop(versioned({ schemaVersion: 'none' }), 1, init)).toEqual({
       type: 'invalid',
     });
     expect(JSON.parse(JSON.stringify(document.value))).toEqual({
@@ -99,7 +102,7 @@ describe('the current version of a document', () => {
       schemaVersion: { 1: 42 },
     } as unknown as Versioned<SharedDocument>);
 
-    expect(() => SharedDocumentGetCurrentVersion(document.value)).toThrow(
+    expect(() => SharedDocumentGetCurrentVersion(document)).toThrow(
       'The shared document is invalid.',
     );
   });

@@ -2,6 +2,7 @@ import '@/formats';
 import { Type, type Static } from '@sinclair/typebox';
 import * as uuid from 'uuid';
 import { type Rop } from 'automerge-diy-vue-hooks';
+import type { Ref } from 'vue';
 import { getCurrentVersionRop, type Versioned } from '@/versioned';
 import {
   isObject,
@@ -94,7 +95,7 @@ export function LocalDocumentGetRemotePeers(
 }
 
 export function LocalDocumentGetCurrentVersion(
-  versioned: Rop<Versioned<LocalDocument>>,
+  versioned: Ref<Rop<Versioned<LocalDocument>>>,
   defaultPeerJsPeerId: undefined | PeerJsPeerId,
 ): LocalDocumentRop {
   const result = getCurrentVersionRop(versioned, LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT, () =>
