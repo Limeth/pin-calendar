@@ -16,8 +16,11 @@ type Literal<T, PrimitiveType> = T extends PrimitiveType
 
 // This stores values for all variants, as well as a discriminant.
 // This makes CRDT consistency easier than if it was a union.
-export function Variant<D, T extends TObject>(discriminantField: Literal<D, string>, object: T) {
-  // TODO: Check that discriminantField doesn't interfere with the variants.
+// The discriminant cannot have the name of a variant, as both would be stored in the same property.
+export function Variant<D, T extends TObject>(
+  discriminantField: D extends keyof T['properties'] ? never : Literal<D, string>,
+  object: T,
+) {
   return Type.Composite([
     Type.Mapped(Type.Literal(discriminantField), () => Type.KeyOf(object)),
     object,
@@ -51,8 +54,8 @@ export class RegistryId<S extends symbol> {
   }
 }
 
-// TODO: Assert that IdKey is the same type?
-export function IdKeySchema<_ extends { key: unknown }>() {
+// The schema of the `IdKey` of the ID type `_`, whose keys are strings, like this schema's values.
+export function IdKeySchema<_ extends { key: string }>() {
   return Type.String({
     format: 'uuid',
   });
