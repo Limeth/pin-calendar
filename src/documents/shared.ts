@@ -1,6 +1,6 @@
 import { PinCalendarNew, PinCalendarSchema } from '@/pins/pinCalendar';
 import { PinCatalogDefault, PinCatalogSchema } from '@/pins/pinCatalog';
-import { getCurrentVersionRop, type Versioned } from '@/versioned';
+import { getCurrentVersionRop, NewerVersionError, type Versioned } from '@/versioned';
 import { readProperty, type Unchecked, type UncheckedRop } from '@/validation';
 import { Type, type Static } from '@sinclair/typebox';
 import type { Rop } from 'automerge-diy-vue-hooks';
@@ -47,9 +47,12 @@ export function SharedDocumentGetCurrentVersion(
 
   if (result.type === 'current') return result.current;
 
-  // TODO: This should be handled gracefully.
-  if (result.type === 'unsupported')
-    throw new Error(`Unsupported shared document schema version: ${result.version}`);
+  // Shown read-only, see `hasNewerVersionRop`.
+  if (result.type === 'unsupported') {
+    if (result.current !== undefined) return result.current;
+
+    throw new NewerVersionError(`Unsupported shared document schema version: ${result.version}`);
+  }
 
   if (result.type === 'invalid') throw new Error(`The shared document is invalid.`);
 

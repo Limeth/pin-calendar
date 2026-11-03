@@ -26,7 +26,7 @@ import {
 } from '@/documents/shared';
 import type { EphemeralDocument } from '@/documents/ephemeral';
 import type { DocumentWrapper, VersionedDocumentWrapper } from '@/documents/wrapper';
-import { makeVersioned, type Versioned } from '@/versioned';
+import { hasNewerVersionRop, makeVersioned, type Versioned } from '@/versioned';
 
 declare const self: SharedWorkerGlobalScope;
 
@@ -189,6 +189,9 @@ class SharedRepo {
     );
 
     let documentSharedAvailableLocally;
+    // TODO: A local document with only newer versions throws a `NewerVersionError` here, which the tab
+    // is not told about: it keeps loading, rather than asking to refresh. Only a newer version of the
+    // app on this device could cause it, by removing the current version, which it must not.
     const documentIdShared = LocalDocumentGetDocumentIdShared(docDataLocal.value);
 
     if (docDataLocal.value.documentIdShared === undefined) {
@@ -298,6 +301,9 @@ class SharedRepo {
         handle: docHandleLocal,
         versionedData: docDataLocalVersioned,
         data: docDataLocal,
+        readOnly: computed(() =>
+          hasNewerVersionRop(docDataLocalVersioned, LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT),
+        ),
       },
       documentSharedAvailableLocally,
     });

@@ -5,6 +5,7 @@ import { SYMBOL_IS_WEBRTC_NETWORK_ADAPTER, WebRtcNetworkAdapter } from './webrtc
 import {
   type LocalDocument,
   type CalendarId,
+  LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT,
   LocalDocumentGetCurrentVersion,
   LocalDocumentGetDocumentIdShared,
 } from './documents/local';
@@ -18,6 +19,7 @@ import {
 import { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-messagechannel';
 import SharedRepoWorker from './workers/sharedRepo?sharedworker';
 import {
+  SHARED_DOCUMENT_SCHEMA_VERSION_CURRENT,
   SharedDocumentGetCurrentVersion,
   SharedDocumentGetName,
   type SharedDocument,
@@ -29,7 +31,7 @@ import {
   type LocalStorageDataCalendar,
 } from './localStorageData';
 import type { DocumentWrapper, VersionedDocumentWrapper } from './documents/wrapper';
-import type { Versioned } from './versioned';
+import { hasNewerVersionRop, type Versioned } from './versioned';
 
 export type App = {
   readonly calendarId: CalendarId;
@@ -206,6 +208,10 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
     LocalDocumentGetCurrentVersion(dataLocalVersioned, calendarData.invitation?.localPeerId),
   );
 
+  const readOnlyLocal = computed(() =>
+    hasNewerVersionRop(dataLocalVersioned, LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT),
+  );
+
   console.log('dataLocal: ', dataLocal.value);
 
   const repoShared = new A.Repo({
@@ -222,6 +228,7 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
       repo: repoLocal,
       versionedData: dataLocalVersioned,
       data: dataLocal,
+      readOnly: readOnlyLocal,
       handle: handleLocal,
     },
     repoShared,
@@ -241,6 +248,9 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
 
   const dataSharedVersioned: Ref<Rop<Versioned<SharedDocument>>> = makeReactive(handleShared);
   const dataShared = computed(() => SharedDocumentGetCurrentVersion(dataSharedVersioned));
+  const readOnlyShared = computed(() =>
+    hasNewerVersionRop(dataSharedVersioned, SHARED_DOCUMENT_SCHEMA_VERSION_CURRENT),
+  );
 
   // Keep a copy of the name in local storage, to show it without loading the calendar.
   watch(
@@ -260,12 +270,14 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
       repo: repoLocal,
       versionedData: dataLocalVersioned,
       data: dataLocal,
+      readOnly: readOnlyLocal,
       handle: handleLocal,
     },
     docShared: {
       repo: repoShared,
       versionedData: dataSharedVersioned,
       data: dataShared,
+      readOnly: readOnlyShared,
       handle: handleShared,
     },
     shutDownWebRtc() {

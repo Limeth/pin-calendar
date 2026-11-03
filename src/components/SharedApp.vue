@@ -24,6 +24,8 @@ import {
 import * as auth from '@/auth';
 import { forgetRemotePeer } from '@/peers';
 import { SharedDocumentGetName, SharedDocumentSetName } from '@/documents/shared';
+import NewerVersionAlert from './NewerVersionAlert.vue';
+import { NewerVersionError } from '@/versioned';
 
 // const app: Ref<App> = ref({
 //   pinCatalog: PinCatalog.loadFromLocalStorageOrDefault(),
@@ -98,7 +100,11 @@ function defaultCalendarId(): CalendarId | undefined {
 // );
 
 function openCalendar(calendarId: CalendarId) {
-  if (calendarId in localStorageData.value.calendars) {
+  // Not in a read-only list, which is never saved, see `LocalStorageDataIsReadOnly`.
+  if (
+    calendarId in localStorageData.value.calendars &&
+    !LocalStorageDataIsReadOnly(localStorageData.value)
+  ) {
     localStorageData.value.leastRecentlyUsedCalendar = calendarId;
   }
 
@@ -137,8 +143,13 @@ watch(
 );
 
 const appIsBeingLoaded = ref(true);
+// Whether the calendar could not be loaded, as its documents only have newer versions, see
+// `NewerVersionError`. Loading is not retried, so the page needs to be refreshed.
+const appHasOnlyNewerVersions = ref(false);
 const appAsync = computedAsync(
   async () => {
+    appHasOnlyNewerVersions.value = false;
+
     const app = await appStore.value.GetAppOptional(currentHash.value.path!.calendar.id);
     // To debug the loading indicator when switching between calendars, uncomment this:
     // await new Promise(() => { /* Never resolve */ });
@@ -147,6 +158,10 @@ const appAsync = computedAsync(
   undefined,
   {
     evaluating: appIsBeingLoaded,
+    onError(error) {
+      console.error('Failed to load the calendar:', error);
+      appHasOnlyNewerVersions.value = error instanceof NewerVersionError;
+    },
   },
 );
 // This property exists so that the app has the value `undefined`
@@ -249,6 +264,7 @@ function createNewCalendar() {
 
 async function forgetPeer(peerJsPeerId: string) {
   if (app.value === undefined) return;
+  if (app.value.docLocal.readOnly.value) return;
 
   await forgetRemotePeer(app.value.docLocal.data, peerJsPeerId);
 }
@@ -317,6 +333,7 @@ async function createInviteUrl() {
 
 async function openAddDeviceDialog() {
   if (modalData.value !== undefined) return;
+  if (app.value?.docLocal.readOnly.value) return;
 
   const inviteUrlResult = await createInviteUrl();
 
@@ -366,9 +383,10 @@ function saveRenameDialog() {
 
   const { app, name, alias } = modalData.value;
 
-  app.docShared.data.value[changeSubtree]((shared) => {
-    SharedDocumentSetName(shared, name);
-  });
+  if (!app.docShared.readOnly.value)
+    app.docShared.data.value[changeSubtree]((shared) => {
+      SharedDocumentSetName(shared, name);
+    });
   if (!LocalStorageDataIsReadOnly(localStorageData.value))
     LocalStorageDataSetCalendarAlias(localStorageData.value, app.calendarId, alias);
 
@@ -438,6 +456,7 @@ function saveRenameDialog() {
           class="input w-full"
           maxlength="100"
           placeholder="Unnamed Calendar"
+          :disabled="modalData.app.docShared.readOnly.value"
         />
         <span class="text-xs opacity-60">Shared with all devices of this calendar.</span>
       </label>
@@ -508,6 +527,9 @@ function saveRenameDialog() {
         <template v-if="appIsBeingLoaded">
           <span class="loading loading-bars loading-xl"></span>
           <h1>Loading calendar, please wait.</h1>
+        </template>
+        <template v-else-if="appHasOnlyNewerVersions">
+          <h1>This calendar cannot be shown, as it was changed by a newer version of the app.</h1>
         </template>
         <template v-else>
           <h1>Please select a calendar to display, in the bottom left menu.</h1>
@@ -639,6 +661,7 @@ function saveRenameDialog() {
               <div class="flex flex-col gap-1 items-stretch">
                 <button
                   class="btn btn-sm btn-neutral max-sm:btn-square"
+                  :disabled="app?.docLocal.readOnly.value"
                   @click="forgetPeer(peer.peerJsPeerId)"
                 >
                   <div v-html="feather.icons['trash-2'].toSvg()" />
@@ -648,7 +671,11 @@ function saveRenameDialog() {
             </li>
           </template>
           <li class="py-4 w-full flex justify-center">
-            <button @click="openAddDeviceDialog" class="btn btn-sm btn-primary">
+            <button
+              @click="openAddDeviceDialog"
+              class="btn btn-sm btn-primary"
+              :disabled="app?.docLocal.readOnly.value"
+            >
               <div v-html="feather.icons['user-plus'].toSvg()" />
               <div class="max-sm:hidden">Add a Device</div>
             </button>
@@ -657,6 +684,12 @@ function saveRenameDialog() {
       </template>
     </div>
   </div>
+  <NewerVersionAlert
+    :list="LocalStorageDataIsReadOnly(localStorageData)"
+    :calendar="
+      appHasOnlyNewerVersions || !!(app?.docShared.readOnly.value || app?.docLocal.readOnly.value)
+    "
+  />
 </template>
 
 <style scoped lang="css">

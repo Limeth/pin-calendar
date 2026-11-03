@@ -44,6 +44,17 @@ replaced or deleted.
   read, e.g. invite links and imported files, may be parsed.
 - Every module defining a schema with a string format imports `formats.ts`.
 
+## Data of a newer schema version is read-only (`versioned.ts`)
+
+- When data has a schema version newer than this version of the app, the app is outdated: it shows
+  the data's current version, if there is one, read-only, so that it stays as other devices or tabs
+  running this version left it, and asks the user to refresh the page (`NewerVersionAlert`).
+- Every GUI control that changes a document is disabled while the document is read-only
+  (`VersionedDocumentWrapper.readOnly`, see `hasNewerVersionRop`), and its handler returns early.
+  The same applies to the calendar list (`LocalStorageDataIsReadOnly`), which is then never saved.
+  Viewing, browsing and exporting stay possible. Add this to every new control that changes data.
+- Writes outside the GUI, e.g. by the WebRTC code, are not blocked.
+
 ## Protocol and security (`auth.ts`, `handshake.ts`, `invite.ts`, `webrtc.ts`)
 
 - Joining (invite) and connecting (paired peers) use the same mutual challenge-response handshake,

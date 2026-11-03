@@ -196,6 +196,14 @@ watch(editing, () => {
 });
 
 function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
+  // Editing only shows the values, see the editor's `fieldset`.
+  if (
+    app.value!.docShared.readOnly.value &&
+    event.kind !== 'pinEdit' &&
+    event.kind !== 'categoryEdit'
+  )
+    return;
+
   switch (event.kind) {
     case 'pinAdd': {
       onClickAddPin(event.parent);
@@ -254,6 +262,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               :depth="0"
               :pin-catalog="pinCatalog"
               :pin-category="rootCategory"
+              :read-only="app!.docShared.readOnly.value"
             />
           </li>
           <li
@@ -284,6 +293,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                   :depth="0"
                   :pin-catalog="pinCatalog"
                   :pin-category="rootCategory"
+                  :read-only="app!.docShared.readOnly.value"
                 />
               </li>
             </ul>
@@ -292,6 +302,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
             <button
               @click="onSettingsPinCategoryEvent({ kind: 'categoryAdd' })"
               class="btn btn-primary max-sm:btn-square"
+              :disabled="app!.docShared.readOnly.value"
             >
               <div v-html="feather.icons['plus-square'].toSvg()" />
               <div class="max-sm:hidden">Add Category</div>
@@ -305,7 +316,12 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
       <div
         class="bg-base-200 text-base-content min-h-full w-80 p-4 flex flex-col gap-1 shadow-[0_0_4rem_0px_rgba(0,0,0,0.3)]"
       >
-        <template v-if="editing !== undefined">
+        <!-- `contents`, so that the fields keep their layout. -->
+        <fieldset
+          v-if="editing !== undefined"
+          class="contents"
+          :disabled="app!.docShared.readOnly.value"
+        >
           <template v-if="editing.kind === 'category'">
             <label class="form-control w-full max-w-xs">
               <div class="label">
@@ -325,6 +341,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <label class="form-control w-full max-w-xs">
                 <ValidatedInput
                   v-slot="slot"
+                  :disabled="app!.docShared.readOnly.value"
                   :subtree="editingPinCategory.value"
                   :original="editing.original"
                   property="displayName"
@@ -349,6 +366,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <label class="form-control w-full max-w-xs">
                 <ValidatedInput
                   v-slot="slot"
+                  :disabled="app!.docShared.readOnly.value"
                   :subtree="editingPinCategory.value"
                   :original="editing.original"
                   property="description"
@@ -373,6 +391,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <label class="form-control w-full max-w-xs">
                 <ValidatedInput
                   v-slot="slot"
+                  :disabled="app!.docShared.readOnly.value"
                   :subtree="editingPinCategory.value"
                   :original="editing.original"
                   :default-value="''"
@@ -409,6 +428,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <label class="form-control w-full max-w-xs">
                 <ValidatedInput
                   v-slot="slot"
+                  :disabled="app!.docShared.readOnly.value"
                   :subtree="editingPin.value"
                   :original="editing.original"
                   property="displayName"
@@ -433,6 +453,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <label class="form-control w-full max-w-xs">
                 <ValidatedInput
                   v-slot="slot"
+                  :disabled="app!.docShared.readOnly.value"
                   :subtree="editingPin.value"
                   :original="editing.original"
                   property="description"
@@ -457,6 +478,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <label class="form-control w-full max-w-xs">
                 <ValidatedInput
                   v-slot="slot"
+                  :disabled="app!.docShared.readOnly.value"
                   :subtree="editingPin.value"
                   :original="editing.original"
                   :default-value="''"
@@ -477,6 +499,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <label class="form-control w-full max-w-xs">
                 <ValidatedInput
                   v-slot="slot"
+                  :disabled="app!.docShared.readOnly.value"
                   :subtree="editingPin.value.icon.emoji"
                   :original="editing.original?.icon.emoji"
                   property="emoji"
@@ -504,6 +527,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <label class="form-control w-full max-w-xs">
                 <ValidatedInput
                   v-slot="slot"
+                  :disabled="app!.docShared.readOnly.value"
                   :subtree="editingPin.value.icon.emoji"
                   :original="editing.original?.icon.emoji"
                   property="scale"
@@ -531,6 +555,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               <label class="form-control w-full max-w-xs">
                 <ValidatedInput
                   v-slot="slot"
+                  :disabled="app!.docShared.readOnly.value"
                   :subtree="editingPin.value"
                   :original="editing.original"
                   property="backgroundColor"
@@ -549,8 +574,14 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
               </label>
             </template>
           </template>
-          <button @click="onClickEditClose" class="btn btn-secondary mt-3">Close</button>
-        </template>
+        </fieldset>
+        <button
+          v-if="editing !== undefined"
+          @click="onClickEditClose"
+          class="btn btn-secondary mt-3"
+        >
+          Close
+        </button>
       </div>
     </div>
   </div>

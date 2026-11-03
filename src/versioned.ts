@@ -156,6 +156,25 @@ export function getCurrentVersionRop<R, T extends Versioned<R>>(
   return result;
 }
 
+// Thrown when a document only has versions newer than this version of the app, so that it cannot even
+// be shown read-only, see `hasNewerVersionRop`.
+export class NewerVersionError extends Error {}
+
+// Whether a document has a version newer than the current one, which this version of the app cannot
+// read: the GUI then does not allow editing it, so that the current version stays as other devices or
+// tabs, running older versions of the app, left it.
+export function hasNewerVersionRop<R, T extends Versioned<R>>(
+  versioned: Ref<Rop<T>>,
+  currentVersion: number,
+): boolean {
+  const schemaVersion: unknown = versioned.value.schemaVersion;
+
+  return (
+    isObject(schemaVersion) &&
+    findCurrentVersion(schemaVersion, currentVersion).type === 'unsupported'
+  );
+}
+
 export function makeVersioned<T>(currentVersion: T, currentVersionNumber: number): Versioned<T> {
   return {
     schemaVersion: {

@@ -55,6 +55,8 @@ function isSelected(day: DayListDay) {
 }
 
 function clickPinToggle(pin: Pin) {
+  if (app.value!.docShared.readOnly.value) return;
+
   if (pinDay.value !== null && pinDay.value.value !== undefined) {
     pinDay.value.value[changeSubtree]((pinDay: PinDay) => {
       PinDayTogglePin(pinDay, pin);
@@ -247,6 +249,7 @@ app.value!.docShared.handle.on('change', () => {
                   :pin-catalog="pinCatalog"
                   :pin-category="rootCategory"
                   :pin-day="pinDay.value"
+                  :disabled="app!.docShared.readOnly.value"
                 />
               </li>
             </ul>

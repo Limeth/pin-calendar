@@ -74,6 +74,9 @@ type ModalInviteConfirmation = {
   // Whether the existing calendar is still shared with the inviter, see `InviterPairing`. Joining is
   // only offered if it is not. Undefined if this device does not have the calendar.
   inviterPairing: undefined | 'checking' | InviterPairing;
+  // Whether the existing calendar cannot be shared, as its local document has a newer version, see
+  // `hasNewerVersionRop`. Joining a new calendar changes the list instead, see `isJoinReadOnly`.
+  existingCalendarReadOnly: boolean;
   actionCancel(): void;
   actionConfirm(): void;
   actionOpenExistingCalendar(): void;
@@ -87,6 +90,14 @@ function isJoinOffered(inviterPairing: ModalInviteConfirmation['inviterPairing']
     inviterPairing === 'forgotten-inviter' ||
     inviterPairing === 'unconnected-inviter'
   );
+}
+
+// Whether joining is not possible, as the data it changes was changed by a newer version of the app:
+// the list of calendars, for a new calendar, or the existing calendar's local document.
+function isJoinReadOnly(modal: ModalInviteConfirmation): boolean {
+  return modal.existingCalendarId === undefined
+    ? LocalStorageDataIsReadOnly(localStorageData.value)
+    : modal.existingCalendarReadOnly;
 }
 
 // How long to wait for a connection to the inviter, before concluding that the existing calendar
@@ -129,6 +140,7 @@ if (isHashValidAddPeer(currentHash.value)) {
     error: undefined,
     existingCalendarId,
     inviterPairing: existingCalendarId === undefined ? undefined : 'checking',
+    existingCalendarReadOnly: false,
     actionCancel() {
       modalData.value = undefined;
       currentHash.value = { path: undefined, args: undefined };
@@ -136,8 +148,13 @@ if (isHashValidAddPeer(currentHash.value)) {
     },
     async actionConfirm() {
       if (!isHashValidAddPeer(currentHash.value)) return;
-      if (LocalStorageDataIsReadOnly(localStorageData.value)) return;
+      if (isJoinReadOnly(this)) return;
       if (this.existingCalendarId !== undefined && !isJoinOffered(this.inviterPairing)) return;
+      if (
+        this.existingCalendarId !== undefined &&
+        (await appStore.value.GetApp(this.existingCalendarId)).docLocal.readOnly.value
+      )
+        return;
 
       this.status = 'requesting-access';
       this.error = undefined;
@@ -177,7 +194,12 @@ if (isHashValidAddPeer(currentHash.value)) {
 
     appStore.value
       .GetApp(existingCalendarId)
-      .then((app) => checkInviterPairing(app, invite, PAIRING_CHECK_TIMEOUT_MS))
+      .then((app) => {
+        if (modalData.value?.kind === 'invite-confirmation')
+          modalData.value.existingCalendarReadOnly = app.docLocal.readOnly.value;
+
+        return checkInviterPairing(app, invite, PAIRING_CHECK_TIMEOUT_MS);
+      })
       .catch((error): InviterPairing => {
         // Offer joining, which reports its own errors. Assume that the inviter was not contacted, so
         // that the dialog mentions that joining shares the IP address with it.
@@ -206,9 +228,13 @@ if (isHashValidAddPeer(currentHash.value)) {
       "
     />
   </div>
+  <!-- Otherwise shown by `SharedApp`, along with the calendar's. -->
   <NewerVersionAlert
-    v-if="LocalStorageDataIsReadOnly(localStorageData)"
-    message="The list of calendars was changed by a newer version of the app. Refresh the page to update the app. Until then, the list cannot be changed."
+    v-if="
+      currentHash.args?.action === 'addPeer' || Object.keys(localStorageData.calendars).length === 0
+    "
+    :list="LocalStorageDataIsReadOnly(localStorageData)"
+    :calendar="modalData?.kind === 'invite-confirmation' && modalData.existingCalendarReadOnly"
   />
   <div class="modal" :class="{ 'modal-open': modalData !== undefined }">
     <div v-if="modalData?.kind === 'invite-confirmation'" class="modal-box flex flex-col gap-2">
@@ -329,7 +355,7 @@ if (isHashValidAddPeer(currentHash.value)) {
         <button
           v-if="isJoinOffered(modalData.inviterPairing)"
           class="btn btn-primary"
-          :disabled="modalData.status !== 'idle' || LocalStorageDataIsReadOnly(localStorageData)"
+          :disabled="modalData.status !== 'idle' || isJoinReadOnly(modalData)"
           @click="modalData.actionConfirm"
         >
           <template v-if="modalData.status === 'idle'">

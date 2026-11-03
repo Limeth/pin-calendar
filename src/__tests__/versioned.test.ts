@@ -1,7 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { getCurrentVersionRop, type Versioned } from '@/versioned';
-import { SharedDocumentGetCurrentVersion, type SharedDocument } from '@/documents/shared';
-import { reactiveDocument } from './helpers';
+import {
+  getCurrentVersionRop,
+  hasNewerVersionRop,
+  NewerVersionError,
+  type Versioned,
+} from '@/versioned';
+import {
+  SharedDocumentDefault,
+  SharedDocumentGetCurrentVersion,
+  SharedDocumentGetName,
+  type SharedDocument,
+} from '@/documents/shared';
+import {
+  LocalDocumentDefault,
+  LocalDocumentGetCurrentVersion,
+  LocalDocumentGetLocalPeer,
+  type LocalDocument,
+} from '@/documents/local';
+import { peerId, reactiveDocument } from './helpers';
 
 type Data = { value: string };
 
@@ -105,5 +121,42 @@ describe('the current version of a document', () => {
     expect(() => SharedDocumentGetCurrentVersion(document)).toThrow(
       'The shared document is invalid.',
     );
+  });
+
+  it('is newer only if a newer version exists', () => {
+    expect(hasNewerVersionRop(versioned({ schemaVersion: { 1: {}, 2: 'newer' } }), 1)).toBe(true);
+    expect(hasNewerVersionRop(versioned({ schemaVersion: { 2: {} } }), 1)).toBe(true);
+    expect(hasNewerVersionRop(versioned({ schemaVersion: { 1: {}, next: {} } }), 1)).toBe(false);
+    expect(hasNewerVersionRop(versioned({ schemaVersion: { 0: {}, 1: {} } }), 1)).toBe(false);
+    expect(hasNewerVersionRop(versioned({ schemaVersion: 'none' }), 1)).toBe(false);
+  });
+
+  it('is read from a shared document of a newer version, if it has one', () => {
+    const document = reactiveDocument({
+      schemaVersion: { 1: { ...SharedDocumentDefault(), name: 'Work' }, 2: 'newer' },
+    } as unknown as Versioned<SharedDocument>);
+
+    expect(SharedDocumentGetName(SharedDocumentGetCurrentVersion(document))).toBe('Work');
+    expect(() =>
+      SharedDocumentGetCurrentVersion(
+        reactiveDocument({ schemaVersion: { 2: {} } } as unknown as Versioned<SharedDocument>),
+      ),
+    ).toThrow(NewerVersionError);
+  });
+
+  it('is read from a local document of a newer version, if it has one', () => {
+    const document = reactiveDocument({
+      schemaVersion: { 1: LocalDocumentDefault(peerId('laptop')), 2: 'newer' },
+    } as unknown as Versioned<LocalDocument>);
+
+    expect(
+      LocalDocumentGetLocalPeer(LocalDocumentGetCurrentVersion(document, undefined))?.peerJsPeerId,
+    ).toBe(peerId('laptop'));
+    expect(() =>
+      LocalDocumentGetCurrentVersion(
+        reactiveDocument({ schemaVersion: { 2: {} } } as unknown as Versioned<LocalDocument>),
+        undefined,
+      ),
+    ).toThrow(NewerVersionError);
   });
 });

@@ -3,7 +3,7 @@ import { Type, type Static } from '@sinclair/typebox';
 import * as uuid from 'uuid';
 import { type Rop } from 'automerge-diy-vue-hooks';
 import type { Ref } from 'vue';
-import { getCurrentVersionRop, type Versioned } from '@/versioned';
+import { getCurrentVersionRop, NewerVersionError, type Versioned } from '@/versioned';
 import {
   isObject,
   readEntry,
@@ -104,9 +104,12 @@ export function LocalDocumentGetCurrentVersion(
 
   if (result.type === 'current') return result.current;
 
-  // TODO: This should be handled gracefully.
-  if (result.type === 'unsupported')
-    throw new Error(`Unsupported local document schema version: ${result.version}`);
+  // Shown read-only, see `hasNewerVersionRop`.
+  if (result.type === 'unsupported') {
+    if (result.current !== undefined) return result.current;
+
+    throw new NewerVersionError(`Unsupported local document schema version: ${result.version}`);
+  }
 
   if (result.type === 'invalid') throw new Error(`The local document is invalid.`);
 

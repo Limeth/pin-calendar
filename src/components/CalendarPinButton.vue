@@ -4,10 +4,12 @@ import { type Pin, type PinRop } from '../pins/pinCatalog';
 import PinCard from './PinCard.vue';
 import type { Rop } from 'automerge-diy-vue-hooks';
 
-const { depth, pin, pinDay } = defineProps<{
+const { depth, pin, pinDay, disabled } = defineProps<{
   depth: number;
   pin: PinRop;
   pinDay: Rop<PinDay>;
+  // The pin cannot be toggled, e.g. as the calendar is read-only.
+  disabled: boolean;
 }>();
 
 export type CalendarPinCategoryEvent = {
@@ -22,13 +24,16 @@ const emit = defineEmits<{
 
 <template>
   <li
-    class="pin-btn flex flex-row items-center gap-1 px-4 py-1 cursor-pointer"
+    class="pin-btn flex flex-row items-center gap-1 px-4 py-1"
     :class="{
       'pin-btn-even-depth': depth % 2 == 0,
       'pin-btn-odd-depth': depth % 2 == 1,
       'pin-btn-active': pinDay !== null && PinDayHasPin(pinDay, pin),
+      'cursor-pointer': !disabled,
+      'cursor-not-allowed': disabled,
     }"
-    @click="emit('event', { kind: 'toggle', pin })"
+    :aria-disabled="disabled"
+    @click="!disabled && emit('event', { kind: 'toggle', pin })"
   >
     <PinCard :pin="pin" :details="true" class="w-full" />
   </li>

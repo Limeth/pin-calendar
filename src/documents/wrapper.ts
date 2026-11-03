@@ -16,5 +16,8 @@ export type VersionedDocumentWrapper<T, Trusted extends keyof T = never> = {
   repo: Repo;
   versionedData: Ref<Versioned<Rop<T>>>;
   data: Ref<UncheckedRop<T, Trusted>>;
+  // Whether the document has a newer version, so that the GUI does not allow editing it, see
+  // `hasNewerVersionRop`.
+  readOnly: Ref<boolean>;
   handle: DocHandle<Versioned<T>>;
 };

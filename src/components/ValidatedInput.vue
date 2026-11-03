@@ -13,6 +13,7 @@ const {
   parse,
   validate,
   change: changeInner,
+  disabled,
 } = defineProps<{
   subtree: Rop<T>;
   original?: Ro<T>;
@@ -22,6 +23,9 @@ const {
   parse?: (value: string) => T[P]; // TODO: Make mandatory if T[P] !== string
   validate?: (value: T[P]) => string | undefined;
   change: 'assign' | 'updateText' | ((subtree: T, property: P, value: T[P]) => void);
+  // The value cannot be changed, e.g. as the calendar is read-only. The slot's input is disabled by
+  // its parent, e.g. via a `fieldset`.
+  disabled?: boolean;
 }>();
 
 let change: (subtree: T, property: P, value: T[P]) => void;
@@ -44,6 +48,8 @@ if (changeInner === 'assign') {
 const warning: Ref<string | undefined> = ref(undefined);
 
 function onChange(event: Event) {
+  if (disabled) return;
+
   const string = (event.target! as HTMLInputElement).value;
   const value = parse !== undefined ? parse(string) : (string as T[P]); // TODO: unsafe
   warning.value = validate?.(value);
@@ -54,6 +60,8 @@ function onChange(event: Event) {
 }
 
 function onRevert() {
+  if (disabled) return;
+
   if (original !== undefined) {
     const value = original[property] as T[P];
     warning.value = validate?.(value);
@@ -78,7 +86,9 @@ function onRevert() {
       <button
         class="btn btn-square btn-ghost"
         v-html="feather.icons['rotate-ccw'].toSvg()"
-        :disabled="(subtree[property] ?? defaultValue) === (original[property] ?? defaultValue)"
+        :disabled="
+          disabled || (subtree[property] ?? defaultValue) === (original[property] ?? defaultValue)
+        "
         @click="onRevert"
       />
     </div>

@@ -89,6 +89,8 @@ type Import = ImportPins | ImportCalendar;
 
 const app = defineModel<App>();
 const localStorageData = await localStorageDataStore.value.GetData();
+// Exporting stays possible, see `hasNewerVersionRop`.
+const readOnly = computed(() => app.value!.docShared.readOnly.value);
 const docData = computed(() => app.value!.docShared.data.value);
 const pinCalendar = computed(() => docData.value!.pinCalendar);
 const pinCatalog = computed(() => docData.value!.pinCatalog);
@@ -203,6 +205,8 @@ function onClickPinsClear() {
       'Are you sure you want to delete all pin definitions from the pin catalog? This action cannot be undone.',
     buttonConfirm: 'Delete All Pins',
     actionConfirm: () => {
+      if (readOnly.value) return;
+
       docData.value[changeSubtree]((shared) => {
         // Replaced if invalid, as it is cleared anyway.
         if (isObject(shared.pinCatalog)) PinCatalogClear(shared.pinCatalog);
@@ -252,6 +256,8 @@ function onClickCalendarClear() {
       'Are you sure you want to clear all pins from the calendar? This action cannot be undone.',
     buttonConfirm: 'Clear Calendar',
     actionConfirm: () => {
+      if (readOnly.value) return;
+
       docData.value[changeSubtree]((shared) => {
         // Replaced if invalid, as it is cleared anyway.
         if (isObject(shared.pinCalendar)) PinCalendarClear(shared.pinCalendar);
@@ -295,6 +301,8 @@ function onClickCalendarDelete() {
 }
 
 function onClickImportPinsConfirm(importPins: ImportPins) {
+  if (readOnly.value) return;
+
   PinCatalogChange(pinCatalog.value, (pinCatalog) => {
     if (importPins.overwrite) {
       // Remove conflicting elements
@@ -326,6 +334,8 @@ function onClickImportPinsConfirm(importPins: ImportPins) {
 }
 
 function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
+  if (readOnly.value) return;
+
   const calendar = pinCalendar.value;
 
   // An invalid calendar is left as it is, rather than replaced.
@@ -483,11 +493,19 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
           <div v-html="feather.icons['upload'].toSvg()" />
           <div>Export</div>
         </button>
-        <button @click="onClickPinsImport" class="btn max-sm:btn-square btn-neutral flex-1">
+        <button
+          @click="onClickPinsImport"
+          class="btn max-sm:btn-square btn-neutral flex-1"
+          :disabled="readOnly"
+        >
           <div v-html="feather.icons['download'].toSvg()" />
           <div>Import</div>
         </button>
-        <button @click="onClickPinsClear" class="btn max-sm:btn-square btn-error flex-1">
+        <button
+          @click="onClickPinsClear"
+          class="btn max-sm:btn-square btn-error flex-1"
+          :disabled="readOnly"
+        >
           <div v-html="feather.icons['trash-2'].toSvg()" />
           <div>Clear</div>
         </button>
@@ -500,11 +518,19 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
           <div v-html="feather.icons['upload'].toSvg()" />
           <div>Export</div>
         </button>
-        <button @click="onClickCalendarImport" class="btn max-sm:btn-square btn-neutral flex-1">
+        <button
+          @click="onClickCalendarImport"
+          class="btn max-sm:btn-square btn-neutral flex-1"
+          :disabled="readOnly"
+        >
           <div v-html="feather.icons['download'].toSvg()" />
           <div>Import</div>
         </button>
-        <button @click="onClickCalendarClear" class="btn max-sm:btn-square btn-error flex-1">
+        <button
+          @click="onClickCalendarClear"
+          class="btn max-sm:btn-square btn-error flex-1"
+          :disabled="readOnly"
+        >
           <div v-html="feather.icons['trash-2'].toSvg()" />
           <div>Clear</div>
         </button>

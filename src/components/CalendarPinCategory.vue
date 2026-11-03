@@ -14,11 +14,13 @@ import type { Rop } from 'automerge-diy-vue-hooks';
 import type { PinDay } from '@/pins/pinCalendarDay';
 import CollapsibleText from './CollapsibleText.vue';
 
-const { depth, pinCategory, pinDay } = defineProps<{
+const { depth, pinCategory, pinDay, disabled } = defineProps<{
   depth: number;
   pinCatalog: PinCatalogUncheckedRop;
   pinCategory: PinCategoryRop;
   pinDay: Rop<PinDay>;
+  // The pins cannot be toggled, e.g. as the calendar is read-only.
+  disabled: boolean;
 }>();
 
 export type CalendarPinCategoryEvent = {
@@ -75,6 +77,7 @@ const isCollapsed = ref(true);
               :depth
               :pin
               :pin-day
+              :disabled
             />
           </ul>
         </li>
@@ -92,6 +95,7 @@ const isCollapsed = ref(true);
             :pin-catalog
             :pin-category="subcategory"
             :pin-day
+            :disabled
           />
         </li>
       </template>

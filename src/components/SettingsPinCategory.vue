@@ -12,11 +12,13 @@ import PinCard from './PinCard.vue';
 import * as R from 'ramda';
 import CollapsibleText from './CollapsibleText.vue';
 
-const { depth, pinCategory, predecessorArchived } = defineProps<{
+const { depth, pinCategory, predecessorArchived, readOnly } = defineProps<{
   depth: number;
   predecessorArchived?: boolean;
   pinCatalog: PinCatalogUncheckedRop;
   pinCategory: PinCategoryRop;
+  // The catalog cannot be changed, e.g. as the calendar is read-only. Editing only shows the values.
+  readOnly: boolean;
 }>();
 
 export type SettingsPinCategoryEvent =
@@ -87,6 +89,7 @@ const isCollapsed = ref(true);
         >
           <template v-if="!pinCategory.value.archived">
             <button
+              :disabled="readOnly"
               @click="emit('event', { kind: 'categoryAdd', parent: pinCategory })"
               class="btn btn-sm btn-primary max-sm:btn-square"
             >
@@ -94,6 +97,7 @@ const isCollapsed = ref(true);
               <div class="max-sm:hidden">Add Subcategory</div>
             </button>
             <button
+              :disabled="readOnly"
               @click="emit('event', { kind: 'pinAdd', parent: pinCategory })"
               class="btn btn-sm btn-primary max-sm:btn-square"
             >
@@ -108,6 +112,7 @@ const isCollapsed = ref(true);
               <div class="max-sm:hidden">Edit</div>
             </button>
             <button
+              :disabled="readOnly"
               @click="
                 emit('event', {
                   kind: 'categoryArchive',
@@ -123,6 +128,7 @@ const isCollapsed = ref(true);
           </template>
           <template v-else>
             <button
+              :disabled="readOnly"
               @click="
                 emit('event', {
                   kind: 'categoryArchive',
@@ -136,6 +142,7 @@ const isCollapsed = ref(true);
               <div class="max-sm:hidden">Restore</div>
             </button>
             <button
+              :disabled="readOnly"
               @click="emit('event', { kind: 'categoryDelete', pinCategory })"
               class="btn btn-sm max-sm:btn-square btn-error"
             >
@@ -177,6 +184,7 @@ const isCollapsed = ref(true);
                   <div class="max-sm:hidden">Edit</div>
                 </button>
                 <button
+                  :disabled="readOnly"
                   @click="emit('event', { kind: 'pinArchive', pin, archive: true })"
                   class="btn btn-sm max-sm:btn-square btn-warning"
                 >
@@ -201,6 +209,7 @@ const isCollapsed = ref(true);
             :depth="depth + 1"
             :pin-catalog
             :pin-category="subcategory"
+            :read-only
           />
         </li>
 
@@ -234,6 +243,7 @@ const isCollapsed = ref(true);
               <PinCard :pin="pin" :details="true" class="flex-1" />
               <template v-if="!predecessorArchived && !pinCategory.value.archived">
                 <button
+                  :disabled="readOnly"
                   @click="emit('event', { kind: 'pinArchive', pin, archive: false })"
                   class="btn btn-sm max-sm:btn-square btn-neutral"
                 >
@@ -241,6 +251,7 @@ const isCollapsed = ref(true);
                   <div class="max-sm:hidden">Restore</div>
                 </button>
                 <button
+                  :disabled="readOnly"
                   @click="emit('event', { kind: 'pinDelete', pin })"
                   class="btn btn-sm max-sm:btn-square btn-error"
                 >
@@ -263,6 +274,7 @@ const isCollapsed = ref(true);
                 :predecessor-archived="predecessorArchived || pinCategory.value.archived"
                 :pin-catalog
                 :pin-category="subcategory"
+                :read-only
               />
             </li>
           </ul>
