@@ -122,7 +122,10 @@ replaced or deleted.
   fake network. Put tests that wait long (e.g. for timeouts) in a file of their own.
 - PeerJS peer IDs are UUIDs, as the local document requires, derived from readable names via
   `peerId`.
-- The shared worker and Vue components are not covered; check them in a browser.
+- The shared worker's code runs in the tests (`SharedRepoWorker`, `sharedWorker.ts`): tabs are
+  connected to it via `MessageChannel`s, with short polling intervals and their own IndexedDB
+  database. Its entry (`workers/sharedRepo.ts`), `LoadApp` and Vue components are not covered;
+  check them in a browser.
 - CI (`.github/workflows/check.yml`) runs only on pushes to `master` and `deploy`.
 
 ## Conventions

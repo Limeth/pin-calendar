@@ -23,9 +23,12 @@ export function sleep(ms: number): Promise<void> {
 }
 
 // Wait until the condition holds, and return whether it did before the timeout.
-export async function until(condition: () => boolean, timeoutMs = 5_000): Promise<boolean> {
+export async function until(
+  condition: () => boolean | Promise<boolean>,
+  timeoutMs = 5_000,
+): Promise<boolean> {
   for (const start = Date.now(); Date.now() - start < timeoutMs; await sleep(25))
-    if (condition()) return true;
+    if (await condition()) return true;
 
   return condition();
 }

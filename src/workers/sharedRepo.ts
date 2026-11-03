@@ -6,9 +6,13 @@
 
 declare const self: SharedWorkerGlobalScope;
 
-const sharedRepoMain = import('./sharedRepoMain');
+const worker = import('./sharedRepoMain').then(({ SharedRepoWorker }) => new SharedRepoWorker());
 
 self.onconnect = (eventConnect: MessageEvent) => {
+  const port = eventConnect.ports[0];
+
+  if (port === undefined) return;
+
   // The port keeps the tab's messages until the worker's code starts it.
-  sharedRepoMain.then(({ onConnect }) => onConnect(eventConnect));
+  void worker.then((worker) => worker.onConnect(port));
 };
