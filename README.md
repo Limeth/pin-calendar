@@ -5,7 +5,6 @@ A calendar-based activity tracking web app with multi-client synchronization.
 ## TODO:
 
 - Display orphaned pins in settings
-- Confirmation dialog when being invited to a calendar, to prevent IP address leakage without confirmation (should display a warning about that in the dialog)
 - Periodically clean up pins/categories in `PinCatalog::removed`
 
 ## Running on Windows:
