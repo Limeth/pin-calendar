@@ -20,6 +20,8 @@ import {
   PinCatalogGetPinCategories,
   PinCatalogGetPins,
   PinCatalogAddPin,
+  PinCatalogGetPinById,
+  PinCatalogGetPinCategoryById,
 } from '../pins/pinCatalog';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 import {
@@ -173,6 +175,39 @@ function showImportError(
           : `This file is not a valid ${description}.`,
   };
   getSettingsIoModal().showModal();
+}
+
+// Describes a conflict by the names of the existing and the imported entry, e.g. "Jog → Run". The
+// existing entry may be invalid, as invalid entries conflict too, see `onClickPinsImport`.
+function describeConflict(
+  existing: { value: { displayName: string } } | null,
+  imported: { value: { displayName: string } } | null,
+  unreadable: string,
+): string {
+  const existingName = existing?.value.displayName ?? unreadable;
+  const importedName = imported?.value.displayName ?? existingName;
+
+  return existingName === importedName ? existingName : `${existingName} → ${importedName}`;
+}
+
+function describePinConflict(importPins: ImportPins, pinId: PinId): string {
+  const catalog = pinCatalog.value;
+
+  return describeConflict(
+    isObject(catalog) ? PinCatalogGetPinById(catalog, pinId) : null,
+    PinCatalogGetPinById(importPins.pinCatalog, pinId),
+    'Unreadable pin',
+  );
+}
+
+function describePinCategoryConflict(importPins: ImportPins, pinCategoryId: PinCategoryId): string {
+  const catalog = pinCatalog.value;
+
+  return describeConflict(
+    isObject(catalog) ? PinCatalogGetPinCategoryById(catalog, pinCategoryId) : null,
+    PinCatalogGetPinCategoryById(importPins.pinCatalog, pinCategoryId),
+    'Unreadable category',
+  );
 }
 
 function onClickPinsImport() {
@@ -422,29 +457,31 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
               modalData.import.conflicts.pins.length > 0
             "
           >
-            <div>
-              <p v-if="modalData.import.conflicts.pinCategories.length > 0">
-                <span class="font-semibold"
-                  >Found
-                  {{ modalData.import.conflicts.pinCategories.length }}
-                  conflicting categories</span
-                >:
-                {{
-                  // TODO: This is incomprehensible to humans, display the original and new titles instead
-                  Array.from(
-                    modalData.import.conflicts.pinCategories.map((pinCategory) => pinCategory.key),
-                  ).join(', ')
-                }}.
-              </p>
-              <p v-if="modalData.import.conflicts.pins.length > 0">
-                <span class="font-semibold"
-                  >Found {{ modalData.import.conflicts.pins.length }} conflicting pins</span
-                >:
-                {{
-                  // TODO: This is incomprehensible to humans, display the original and new titles instead
-                  Array.from(modalData.import.conflicts.pins.map((pin) => pin.key)).join(', ')
-                }}.
-              </p>
+            <div class="flex flex-col gap-2">
+              <div v-if="modalData.import.conflicts.pinCategories.length > 0">
+                <p class="font-semibold">
+                  Found {{ modalData.import.conflicts.pinCategories.length }} conflicting
+                  categories:
+                </p>
+                <ul class="list-disc ps-5">
+                  <li
+                    v-for="pinCategoryId in modalData.import.conflicts.pinCategories"
+                    :key="pinCategoryId.key"
+                  >
+                    {{ describePinCategoryConflict(modalData.import, pinCategoryId) }}
+                  </li>
+                </ul>
+              </div>
+              <div v-if="modalData.import.conflicts.pins.length > 0">
+                <p class="font-semibold">
+                  Found {{ modalData.import.conflicts.pins.length }} conflicting pins:
+                </p>
+                <ul class="list-disc ps-5">
+                  <li v-for="pinId in modalData.import.conflicts.pins" :key="pinId.key">
+                    {{ describePinConflict(modalData.import, pinId) }}
+                  </li>
+                </ul>
+              </div>
             </div>
             <div>
               What do you wish to perform with conflicting elements?
