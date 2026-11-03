@@ -17,7 +17,9 @@ export default defineConfig({
   base: '/pin-calendar/',
   plugins: [vue(), vueDevTools(), wasm(), tailwindcss()],
   worker: {
-    format: 'es', // TODO: I don't think this should be necessary, we might want to use the default.
+    // The worker's code awaits the Automerge WASM module when it is imported (a top-level `await`),
+    // which the default `iife` format does not support.
+    format: 'es',
     plugins: () => [wasm()],
   },
   resolve: {
