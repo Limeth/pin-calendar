@@ -26,6 +26,24 @@ replaced or deleted.
 - Outside reactivity, use `Object.hasOwn` for keys chosen by a remote peer (invite thumbprints,
   PeerJS peer IDs): `in` also matches inherited properties, such as `toString`.
 
+## Data written by other devices and versions (`validation.ts`)
+
+- Documents and local storage may hold anything, written by other devices, tabs or versions of the
+  app. Their schemas define the types data is written with (`Static<typeof ...Schema>`), but data is
+  read unchecked (`Unchecked`, `UncheckedRop`): values via getters that check them against the
+  schema (`readProperty`, `readEntry`, `readEntryRop`), objects only after `isObject`, and arrays as
+  a whole.
+- The unit that is checked is one entity, e.g. a pin, a category, a day or a remote peer. An invalid
+  one is ignored where it is read, e.g. left out of lists, and kept as it is.
+- Invalid data is never corrected automatically. Only a user's action replaces it, e.g. renaming,
+  clearing, joining again or forgetting a peer, or a migration to a new schema version.
+- Functions that change data read the existing data via the getters, so that invalid data cannot
+  make a change fail halfway.
+- Check data that is saved back with `Value.Check` (`readValue`), not `Value.Parse`, which removes
+  properties unknown to this version and converts values. Data that is not saved back as it was
+  read, e.g. invite links and imported files, may be parsed.
+- Every module defining a schema with a string format imports `formats.ts`.
+
 ## Protocol and security (`auth.ts`, `handshake.ts`, `invite.ts`, `webrtc.ts`)
 
 - Joining (invite) and connecting (paired peers) use the same mutual challenge-response handshake,
@@ -77,6 +95,8 @@ replaced or deleted.
   tests need to cause network failures. Keep the fake's behaviour faithful to PeerJS.
 - Test files run in parallel, the tests of a file one after another, and each file has its own
   fake network. Put tests that wait long (e.g. for timeouts) in a file of their own.
+- PeerJS peer IDs are UUIDs, as the local document requires, derived from readable names via
+  `peerId`.
 - The shared worker and Vue components are not covered; check them in a browser.
 - CI (`.github/workflows/check.yml`) runs only on pushes to `master` and `deploy`.
 
