@@ -241,12 +241,15 @@ function setPage(newPage: Page) {
 
 const inviteLink = ref('');
 
+// Open an invite link of this app. The page is reloaded, as only the hash changes, and the invite is
+// only read from it when the app starts, see `SinglePageApp`.
 function useInviteLink() {
   const [currentPath] = window.location.href.split('#', 2);
   const [newPath] = inviteLink.value.split('#', 2);
 
   if (currentPath === newPath) {
-    window.location.href = newPath;
+    window.location.href = inviteLink.value;
+    window.location.reload();
     return;
   }
 
