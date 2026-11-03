@@ -624,8 +624,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
             handleJoinRequest(dataConnection, requestPacket, this.options),
           );
         } else {
-          // TODO: Send error
-          closeConnection(dataConnection);
+          closeOnFailure(dataConnection, 'Request', sendError(dataConnection, 'Unknown request.'));
         }
       });
     });

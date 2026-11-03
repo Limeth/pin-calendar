@@ -262,6 +262,24 @@ describe('watchers', () => {
   });
 });
 
+describe('inbound requests', () => {
+  it('of an unknown kind are answered with an error, then closed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { adapter } = unconnectedAdapter();
+    const [local, remote] = connectionPair('local', 'stranger');
+    const received: unknown[] = [];
+    remote.on('data', (packet) => received.push(packet));
+    adapter.onInboundConnectionRequested(local as unknown as PeerJsDataConnection);
+    local.emit('open');
+    remote.emit('open');
+
+    await remote.send({ kind: 'unknown-request' });
+
+    expect(await until(() => !remote.open)).toBe(true);
+    expect(received).toEqual([{ kind: 'error', message: 'Unknown request.' }]);
+  });
+});
+
 describe('peer IDs', () => {
   it('that name inherited properties are rejected as unauthorized', async () => {
     const { adapter } = unconnectedAdapter();
