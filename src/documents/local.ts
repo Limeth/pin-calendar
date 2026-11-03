@@ -109,6 +109,9 @@ export function LocalDocumentGetCurrentVersion(
 
   if (result.type === 'invalid') throw new Error(`The local document is invalid.`);
 
+  if (result.type === 'outdated')
+    throw new Error(`Outdated local document schema version: ${result.version}`);
+
   throw new Error(`No local document found.`);
 }
 

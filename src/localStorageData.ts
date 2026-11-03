@@ -159,7 +159,8 @@ export function LocalStorageDataParse(string: string): LocalStorageData | undefi
   if (result.type === 'unsupported')
     throw new Error(`Unsupported local storage data schema version: ${result.version}`);
 
-  if (result.type === 'none') return undefined;
+  // TODO: Migrate from older versions.
+  if (result.type === 'none' || result.type === 'outdated') return undefined;
 
   const { calendars, ...rest }: { calendars?: unknown } = result.current;
 
