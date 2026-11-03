@@ -94,6 +94,16 @@ export function LocalDocumentGetRemotePeers(
   return remotePeers;
 }
 
+// The PeerJS peer IDs of the invalid remote peers, so that they can be forgotten, see
+// `forgetRemotePeer`. None if the list of peers is invalid, which joining again replaces as a whole.
+export function LocalDocumentGetInvalidRemotePeerIds(
+  self: Unchecked<LocalDocument>,
+): PeerJsPeerId[] {
+  return readKeys(isObject(self) ? self.remotePeers : undefined).filter(
+    (peerJsPeerId) => LocalDocumentGetRemotePeer(self, peerJsPeerId) === undefined,
+  );
+}
+
 export function LocalDocumentGetCurrentVersion(
   versioned: Ref<Rop<Versioned<LocalDocument>>>,
   defaultPeerJsPeerId: undefined | PeerJsPeerId,

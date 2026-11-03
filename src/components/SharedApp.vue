@@ -10,6 +10,7 @@ import QRCode from 'qrcode';
 import { computedAsync } from '@vueuse/core';
 import { decodeHash, encodeHash, type Hash, type HashAddPeer } from '@/hash';
 import {
+  LocalDocumentGetInvalidRemotePeerIds,
   LocalDocumentGetLocalPeer,
   LocalDocumentGetRemotePeers,
   type CalendarId,
@@ -195,6 +196,7 @@ const peers = computed(() => {
   if (app.value === undefined) return [];
 
   const remotePeers = LocalDocumentGetRemotePeers(app.value.docLocal.data.value);
+  const invalidPeerJsPeerIds = LocalDocumentGetInvalidRemotePeerIds(app.value.docLocal.data.value);
   const connectedPeers = app.value.docEphemeral.data.value.connectedPeers;
   const result = [];
 
@@ -206,6 +208,7 @@ const peers = computed(() => {
         ...remotePeer,
         peerJsPeerId,
         connected: false,
+        invalid: false,
       });
     } else
       result.push({
@@ -213,17 +216,27 @@ const peers = computed(() => {
         ...connectedPeer,
         peerJsPeerId,
         connected: true,
+        invalid: false,
       });
   }
 
-  // Include peers that we are connected to, but that aren't known. `hasOwn`, as the peer chooses its
-  // ID, and `remotePeers` is a plain copy, which Vue does not need to track.
+  // Invalid peers cannot be connected to, as their keys are not known, but they can be forgotten.
+  for (const peerJsPeerId of invalidPeerJsPeerIds)
+    result.push({
+      peerJsPeerId,
+      connected: false,
+      invalid: true,
+    });
+
+  // Include peers that we are connected to, but that aren't listed yet. `hasOwn`, as the peer chooses
+  // its ID, and `remotePeers` is a plain copy, which Vue does not need to track.
   for (const [peerJsPeerId, connectedPeer] of Object.entries(connectedPeers))
-    if (!Object.hasOwn(remotePeers, peerJsPeerId))
+    if (!Object.hasOwn(remotePeers, peerJsPeerId) && !invalidPeerJsPeerIds.includes(peerJsPeerId))
       result.push({
         ...connectedPeer,
         peerJsPeerId,
         connected: true,
+        invalid: false,
       });
 
   return result;
@@ -645,15 +658,33 @@ function saveRenameDialog() {
               <div
                 :class="
                   'rounded-full bg-neutral p-2 ' +
-                  (peer.connected ? 'text-lime-300' : 'text-neutral-500')
+                  (peer.invalid
+                    ? 'text-warning'
+                    : peer.connected
+                      ? 'text-lime-300'
+                      : 'text-neutral-500')
                 "
               >
                 <div
-                  v-html="feather.icons[peer.connected ? 'upload-cloud' : 'cloud-off'].toSvg()"
+                  v-html="
+                    feather.icons[
+                      peer.invalid
+                        ? 'alert-triangle'
+                        : peer.connected
+                          ? 'upload-cloud'
+                          : 'cloud-off'
+                    ].toSvg()
+                  "
                 />
               </div>
               <div class="flex flex-1 flex-col items-start">
-                <div>PEER NAME (TODO)</div>
+                <template v-if="peer.invalid">
+                  <div>Unreadable device</div>
+                  <div class="text-xs opacity-60">
+                    It cannot be connected to. Forget it, then add the device again.
+                  </div>
+                </template>
+                <div v-else>PEER NAME (TODO)</div>
                 <div class="text-xs">
                   {{ peer.peerJsPeerId }}
                 </div>

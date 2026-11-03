@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Ref } from 'vue';
 import {
   LocalDocumentGetDocumentIdShared,
+  LocalDocumentGetInvalidRemotePeerIds,
   LocalDocumentGetLocalPeer,
   LocalDocumentGetRemotePeer,
   LocalDocumentGetRemotePeers,
@@ -39,6 +40,7 @@ describe('the local document', () => {
     expect(LocalDocumentGetLocalPeer(document.value)).toMatchObject(LOCAL_PEER);
     expect(LocalDocumentGetRemotePeer(document.value, peerId('phone'))).toMatchObject(phone);
     expect(Object.keys(LocalDocumentGetRemotePeers(document.value))).toEqual([peerId('phone')]);
+    expect(LocalDocumentGetInvalidRemotePeerIds(document.value)).toEqual([]);
   });
 
   it('ignores invalid values', () => {
@@ -55,6 +57,8 @@ describe('the local document', () => {
     expect(LocalDocumentGetLocalPeer(document.value)).toBeUndefined();
     expect(LocalDocumentGetRemotePeer(document.value, peerId('tablet'))).toBeUndefined();
     expect(Object.keys(LocalDocumentGetRemotePeers(document.value))).toEqual([peerId('phone')]);
+    // So that they can be forgotten.
+    expect(LocalDocumentGetInvalidRemotePeerIds(document.value)).toEqual([peerId('tablet')]);
   });
 
   it('does not count inherited properties as remote peers', () => {
@@ -69,6 +73,7 @@ describe('the local document', () => {
     const document = localDocument({ localPeer: LOCAL_PEER, remotePeers: 'not a list' });
 
     expect(LocalDocumentGetRemotePeers(document.value)).toEqual({});
+    expect(LocalDocumentGetInvalidRemotePeerIds(document.value)).toEqual([]);
   });
 
   it('can only be used after it was checked', () => {
