@@ -1,6 +1,7 @@
 import '@/formats';
 import { Type, type TObject } from '@sinclair/typebox';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
+import { isObject, type UncheckedRop } from '@/validation';
 
 const VersionSchema = Type.String({ format: 'integer' });
 
@@ -70,15 +71,28 @@ export function getCurrentVersion<R, T extends Versioned<R>>(
   return { type: 'none' };
 }
 
+// The current version of a document, which other devices or versions of the app may have written:
+// `invalid` if its versions, or the current one, are not objects. The current version is read
+// unchecked, see `UncheckedRop`.
+type GetCurrentVersionRopResult<R> =
+  | GetCurrentVersionResult<UncheckedRop<R>>
+  | {
+      type: 'invalid';
+    };
+
 export function getCurrentVersionRop<R, T extends Versioned<R>>(
   versioned: Rop<T>,
   currentVersion: number,
   init: undefined | (() => R),
-): GetCurrentVersionResult<Rop<R>> {
+): GetCurrentVersionRopResult<R> {
   if (currentVersion !== (currentVersion | 0))
     throw new Error('The current version must be an integer.');
 
-  const availableVersions = Object.keys(versioned.schemaVersion)
+  const schemaVersion: unknown = versioned.schemaVersion;
+
+  if (!isObject(schemaVersion)) return { type: 'invalid' };
+
+  const availableVersions = Object.keys(schemaVersion)
     .map((versionKey) => parseInt(versionKey))
     .toSorted((a, b) => a - b);
   const latestVersion =
@@ -92,11 +106,13 @@ export function getCurrentVersionRop<R, T extends Versioned<R>>(
 
   const versionKey = JSON.stringify(currentVersion | 0); // Remove trailing '.0'
 
-  if (versionKey in versioned.schemaVersion)
-    return {
-      type: 'current',
-      current: versioned.schemaVersion[versionKey] as Rop<R>,
-    };
+  if (versionKey in schemaVersion) {
+    const current: unknown = (schemaVersion as Record<string, unknown>)[versionKey];
+
+    return isObject(current)
+      ? { type: 'current', current: current as UncheckedRop<R> }
+      : { type: 'invalid' };
+  }
 
   // TODO: Migrate from previous versions.
 
@@ -106,7 +122,7 @@ export function getCurrentVersionRop<R, T extends Versioned<R>>(
     });
     return {
       type: 'current',
-      current: versioned.schemaVersion[versionKey] as Rop<R>,
+      current: versioned.schemaVersion[versionKey] as UncheckedRop<R>,
     };
   }
 

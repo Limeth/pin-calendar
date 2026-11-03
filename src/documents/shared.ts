@@ -50,6 +50,8 @@ export function SharedDocumentGetCurrentVersion(
   if (result.type === 'unsupported')
     throw new Error(`Unsupported shared document schema version: ${result.version}`);
 
+  if (result.type === 'invalid') throw new Error(`The shared document is invalid.`);
+
   throw new Error(`No shared document found.`);
 }
 
