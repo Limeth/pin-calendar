@@ -144,8 +144,8 @@ type HandshakeSignedData = {
 
 // What both peers sign in a handshake, each from its own point of view, see `HandshakeSignedData`.
 export type HandshakeTranscript = {
-  challengeInitiator: BufferSource;
-  challengeResponder: BufferSource;
+  challengeInitiator: Challenge;
+  challengeResponder: Challenge;
   fingerprintsInitiator: string;
   fingerprintsResponder: string;
 };
@@ -157,8 +157,8 @@ function handshakeSignedData(
   role: HandshakeRole,
   transcript: HandshakeTranscript,
 ): Uint8Array<ArrayBuffer> {
-  const initiator = toBytes(transcript.challengeInitiator);
-  const responder = toBytes(transcript.challengeResponder);
+  const initiator = transcript.challengeInitiator;
+  const responder = transcript.challengeResponder;
 
   if (initiator.length !== CHALLENGE_LENGTH || responder.length !== CHALLENGE_LENGTH)
     throw new Error('Invalid handshake challenge length.');
@@ -172,13 +172,6 @@ function handshakeSignedData(
     fingerprintsResponder: transcript.fingerprintsResponder,
   };
   return new TextEncoder().encode(JSON.stringify(data));
-}
-
-// Packets received via PeerJS may contain an `ArrayBuffer` in place of a `Uint8Array`.
-function toBytes(buffer: BufferSource): Uint8Array {
-  if (ArrayBuffer.isView(buffer))
-    return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-  return new Uint8Array(buffer);
 }
 
 // Sign the handshake as the peer with the given role.

@@ -1,3 +1,4 @@
+import { Type, type Static } from '@sinclair/typebox';
 import {
   NetworkAdapter,
   type Repo,
@@ -19,19 +20,20 @@ import {
 import type { HashArgsInvite } from './hash';
 import { changeSubtree, type Rop } from 'automerge-diy-vue-hooks';
 import type { EphemeralDocument } from './documents/ephemeral';
-import { handleJoinRequest, joinCalendarVia, type JoinRequestPacket } from './invite';
+import { handleJoinRequest, joinCalendarVia, JoinRequestPacketSchema } from './invite';
 import * as auth from './auth';
-import { asyncOnceOpen, closeConnection } from './util/peerjs';
+import { asyncOnceOpen, closeConnection, decodePacket } from './util/peerjs';
 import { setRemotePeerKey } from './peers';
+import { readValue } from './validation';
 import {
   exchange,
+  HandshakeAuthBaseSchema,
+  HandshakeRequestBaseSchema,
   initiateHandshake,
   respondToHandshake,
   sendError,
   toErrorPacket,
   type ErrorPacket,
-  type HandshakeAuthBase,
-  type HandshakeRequestBase,
 } from './handshake';
 
 export type WebRtcNetworkAdapterOptions = {
@@ -48,10 +50,14 @@ export type WebRtcNetworkAdapterOptions = {
 };
 
 // Information about a peer, exchanged once the peer is authenticated.
-export type PeerInfo = {
-  automergePeerId: string;
-  automergePeerMetadata: PeerMetadata;
-};
+const PeerInfoSchema = Type.Object({
+  automergePeerId: Type.String(),
+  // Automerge's, which only checks that it is an object. Its optional properties may be `null`, as
+  // PeerJS delivers `undefined` as `null`, see `decodePacket`.
+  automergePeerMetadata: Type.Unsafe<PeerMetadata>(Type.Object({})),
+});
+
+export type PeerInfo = Static<typeof PeerInfoSchema>;
 
 export type ConnectedPeer = {
   dataConnection: DataConnection;
@@ -66,26 +72,37 @@ type Packet = {
 // during the invitation.
 
 // 1. Sent from initiator to responder.
-export type ConnectRequestPacket = HandshakeRequestBase & {
-  kind: 'connect-request';
-};
+const ConnectRequestPacketSchema = Type.Object({
+  ...HandshakeRequestBaseSchema.properties,
+  kind: Type.Literal('connect-request'),
+});
+
+export type ConnectRequestPacket = Static<typeof ConnectRequestPacketSchema>;
 
 // 2. Sent from responder to initiator: `HandshakeResponsePacket`.
 
 // 3. Sent from initiator to responder, if the `HandshakeResponsePacket::signature` was correct.
-type ConnectAuthPacket = HandshakeAuthBase & {
-  kind: 'connect-auth';
-  peerInfo: PeerInfo;
-};
+const ConnectAuthPacketSchema = Type.Object({
+  ...HandshakeAuthBaseSchema.properties,
+  kind: Type.Literal('connect-auth'),
+  peerInfo: PeerInfoSchema,
+});
+
+type ConnectAuthPacket = Static<typeof ConnectAuthPacketSchema>;
 
 // 4. Sent from responder to initiator, if the `ConnectAuthPacket::signature` was correct.
-type ConnectAcceptPacket = {
-  kind: 'connect-accept';
-  peerInfo: PeerInfo;
-};
+const ConnectAcceptPacketSchema = Type.Object({
+  kind: Type.Literal('connect-accept'),
+  peerInfo: PeerInfoSchema,
+});
+
+type ConnectAcceptPacket = Static<typeof ConnectAcceptPacketSchema>;
 
 // The first packet sent over a new connection.
-export type HandshakeRequestPacket = ConnectRequestPacket | JoinRequestPacket;
+const HandshakeRequestPacketSchema = Type.Union([
+  ConnectRequestPacketSchema,
+  JoinRequestPacketSchema,
+]);
 
 // Compares by UTF-16 code units, unlike `localeCompare`, which depends on the user's locale and
 // could order the same strings differently on different devices.
@@ -571,7 +588,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       signature: handshake.signature,
       peerInfo: this.getLocalPeerInfo(),
     };
-    return await exchange<ConnectAcceptPacket>(dataConnection, connectAuth);
+    return await exchange(dataConnection, connectAuth, ConnectAcceptPacketSchema);
   }
 
   // Authenticate a connection opened by a remote peer, as the responder of the handshake.
@@ -583,10 +600,11 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
 
     if (authKey === undefined) return await sendError(dataConnection, 'Unauthorized peer.');
 
-    const connectAuth = await respondToHandshake<ConnectAuthPacket>(
+    const connectAuth = await respondToHandshake(
       dataConnection,
       authKey,
       connectRequest,
+      ConnectAuthPacketSchema,
     );
 
     if (connectAuth.kind === 'error') return connectAuth;
@@ -609,22 +627,22 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   onInboundConnectionRequested(dataConnection: DataConnection) {
     dataConnection.once('open', () => {
       dataConnection.once('data', (message) => {
-        const requestPacket = message as HandshakeRequestPacket; // TODO: Schema validation
+        const request = readValue(HandshakeRequestPacketSchema, decodePacket(message), 'request');
 
-        if (requestPacket.kind === 'connect-request') {
+        if (request?.kind === 'connect-request') {
           closeOnFailure(
             dataConnection,
             'Connection handshake',
-            this.authenticateInboundConnection(dataConnection, requestPacket),
+            this.authenticateInboundConnection(dataConnection, request),
           );
-        } else if (requestPacket.kind === 'join-request') {
+        } else if (request?.kind === 'join-request') {
           closeOnFailure(
             dataConnection,
             'Join request',
-            handleJoinRequest(dataConnection, requestPacket, this.options),
+            handleJoinRequest(dataConnection, request, this.options),
           );
         } else {
-          closeOnFailure(dataConnection, 'Request', sendError(dataConnection, 'Unknown request.'));
+          closeOnFailure(dataConnection, 'Request', sendError(dataConnection, 'Invalid request.'));
         }
       });
     });

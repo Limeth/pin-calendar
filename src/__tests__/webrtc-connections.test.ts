@@ -263,8 +263,14 @@ describe('watchers', () => {
 });
 
 describe('inbound requests', () => {
-  it('of an unknown kind are answered with an error, then closed', async () => {
+  it.each([
+    ['of an unknown kind', { kind: 'unknown-request' }],
+    ['that are malformed', { kind: 'connect-request', challenge: 'not binary' }],
+    // Arrives as `null`.
+    ['that are not objects', undefined],
+  ])('%s are answered with an error, then closed', async (_, request) => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { adapter } = unconnectedAdapter();
     const [local, remote] = connectionPair('local', 'stranger');
     const received: unknown[] = [];
@@ -273,10 +279,10 @@ describe('inbound requests', () => {
     local.emit('open');
     remote.emit('open');
 
-    await remote.send({ kind: 'unknown-request' });
+    await remote.send(request);
 
     expect(await until(() => !remote.open)).toBe(true);
-    expect(received).toEqual([{ kind: 'error', message: 'Unknown request.' }]);
+    expect(received).toEqual([{ kind: 'error', message: 'Invalid request.' }]);
   });
 });
 

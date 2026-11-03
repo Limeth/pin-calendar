@@ -32,6 +32,19 @@ function asyncOnceOrFail(
   });
 }
 
+// A received packet with the binary data that PeerJS's serialization (binarypack) delivers as an
+// `ArrayBuffer` as a `Uint8Array` instead, as it was sent. Note that `undefined` is delivered as
+// `null`, which is kept.
+export function decodePacket(packet: unknown): unknown {
+  if (packet instanceof ArrayBuffer) return new Uint8Array(packet);
+  if (Array.isArray(packet)) return packet.map(decodePacket);
+  if (typeof packet === 'object' && packet !== null)
+    return Object.fromEntries(
+      Object.entries(packet).map(([key, value]) => [key, decodePacket(value)]),
+    );
+  return packet;
+}
+
 // Resolves once the connection is open, or rejects if it errors or is closed first.
 export async function asyncOnceOpen(connection: DataConnection): Promise<void> {
   if (connection.open) return;

@@ -1,7 +1,9 @@
+import { Type, type Static } from '@sinclair/typebox';
 import * as uuid from 'uuid';
 import Peer, { type DataConnection } from 'peerjs';
 import type { HashArgsInvite } from './hash';
 import {
+  CalendarIdSchema,
   LocalDocumentGetDocumentIdShared,
   type CalendarId,
   type PeerJsPeerId,
@@ -12,47 +14,58 @@ import { setRemotePeerKey } from './peers';
 import type { WebRtcNetworkAdapterOptions } from './webrtc';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 import {
+  BytesSchema,
   exchange,
+  HandshakeAuthBaseSchema,
+  HandshakeRequestBaseSchema,
   initiateHandshake,
   respondToHandshake,
   sendError,
   toErrorPacket,
   type ErrorPacket,
-  type HandshakeAuthBase,
-  type HandshakeRequestBase,
 } from './handshake';
 
 // Joining a calendar via an invite uses the handshake from `handshake.ts`, with the invite secret
 // as the key.
 
 // 1. Sent from invitee to inviter.
-export type JoinRequestPacket = HandshakeRequestBase & {
-  kind: 'join-request';
-  secretThumbprint: string;
-};
+export const JoinRequestPacketSchema = Type.Object({
+  ...HandshakeRequestBaseSchema.properties,
+  kind: Type.Literal('join-request'),
+  secretThumbprint: Type.String(),
+});
+
+export type JoinRequestPacket = Static<typeof JoinRequestPacketSchema>;
 
 // 2. Sent from inviter to invitee: `HandshakeResponsePacket`.
 
 // 3. Sent from invitee to inviter, if the `HandshakeResponsePacket::signature` was correct.
-export type JoinAuthPacket = HandshakeAuthBase & {
-  kind: 'join-auth';
-  ecdhPublicKey: Uint8Array<ArrayBuffer>;
-};
+const JoinAuthPacketSchema = Type.Object({
+  ...HandshakeAuthBaseSchema.properties,
+  kind: Type.Literal('join-auth'),
+  ecdhPublicKey: BytesSchema,
+});
+
+export type JoinAuthPacket = Static<typeof JoinAuthPacketSchema>;
 
 // 4. Sent from inviter to invitee, if the `JoinAuthPacket::signature` was correct.
-export type JoinAcceptPacket = {
-  kind: 'join-accept';
-  calendarId: CalendarId;
-  sharedDocumentId: string;
-  ecdhPublicKey: Uint8Array<ArrayBuffer>;
-};
+const JoinAcceptPacketSchema = Type.Object({
+  kind: Type.Literal('join-accept'),
+  calendarId: CalendarIdSchema,
+  sharedDocumentId: Type.String(),
+  ecdhPublicKey: BytesSchema,
+});
+
+export type JoinAcceptPacket = Static<typeof JoinAcceptPacketSchema>;
 
 // 5. Sent from invitee to inviter, once the invitee has saved the shared authentication key.
 // Only then does the inviter add the invitee as a peer, so that a failure on the invitee's side
 // cannot leave the inviter with a peer that does not know about it.
-export type JoinConfirmPacket = {
-  kind: 'join-confirm';
-};
+const JoinConfirmPacketSchema = Type.Object({
+  kind: Type.Literal('join-confirm'),
+});
+
+export type JoinConfirmPacket = Static<typeof JoinConfirmPacketSchema>;
 
 export type JoinSuccess = {
   kind: 'success';
@@ -204,7 +217,7 @@ async function runJoinHandshake(
     signature: handshake.signature,
     ecdhPublicKey: ecdhKeyPair.publicKeyRaw,
   };
-  const joinAccept = await exchange<JoinAcceptPacket>(dataConnection, joinAuth);
+  const joinAccept = await exchange(dataConnection, joinAuth, JoinAcceptPacketSchema);
 
   if (joinAccept.kind === 'error') return joinAccept;
 
@@ -273,10 +286,11 @@ export async function handleJoinRequest(
 
   try {
     const secret = await auth.parseInviteSecret(invite.secretString);
-    const joinAuth = await respondToHandshake<JoinAuthPacket>(
+    const joinAuth = await respondToHandshake(
       dataConnection,
       secret.hmacKey,
       joinRequest,
+      JoinAuthPacketSchema,
     );
 
     if (joinAuth.kind === 'error') return joinAuth;
@@ -302,7 +316,7 @@ export async function handleJoinRequest(
       calendarId: options.calendarId,
       sharedDocumentId,
     };
-    const joinConfirm = await exchange<JoinConfirmPacket>(dataConnection, joinAccept);
+    const joinConfirm = await exchange(dataConnection, joinAccept, JoinConfirmPacketSchema);
 
     if (joinConfirm.kind === 'error') return joinConfirm;
 

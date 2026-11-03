@@ -34,6 +34,21 @@ function isClosePacket(packet: unknown): packet is ClosePacket {
   return (packet as ClosePacket | undefined)?.__peerData?.type === 'close';
 }
 
+// A packet as it arrives, like PeerJS's default serialization (binarypack): binary data, e.g. a
+// `Uint8Array`, arrives as an `ArrayBuffer`, and `undefined` as `null`.
+function serialized(packet: unknown): unknown {
+  if (packet === undefined || packet === null) return null;
+  if (packet instanceof ArrayBuffer) return packet.slice(0);
+  if (ArrayBuffer.isView(packet))
+    return packet.buffer.slice(packet.byteOffset, packet.byteOffset + packet.byteLength);
+  if (Array.isArray(packet)) return packet.map(serialized);
+  if (typeof packet === 'object')
+    return Object.fromEntries(
+      Object.entries(packet).map(([key, value]) => [key, serialized(value)]),
+    );
+  return packet;
+}
+
 export class DataConnection extends EventEmitter {
   peer: string;
   connectionId: string;
@@ -57,9 +72,11 @@ export class DataConnection extends EventEmitter {
   async send(packet: unknown) {
     if (!this.open) return;
 
-    const delivered = network.tamper(structuredClone(packet));
+    const tampered = network.tamper(structuredClone(packet));
 
-    if (delivered === null) return this.close();
+    if (tampered === null) return this.close();
+
+    const delivered = serialized(tampered);
 
     const arrival = Math.max(Date.now() + network.latency(delivered), this.lastArrival);
     this.lastArrival = arrival;

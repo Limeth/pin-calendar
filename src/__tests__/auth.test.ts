@@ -75,19 +75,6 @@ describe('handshake signatures', () => {
     }
   });
 
-  it('accept challenges received as an `ArrayBuffer`', async () => {
-    const key = await hmacKey();
-    const transcript = testTranscript();
-    const signature = await auth.signHandshake(key, 'initiator', transcript);
-    const asArrayBuffers = {
-      ...transcript,
-      challengeInitiator: (transcript.challengeInitiator as Uint8Array).slice().buffer,
-      challengeResponder: (transcript.challengeResponder as Uint8Array).slice().buffer,
-    };
-
-    expect(await auth.verifyHandshake(key, 'initiator', asArrayBuffers, signature)).toBe(true);
-  });
-
   it('cannot be reflected back as the other role', async () => {
     const key = await hmacKey();
     const transcript = testTranscript();
@@ -133,7 +120,7 @@ describe('handshake signatures', () => {
     const signature = await auth.signHandshake(key, 'initiator', transcript);
     const short = {
       ...transcript,
-      challengeInitiator: (transcript.challengeInitiator as Uint8Array).slice(1),
+      challengeInitiator: transcript.challengeInitiator.slice(1),
     };
 
     expect(await auth.verifyHandshake(key, 'initiator', short, signature)).toBe(false);
@@ -145,8 +132,8 @@ describe('handshake signatures', () => {
     const json = JSON.stringify({
       purpose: 'pin-calendar-handshake',
       role: 'initiator',
-      challengeInitiator: (transcript.challengeInitiator as Uint8Array).toBase64(),
-      challengeResponder: (transcript.challengeResponder as Uint8Array).toBase64(),
+      challengeInitiator: transcript.challengeInitiator.toBase64(),
+      challengeResponder: transcript.challengeResponder.toBase64(),
       fingerprintsInitiator: transcript.fingerprintsInitiator,
       fingerprintsResponder: transcript.fingerprintsResponder,
     });
