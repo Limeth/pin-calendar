@@ -204,24 +204,12 @@ if (currentHash.value.args?.action === 'invite') {
 </script>
 
 <template>
-  <!-- Without calendars to show, a read-only list would make the app create one, which could not be
-  saved, see `SharedApp`. -->
   <div class="drawer">
-    <SharedApp
-      v-if="
-        currentHash.args?.action !== 'invite' &&
-        !(
-          LocalStorageDataIsReadOnly(localStorageData) &&
-          Object.keys(localStorageData.calendars).length === 0
-        )
-      "
-    />
+    <SharedApp v-if="currentHash.args?.action !== 'invite'" />
   </div>
   <!-- Otherwise shown by `SharedApp`, along with the calendar's. -->
   <NewerVersionAlert
-    v-if="
-      currentHash.args?.action === 'invite' || Object.keys(localStorageData.calendars).length === 0
-    "
+    v-if="currentHash.args?.action === 'invite'"
     :list="LocalStorageDataIsReadOnly(localStorageData)"
     :calendar="modalData?.kind === 'invite-confirmation' && modalData.existingCalendarReadOnly"
   />

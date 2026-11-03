@@ -70,32 +70,6 @@ function defaultCalendarId(): CalendarId | undefined {
   return Object.keys(calendars)[0];
 }
 
-// Initialize the `currentHash.value.path` field, ensuring it's present.
-{
-  const calendarIds = Object.keys(localStorageData.value.calendars);
-
-  if (calendarIds.length === 0) {
-    // If no calendars exist, create one. The ID in the URL, if any, is not used, like when it is
-    // not one of the calendars below.
-    // TODO: This should be done manually by the user.
-    currentHash.value.path = {
-      calendar: {
-        id: LocalStorageDataAddCalendar(localStorageData.value),
-      },
-    };
-  } else if (
-    currentHash.value.path?.calendar.id === undefined ||
-    !(currentHash.value.path.calendar.id in localStorageData.value.calendars)
-  ) {
-    // Otherwise, if no ID was given, choose one of the calendars to display.
-    currentHash.value.path = {
-      calendar: {
-        id: defaultCalendarId()!,
-      },
-    };
-  }
-}
-
 // const calendar = computed(() =>
 //   currentHash.value.path?.calendar.id !== undefined
 //     ? localStorageData.value.calendars[currentHash.value.path?.calendar.id]
@@ -118,30 +92,30 @@ function openCalendar(calendarId: CalendarId) {
   };
 }
 
-openCalendar(currentHash.value.path!.calendar.id);
+// Open the calendar, if it is listed, otherwise the default one. Without calendars, none is open,
+// and the user is asked to create one.
+function openListedCalendar(calendarId: CalendarId | undefined) {
+  const listedCalendarId =
+    calendarId !== undefined && calendarId in localStorageData.value.calendars
+      ? calendarId
+      : defaultCalendarId();
+
+  if (listedCalendarId !== undefined) openCalendar(listedCalendarId);
+  else currentHash.value.path = undefined;
+}
+
+openListedCalendar(currentHash.value.path?.calendar.id);
 
 // Open another calendar when the open one is removed from the list, e.g. when it was deleted,
-// possibly in another tab. `in`, because Vue does not track `Object.hasOwn`.
+// possibly in another tab, and the first one added while none is open, e.g. created in another tab.
+// `in`, because Vue does not track `Object.hasOwn`.
 watch(
   () =>
-    currentHash.value.path !== undefined &&
-    currentHash.value.path.calendar.id in localStorageData.value.calendars,
-  (isListed) => {
-    if (isListed) return;
-
-    const calendarId = defaultCalendarId();
-
-    if (calendarId !== undefined) {
-      openCalendar(calendarId);
-      return;
-    }
-
-    // No calendars are left, so create one, as on startup. Deleting the last calendar already
-    // creates one, so this is only a fallback, e.g. for when the site data was cleared. Not in a
-    // read-only list, which this component is not shown for without calendars, see `SinglePageApp`.
-    if (LocalStorageDataIsReadOnly(localStorageData.value)) return;
-
-    openCalendar(LocalStorageDataAddCalendar(localStorageData.value));
+    currentHash.value.path === undefined
+      ? Object.keys(localStorageData.value.calendars).length === 0
+      : currentHash.value.path.calendar.id in localStorageData.value.calendars,
+  (isUpToDate) => {
+    if (!isUpToDate) openListedCalendar(currentHash.value.path?.calendar.id);
   },
 );
 
@@ -153,7 +127,11 @@ const appAsync = computedAsync(
   async () => {
     appHasOnlyNewerVersions.value = false;
 
-    const app = await appStore.value.GetAppOptional(currentHash.value.path!.calendar.id);
+    const calendarId = currentHash.value.path?.calendar.id;
+
+    if (calendarId === undefined) return undefined;
+
+    const app = await appStore.value.GetAppOptional(calendarId);
     // To debug the loading indicator when switching between calendars, uncomment this:
     // await new Promise(() => { /* Never resolve */ });
     return app;
@@ -553,7 +531,20 @@ function saveRenameDialog() {
       "
     >
       <div class="flex flex-col gap-2 items-center">
-        <template v-if="appIsBeingLoaded">
+        <template v-if="currentHash.path === undefined">
+          <h1>There are no calendars on this device yet.</h1>
+          <p class="text-sm opacity-60 text-center">
+            To use a calendar of another device instead, open an invite link created on it.
+          </p>
+          <button
+            class="btn btn-primary mt-4"
+            :disabled="LocalStorageDataIsReadOnly(localStorageData)"
+            @click="createNewCalendar"
+          >
+            Create a Calendar
+          </button>
+        </template>
+        <template v-else-if="appIsBeingLoaded">
           <!-- Keep consistent with the indicator shown while the app loads, in `MainPage`. -->
           <span class="loading loading-bars loading-xl"></span>
           <h1>Loading calendar, please wait.</h1>
