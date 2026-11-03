@@ -85,7 +85,10 @@ replaced or deleted.
 
 ## Tabs and the shared worker
 
-- The shared worker (`workers/sharedRepo.ts`) runs the WebRTC network adapter in one tab per
+- The shared worker's entry (`workers/sharedRepo.ts`) sets `onconnect` before it imports the worker's
+  code (`workers/sharedRepoMain.ts`) dynamically, as Chrome loses `connect` events dispatched while
+  the Automerge WASM module loads. It must not import anything else.
+- The shared worker runs the WebRTC network adapter in one tab per
   calendar, and moves it to another tab when that tab stops responding. Other tabs reach the
   adapter through the ephemeral document, e.g. `outgoingJoins`.
 - The local document is the source of truth for a calendar's peers. The invitation in local storage

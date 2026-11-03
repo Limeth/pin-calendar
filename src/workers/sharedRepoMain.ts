@@ -1,0 +1,392 @@
+// The code of the shared worker, imported by its entry, `sharedRepo.ts`.
+import {
+  isValidDocumentId,
+  Repo,
+  type DocHandle,
+  type DocumentId,
+} from '@automerge/automerge-repo';
+import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
+import { MessageChannelNetworkAdapter } from '@automerge/automerge-repo-network-messagechannel';
+import type { Rop } from 'automerge-diy-vue-hooks';
+import * as uuid from 'uuid';
+import {
+  LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT,
+  LocalDocumentDefault,
+  LocalDocumentGetCurrentVersion,
+  LocalDocumentGetDocumentIdShared,
+  type CalendarId,
+  type LocalDocument,
+} from '@/documents/local';
+import { computed, type Ref } from 'vue';
+import {
+  MessagePortWrapper,
+  type FromSharedRepoMessage,
+  type ToSharedRepoMessage,
+  type ToSharedRepoMessageInit,
+} from '@/workerMessages';
+import { changeSubtree, makeReactive } from 'automerge-diy-vue-hooks';
+import {
+  SHARED_DOCUMENT_SCHEMA_VERSION_CURRENT,
+  SharedDocumentDefault,
+  type SharedDocument,
+} from '@/documents/shared';
+import type { EphemeralDocument } from '@/documents/ephemeral';
+import type { DocumentWrapper, VersionedDocumentWrapper } from '@/documents/wrapper';
+import { hasNewerVersionRop, makeVersioned, type Versioned } from '@/versioned';
+
+export function EphemeralDocumentDefault(): EphemeralDocument {
+  return {
+    connectedPeers: {},
+    invites: {},
+    outgoingJoins: {},
+  };
+}
+
+type TabMessagePort = MessagePortWrapper<FromSharedRepoMessage, ToSharedRepoMessage> & {
+  calendarId?: undefined | CalendarId;
+};
+
+type Tab = {
+  port: TabMessagePort;
+  adapterEphemeral: MessageChannelNetworkAdapter;
+  adapterLocal: MessageChannelNetworkAdapter;
+  adapterShared: MessageChannelNetworkAdapter;
+  timedOut: boolean;
+  readySharedPosted: boolean;
+};
+
+function postReadyShared(tab: Tab) {
+  if (!tab.readySharedPosted) {
+    tab.port.postMessage({ type: 'ready-shared' });
+    tab.readySharedPosted = true;
+  }
+}
+
+class Initialized {
+  docEphemeral: DocumentWrapper<EphemeralDocument>;
+  docLocal: VersionedDocumentWrapper<LocalDocument>;
+  documentSharedAvailableLocallyDuringInitialization: boolean;
+  tabs: Tab[] = [];
+  webRtcTab?: Tab;
+  webRtcStarted: boolean = false;
+  // Whether WebRTC was shut down for good, see `ToSharedRepoMessageWebRtcShutdown`. Then, it is not
+  // started in any tab anymore.
+  webRtcShutDown: boolean = false;
+
+  constructor(options: {
+    docEphemeral: DocumentWrapper<EphemeralDocument>;
+    docLocal: VersionedDocumentWrapper<LocalDocument>;
+    documentSharedAvailableLocally: boolean;
+  }) {
+    this.docEphemeral = options.docEphemeral;
+    this.docLocal = options.docLocal;
+    this.documentSharedAvailableLocallyDuringInitialization =
+      options.documentSharedAvailableLocally;
+  }
+
+  // TODO: Ports would have to be weak-referenced.
+  // cleanupClosedTabs() {
+  //   for (let i = this.tabs.length - 1; i >= 0; i--) {
+  //     const tab = this.tabs[i];
+  //     const port = tab.port.deref();
+  //     if (port === undefined) {
+  //       this.tabs.splice(i, 1);
+  //       console.warn("Cleaning up closed tab.", tab);
+  //     }
+  //   }
+  // }
+}
+
+/// There's a separate SharedRepo for each distinct calendar.
+class SharedRepo {
+  calendarId: CalendarId;
+  repoEphemeral: Repo;
+  repoLocal: Repo;
+  repoShared: Repo;
+  initialized?: Promise<Initialized>;
+
+  constructor(calendarId: CalendarId) {
+    this.calendarId = calendarId;
+    this.repoEphemeral = new Repo({
+      network: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      peerId: ('repo-ephemeral:' + uuid.v7()) as any,
+    });
+    this.repoLocal = new Repo({
+      storage: new IndexedDBStorageAdapter(),
+      network: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      peerId: ('repo-local:' + uuid.v7()) as any,
+    });
+    this.repoShared = new Repo({
+      storage: new IndexedDBStorageAdapter(),
+      network: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      peerId: ('repo-shared:' + uuid.v7()) as any,
+    });
+  }
+
+  initialize(message: ToSharedRepoMessageInit): NonNullable<typeof this.initialized> {
+    if (this.initialized !== undefined) return this.initialized;
+
+    this.initialized = this.initializeInner(message);
+    return this.initialized;
+  }
+
+  // To ensure this method is invoked exactly once, invoke `initialize()` instead.
+  async initializeInner(message: ToSharedRepoMessageInit): NonNullable<typeof this.initialized> {
+    const docHandleEphemeral: DocHandle<EphemeralDocument> =
+      this.repoEphemeral.create<EphemeralDocument>(EphemeralDocumentDefault());
+    const docDataEphemeral = makeReactive(docHandleEphemeral) as Ref<Rop<EphemeralDocument>>;
+    let docHandleLocal: DocHandle<Versioned<LocalDocument>>;
+
+    if (isValidDocumentId(message.documentIdLocal)) {
+      docHandleLocal = await this.repoLocal.find<Versioned<LocalDocument>>(message.documentIdLocal);
+    } else {
+      const localDocument = LocalDocumentDefault(message.invitation?.localPeerId);
+
+      // The invitation is only applied when the local document is created. Afterwards, the local
+      // document is the source of truth: e.g. the inviter must not be added again after the user
+      // forgets it.
+      if (message.invitation !== undefined) {
+        localDocument.documentIdShared = message.invitation.documentIdShared;
+        localDocument.remotePeers[message.invitation.invitedBy] = {
+          deviceName: '', // TODO
+          authKeyId: message.invitation.authKeyId,
+        };
+      }
+
+      docHandleLocal = this.repoLocal.create<Versioned<LocalDocument>>(
+        makeVersioned(localDocument, LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT),
+      );
+    }
+
+    const docDataLocalVersioned: Ref<Rop<Versioned<LocalDocument>>> = makeReactive(docHandleLocal);
+    const docDataLocal = computed(() =>
+      LocalDocumentGetCurrentVersion(docDataLocalVersioned, message.invitation?.localPeerId),
+    );
+
+    let documentSharedAvailableLocally;
+    // TODO: A local document with only newer versions throws a `NewerVersionError` here, which the tab
+    // is not told about: it keeps loading, rather than asking to refresh. Only a newer version of the
+    // app on this device could cause it, by removing the current version, which it must not.
+    const documentIdShared = LocalDocumentGetDocumentIdShared(docDataLocal.value);
+
+    if (docDataLocal.value.documentIdShared === undefined) {
+      const docHandleShared = this.repoShared.create<Versioned<SharedDocument>>(
+        makeVersioned(SharedDocumentDefault(), SHARED_DOCUMENT_SCHEMA_VERSION_CURRENT),
+      );
+      docDataLocal.value[changeSubtree]((local) => {
+        local.documentIdShared = docHandleShared.documentId;
+      });
+      documentSharedAvailableLocally = true;
+      console.log(
+        `No shared document ID is set, created a new document with ID: ${docHandleShared.documentId}`,
+      );
+    } else if (documentIdShared === undefined) {
+      // Not replaced by a new document, which would lose the calendar's data. It is not opened,
+      // see `LoadApp`.
+      console.error('The shared document ID is invalid.');
+      documentSharedAvailableLocally = false;
+    } else {
+      /// Attempt to find the document in the local database, before any network adapters are added to the repo.
+      try {
+        console.log(`Attempting to find shared document by ID ${documentIdShared}`);
+        await this.repoShared.find<SharedDocument>(documentIdShared as DocumentId);
+        console.log(`Successfully found shared document by ID ${documentIdShared}`);
+        documentSharedAvailableLocally = true;
+      } catch {
+        console.log(`Failed to find shared document by ID ${documentIdShared}`);
+        documentSharedAvailableLocally = false;
+      }
+    }
+
+    /// Launch a task that ensures a WebRTC network adapter is running on exactly one tab at any point.
+    (async () => {
+      const POLL_INTERVAL_MS = 1000;
+      const POLL_TIMEOUT_MS = 4000;
+      const repo = await GetSharedRepo(this.calendarId);
+      const initialized = await repo.initialized!;
+
+      while (!initialized.webRtcShutDown) {
+        const webRtcRunning =
+          initialized.webRtcTab !== undefined &&
+          (await (async () => {
+            if (initialized.webRtcTab === undefined) return false;
+
+            const alivePromise = Promise.any([
+              initialized.webRtcTab.port
+                .onceAsync((message) => message.type === 'webrtc-pollalive-acq')
+                .then(() => true),
+              new Promise((r) => setTimeout(r, POLL_TIMEOUT_MS)).then(() => false),
+            ]);
+
+            initialized.webRtcTab.port.postMessage({
+              type: 'webrtc-pollalive',
+            });
+
+            if (await alivePromise) return true;
+
+            console.warn('WebRTC pollalive timed out.');
+            initialized.webRtcTab.port.postMessage({ type: 'webrtc-stop' });
+            initialized.webRtcTab.timedOut = true;
+            return false;
+          })());
+
+        // Shut down while the tab was being polled.
+        if (initialized.webRtcShutDown) break;
+
+        if (!webRtcRunning) {
+          initialized.webRtcTab = undefined;
+
+          if (initialized.tabs.length > 0) {
+            let responsiveTabs = initialized.tabs.filter((tab) => !tab.timedOut);
+
+            // Reset timed out status of all tabs in hopes of finding a responsive tab among them.
+            if (responsiveTabs.length === 0) {
+              for (const tab of initialized.tabs) tab.timedOut = false;
+
+              responsiveTabs = initialized.tabs;
+            }
+
+            const tabIndex = Math.floor(Math.random() * responsiveTabs.length);
+            const tab = responsiveTabs[tabIndex]!;
+            initialized.webRtcTab = tab;
+            console.log(`Requesting a WebRTC client to be hosted in tab #${tabIndex}.`);
+            tab.port.postMessage({
+              type: 'webrtc-start',
+              documentSharedAvailableLocallyDuringInitialization:
+                initialized.documentSharedAvailableLocallyDuringInitialization,
+            });
+          } else {
+            initialized.webRtcTab = undefined;
+            console.warn('No tabs to host a WebRTC client in available.');
+          }
+        }
+
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      }
+    })();
+
+    return new Initialized({
+      docEphemeral: {
+        repo: this.repoEphemeral,
+        handle: docHandleEphemeral,
+        data: docDataEphemeral,
+      },
+      docLocal: {
+        repo: this.repoLocal,
+        handle: docHandleLocal,
+        versionedData: docDataLocalVersioned,
+        data: docDataLocal,
+        readOnly: computed(() =>
+          hasNewerVersionRop(docDataLocalVersioned, LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT),
+        ),
+      },
+      documentSharedAvailableLocally,
+    });
+  }
+
+  async addTab(message: ToSharedRepoMessageInit, port: TabMessagePort): Promise<Tab> {
+    const initialized = await this.initialize(message);
+
+    // be careful to not accidentally create a strong reference to port
+    // that will prevent dead ports from being garbage collected
+    const adapterEphemeral = new MessageChannelNetworkAdapter(message.repoEphemeralPort, {
+      useWeakRef: true,
+    });
+    const adapterLocal = new MessageChannelNetworkAdapter(message.repoLocalPort, {
+      useWeakRef: true,
+    });
+    const adapterShared = new MessageChannelNetworkAdapter(message.repoSharedPort, {
+      useWeakRef: true,
+    });
+
+    this.repoEphemeral.networkSubsystem.addNetworkAdapter(adapterEphemeral);
+    this.repoLocal.networkSubsystem.addNetworkAdapter(adapterLocal);
+    this.repoShared.networkSubsystem.addNetworkAdapter(adapterShared);
+
+    initialized.tabs.push({
+      port,
+      adapterEphemeral,
+      adapterLocal,
+      adapterShared,
+      timedOut: false,
+      readySharedPosted: false,
+    });
+
+    return initialized.tabs[initialized.tabs.length - 1];
+  }
+}
+
+const sharedRepoByCalendarId: {
+  [calendarId: CalendarId]: Promise<SharedRepo>;
+} = {};
+
+function GetSharedRepo(calendarId: CalendarId): Promise<SharedRepo> {
+  if (calendarId in sharedRepoByCalendarId) return sharedRepoByCalendarId[calendarId]!;
+
+  sharedRepoByCalendarId[calendarId] = Promise.resolve(new SharedRepo(calendarId));
+
+  return sharedRepoByCalendarId[calendarId];
+}
+
+export function onConnect(eventConnect: MessageEvent) {
+  if (eventConnect.ports[0] === undefined) return;
+
+  const port = new MessagePortWrapper<FromSharedRepoMessage, ToSharedRepoMessage>(
+    eventConnect.ports[0],
+  );
+
+  port.on((message) => {
+    onMessage(message, port);
+  });
+
+  port.start();
+}
+
+async function onMessage(message: ToSharedRepoMessage, port: TabMessagePort) {
+  switch (message.type) {
+    case 'init': {
+      port.calendarId = message.calendarId;
+      const repo = await GetSharedRepo(port.calendarId);
+      const initialized = await repo.initialize(message);
+      const tab = await repo.addTab(message, port);
+
+      port.postMessage({
+        type: 'ready-local',
+        documentIdEphemeral: initialized.docEphemeral.handle.documentId,
+        documentIdLocal: initialized.docLocal.handle.documentId,
+      });
+
+      if (initialized.webRtcStarted) postReadyShared(tab);
+
+      break;
+    }
+    case 'webrtc-start-success': {
+      // Notify all tabs that WebRTC is ready.
+      const repo = await GetSharedRepo(port.calendarId!);
+      const initialized = await repo.initialized!;
+      initialized.webRtcStarted = true;
+
+      for (const tab of initialized.tabs) postReadyShared(tab);
+
+      break;
+    }
+    case 'webrtc-pollalive-acq': {
+      // Handled elsewhere.
+      break;
+    }
+    case 'webrtc-shutdown': {
+      const repo = await GetSharedRepo(port.calendarId!);
+      const initialized = await repo.initialized!;
+
+      // Ends the task that keeps WebRTC running in one of the tabs.
+      initialized.webRtcShutDown = true;
+      initialized.webRtcTab?.port.postMessage({ type: 'webrtc-stop' });
+      initialized.webRtcTab = undefined;
+      console.log(`WebRTC was shut down for calendar ${port.calendarId}.`);
+      break;
+    }
+  }
+}
