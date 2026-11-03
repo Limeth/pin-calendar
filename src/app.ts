@@ -203,9 +203,6 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
   }
 
   const dataLocalVersioned: Ref<Rop<Versioned<LocalDocument>>> = makeReactive(handleLocal);
-  // TODO/FIXME: This `computed` seems problematic because it might cause the entire app to be re-drawn,
-  // but using `toRef` instead would break the reactivity, for some reason.
-  // This affects `dataShared` and `docDataLocal` in `sharedRepoMain.ts`, too.
   const dataLocal = computed(() =>
     LocalDocumentGetCurrentVersion(dataLocalVersioned, calendarData.invitation?.localPeerId),
   );
