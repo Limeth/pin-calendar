@@ -5,6 +5,12 @@ import SinglePageApp from './SinglePageApp.vue';
 <template>
   <Suspense>
     <SinglePageApp />
-    <template #fallback><!-- TODO: Improve -->Loading</template>
+    <template #fallback>
+      <!-- Keep consistent with the indicator shown while a calendar loads, in `SharedApp`. -->
+      <div class="flex h-svh flex-col items-center justify-center gap-2">
+        <span class="loading loading-bars loading-xl"></span>
+        <h1>Loading, please wait.</h1>
+      </div>
+    </template>
   </Suspense>
 </template>

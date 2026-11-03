@@ -545,6 +545,7 @@ function saveRenameDialog() {
     >
       <div class="flex flex-col gap-2 items-center">
         <template v-if="appIsBeingLoaded">
+          <!-- Keep consistent with the indicator shown while the app loads, in `MainPage`. -->
           <span class="loading loading-bars loading-xl"></span>
           <h1>Loading calendar, please wait.</h1>
         </template>
