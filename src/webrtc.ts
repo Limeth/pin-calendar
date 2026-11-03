@@ -26,6 +26,7 @@ import { asyncOnceOpen, closeConnection, decodePacket } from './util/peerjs';
 import { setRemotePeerKey } from './peers';
 import { readValue } from './validation';
 import {
+  BytesSchema,
   exchange,
   HandshakeAuthBaseSchema,
   HandshakeRequestBaseSchema,
@@ -64,9 +65,22 @@ export type ConnectedPeer = {
   peerInfo: PeerInfo;
 };
 
+// Carries a message of the Automerge repo, once the connection is authenticated.
 type Packet = {
   message: Message;
 };
+
+// A received `Packet`. Only the properties of the message common to all messages are checked, the
+// repo checks the rest.
+const ReceivedPacketSchema = Type.Object({
+  message: Type.Object({
+    type: Type.String(),
+    senderId: Type.String(),
+    targetId: Type.String(),
+    // PeerJS delivers `undefined` as `null`, see `decodePacket`.
+    data: Type.Optional(Type.Union([BytesSchema, Type.Null()])),
+  }),
+});
 
 // A connection between paired peers uses the handshake from `handshake.ts`, with the key derived
 // during the invitation.
@@ -755,17 +769,14 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   }
 
   onIncomingMessage(peer: ConnectedPeer, data: unknown) {
-    // TODO: Validate incoming message using a schema?
-    const packet = data as Packet;
+    const packet = readValue(ReceivedPacketSchema, decodePacket(data), 'packet');
 
-    // For some reason, the data field is parsed as an `ArrayBuffer` despite being sent as a `Uint8Array`. We fix that here.
-    packet.message = {
-      ...packet.message,
-      data: packet.message.data !== undefined ? new Uint8Array(packet.message.data) : undefined,
-    };
+    if (packet === undefined) return;
 
-    console.log(`Received packet from peer ${peer.dataConnection.peer}: `, packet.message);
-    this.emit('message', packet.message);
+    const message = { ...packet.message, data: packet.message.data ?? undefined } as Message;
+
+    console.log(`Received packet from peer ${peer.dataConnection.peer}: `, message);
+    this.emit('message', message);
 
     // This runs asynchronously, we don't wait for it to finish.
     this.checkDocumentAvailability();

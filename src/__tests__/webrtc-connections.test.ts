@@ -262,6 +262,30 @@ describe('watchers', () => {
   });
 });
 
+describe('incoming messages', () => {
+  it('are passed on with their binary data, unless malformed', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { adapter } = unconnectedAdapter('C');
+    const remote = open(adapter, 'C', 'automerge-C').other;
+    const received: Message[] = [];
+    adapter.on('message', (message) => received.push(message));
+    const peers = { senderId: 'automerge-C', targetId: 'automerge-local' };
+
+    await remote.send({ message: { type: 'sync', ...peers, data: new Uint8Array([1, 2]) } });
+    await remote.send({ message: { type: 'sync', senderId: 'automerge-C' } });
+    // Arrives as `null`.
+    await remote.send(undefined);
+    await remote.send({ message: { type: 'doc-unavailable', ...peers, documentId: 'x' } });
+    await until(() => received.length >= 2);
+    await sleep(50);
+
+    expect(received).toEqual([
+      { type: 'sync', ...peers, data: new Uint8Array([1, 2]) },
+      { type: 'doc-unavailable', ...peers, documentId: 'x', data: undefined },
+    ]);
+  });
+});
+
 describe('inbound requests', () => {
   it.each([
     ['of an unknown kind', { kind: 'unknown-request' }],
