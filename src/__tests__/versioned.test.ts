@@ -41,7 +41,7 @@ describe('the current version of a document', () => {
     );
 
     expect(result.type).toBe('unsupported');
-    expect(result.type === 'unsupported' && result.version).toBe('10');
+    expect(result.type === 'unsupported' && result.version).toBe(10);
     expect(result.type === 'unsupported' && result.current?.value).toBe('a');
   });
 
@@ -50,20 +50,23 @@ describe('the current version of a document', () => {
 
     expect(getCurrentVersionRop(document.value, 1, init)).toEqual({
       type: 'unsupported',
-      version: '2',
+      version: 2,
     });
     expect(JSON.parse(JSON.stringify(document.value))).toEqual({ schemaVersion: { 2: {} } });
   });
 
-  it('counts keys that are no version numbers as newer versions', () => {
+  it('ignores keys that are no version numbers', () => {
     for (const key of ['next', '1.5', '01', '-1', '']) {
-      const document = versioned({ schemaVersion: { [key]: {} } });
+      const document = versioned({ schemaVersion: { [key]: {}, 1: { value: 'a' } } });
+      const result = getCurrentVersionRop(document.value, 1, init);
 
-      expect(getCurrentVersionRop(document.value, 1, init)).toEqual({
-        type: 'unsupported',
-        version: key,
+      expect(result.type).toBe('current');
+      expect(result.type === 'current' && result.current.value).toBe('a');
+      expect(
+        getCurrentVersionRop(versioned({ schemaVersion: { [key]: {} } }).value, 1, undefined),
+      ).toEqual({
+        type: 'none',
       });
-      expect(JSON.parse(JSON.stringify(document.value))).toEqual({ schemaVersion: { [key]: {} } });
     }
   });
 

@@ -5,8 +5,7 @@ import { isObject, type UncheckedRop } from '@/validation';
 
 const VersionSchema = Type.String({ format: 'integer' });
 
-// The keys of versions: canonical integers. Any other key, e.g. of a future key scheme, counts as a
-// version newer than all of them, so that it is never mistaken for the absence of a version.
+// The keys of versions: canonical integers. Any other key is ignored, as if it were not present.
 const VERSION_KEY_PATTERN = /^(0|[1-9][0-9]*)$/;
 
 export function Versioned<T extends TObject>(innerSchema: T) {
@@ -39,7 +38,7 @@ type GetCurrentVersionResult<R> =
       // There is a newer version, which this version of the app cannot read, but other devices or
       // tabs may still use the current one, if there is one.
       type: 'unsupported';
-      version: string;
+      version: number;
       current?: R;
     }
   | {
@@ -60,24 +59,17 @@ function findCurrentVersion(
   const current: unknown = versionKeys.includes(currentKey)
     ? (schemaVersion as Record<string, unknown>)[currentKey]
     : undefined;
-  let newerNumber: number | undefined;
-  let newerUnknown: string | undefined;
+  let newer: number | undefined;
   let older: number | undefined;
 
   for (const versionKey of versionKeys) {
-    if (!VERSION_KEY_PATTERN.test(versionKey)) {
-      newerUnknown ??= versionKey;
-      continue;
-    }
+    if (!VERSION_KEY_PATTERN.test(versionKey)) continue;
 
     const version = Number(versionKey);
 
-    if (version > currentVersion && (newerNumber === undefined || version > newerNumber))
-      newerNumber = version;
+    if (version > currentVersion && (newer === undefined || version > newer)) newer = version;
     else if (version < currentVersion && (older === undefined || version > older)) older = version;
   }
-
-  const newer = newerNumber !== undefined ? String(newerNumber) : newerUnknown;
 
   if (newer !== undefined)
     return versionKeys.includes(currentKey)
