@@ -30,7 +30,7 @@
     "@tailwindcss/vite": "4.2.4",
     "@types/ramda": "0.31.1",
     "@vueuse/core": "14.2.1",
-    "automerge-diy-vue-hooks": "0.4.2",
+    "automerge-diy-vue-hooks": "0.5.0",
     "daisyui": "5.5.19",
     "emoji-regex": "10.6.0",
     "feather-icons": "4.29.2",

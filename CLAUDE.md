@@ -13,10 +13,12 @@ Automerge documents. Devices are paired via invite links.
 
 ## Documents are snapshots
 
-`automerge-diy-vue-hooks` replaces the whole proxy tree on every change, so an entry read earlier
-(e.g. `docLocal.value.remotePeers[id]`) keeps its old values. Read entries fresh from the `Ref`
-after any change or `await`, copy values before overwriting an entry, and do not pass entries along
-to be read later (e.g. a peer's key is looked up when a handshake needs it, not when connecting).
+`automerge-diy-vue-hooks` replaces the proxies of changed subtrees on every change, so an entry read
+earlier (e.g. `docLocal.value.remotePeers[id]`) keeps its old values. Read entries fresh from the
+`Ref` after any change or `await`, copy values before overwriting an entry, and do not pass entries
+along to be read later (e.g. a peer's key is looked up when a handshake needs it, not when
+connecting). `changeSubtree` on an entry read earlier throws if the entry has since been moved,
+replaced or deleted.
 
 ## Vue reactivity and remote-controlled keys
 
