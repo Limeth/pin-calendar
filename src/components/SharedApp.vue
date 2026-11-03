@@ -268,6 +268,11 @@ function createNewCalendar() {
   LocalStorageDataAddCalendar(localStorageData.value);
 }
 
+// Close the open dropdown menu, which is open while it has focus.
+function closeDropdown() {
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+}
+
 function openRenamePeerDialog(peerJsPeerId: PeerJsPeerId) {
   if (modalData.value !== undefined) return;
   if (app.value === undefined) return;
@@ -770,24 +775,47 @@ function saveRenameDialog() {
                   {{ peer.peerJsPeerId }}
                 </div>
               </div>
-              <div class="flex flex-col gap-1 items-stretch">
-                <button
-                  v-if="peer.deviceName !== undefined"
-                  class="btn btn-sm btn-neutral max-sm:btn-square"
-                  :disabled="app?.docLocal.readOnly.value"
-                  @click="openRenamePeerDialog(peer.peerJsPeerId)"
+              <!-- Open while focused, see `closeDropdown`. -->
+              <div class="dropdown dropdown-end">
+                <div
+                  tabindex="0"
+                  role="button"
+                  aria-label="Device actions"
+                  class="btn btn-sm btn-ghost btn-square"
+                  v-html="feather.icons['more-vertical'].toSvg()"
+                />
+                <ul
+                  tabindex="0"
+                  class="dropdown-content menu bg-base-100 rounded-box z-10 w-40 p-2 shadow-sm"
                 >
-                  <div v-html="feather.icons['edit-2'].toSvg()" />
-                  <div class="max-sm:hidden">Rename</div>
-                </button>
-                <button
-                  class="btn btn-sm btn-neutral max-sm:btn-square"
-                  :disabled="app?.docLocal.readOnly.value"
-                  @click="forgetPeer(peer.peerJsPeerId)"
-                >
-                  <div v-html="feather.icons['trash-2'].toSvg()" />
-                  <div class="max-sm:hidden">Forget</div>
-                </button>
+                  <li
+                    v-if="peer.deviceName !== undefined"
+                    :class="{ 'menu-disabled': app?.docLocal.readOnly.value }"
+                  >
+                    <button
+                      :disabled="app?.docLocal.readOnly.value"
+                      @click="
+                        closeDropdown();
+                        openRenamePeerDialog(peer.peerJsPeerId);
+                      "
+                    >
+                      <div v-html="feather.icons['edit-2'].toSvg({ width: 16, height: 16 })" />
+                      Rename
+                    </button>
+                  </li>
+                  <li :class="{ 'menu-disabled': app?.docLocal.readOnly.value }">
+                    <button
+                      :disabled="app?.docLocal.readOnly.value"
+                      @click="
+                        closeDropdown();
+                        forgetPeer(peer.peerJsPeerId);
+                      "
+                    >
+                      <div v-html="feather.icons['trash-2'].toSvg({ width: 16, height: 16 })" />
+                      Forget
+                    </button>
+                  </li>
+                </ul>
               </div>
             </li>
           </template>
