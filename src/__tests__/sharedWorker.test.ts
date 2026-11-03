@@ -5,13 +5,20 @@ import { LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT, type LocalDocument } from '@/doc
 import type { Versioned } from '@/versioned';
 import { CALENDAR_ID, sleep, until } from './helpers';
 import { TestWorker, type TestTab } from './sharedWorker';
+import type { SharedRepoWorkerOptions } from '@/workers/sharedRepoMain';
 
 const workers: TestWorker[] = [];
 
-function testWorker(database?: string): TestWorker {
-  const worker = new TestWorker({ database });
+function testWorker(database?: string, options: SharedRepoWorkerOptions = {}): TestWorker {
+  const worker = new TestWorker({ database, ...options });
   workers.push(worker);
   return worker;
+}
+
+// The number of the calendar's tabs that the worker knows.
+async function tabCount(worker: TestWorker): Promise<number> {
+  const initialized = await worker.worker.sharedRepoByCalendarId.get(CALENDAR_ID)!.initialized!;
+  return initialized.tabs.length;
 }
 
 afterEach(async () => {
@@ -92,6 +99,34 @@ describe('opening a calendar', () => {
   });
 });
 
+describe('closing a tab', () => {
+  it('forgets the tab', async () => {
+    const worker = testWorker();
+    const tabs = await openTabs(worker, 2);
+
+    tabs[1]!.close();
+    expect(await until(async () => (await tabCount(worker)) === 1)).toBe(true);
+  });
+
+  it('keeps synchronizing the documents with the other tabs', async () => {
+    const worker = testWorker();
+    const [first, second] = await openTabs(worker, 2);
+    const documentIdShared = await first!.documentIdShared();
+
+    first!.close();
+    expect(await until(async () => (await tabCount(worker)) === 1)).toBe(true);
+
+    const handle = await second!.repoShared.find<{ value?: number }>(documentIdShared);
+    handle.change((doc) => {
+      doc.value = 1;
+    });
+    const later = worker.openTab();
+    later.init(CALENDAR_ID, (await second!.message('ready-local')).documentIdLocal);
+    const laterHandle = await later.repoShared.find<{ value?: number }>(documentIdShared);
+    expect(await until(() => laterHandle.doc().value === 1)).toBe(true);
+  });
+});
+
 describe('WebRTC', () => {
   it('is started in one of the tabs', async () => {
     const tabs = await openTabs(testWorker(), 3);
@@ -117,7 +152,8 @@ describe('WebRTC', () => {
   });
 
   it('is moved to another tab when its tab stops answering', async () => {
-    const tabs = await openTabs(testWorker(), 2);
+    const worker = testWorker();
+    const tabs = await openTabs(worker, 2);
     const first = await webRtcTab(tabs);
 
     first.answersPolls = false;
@@ -125,6 +161,18 @@ describe('WebRTC', () => {
     const second = await webRtcTab(tabs, 1);
     expect(second).not.toBe(first);
     expect(first.messages('webrtc-stop')).toHaveLength(1);
+    // Kept, as it may only be frozen.
+    expect(await tabCount(worker)).toBe(2);
+  });
+
+  it('is moved to another tab right away when its tab is closed', async () => {
+    // Only the tab lock can tell that the tab is gone before the test times out.
+    const tabs = await openTabs(testWorker(undefined, { pollTimeoutMs: 60_000 }), 2);
+    const first = await webRtcTab(tabs);
+
+    first.close();
+    // The closed tab is not told to stop.
+    await webRtcTab(tabs.filter((tab) => tab !== first));
   });
 
   it('is started in an unresponsive tab again when all tabs are unresponsive', async () => {

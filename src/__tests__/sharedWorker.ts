@@ -30,7 +30,7 @@ export class TestWorker {
   readonly tabs: TestTab[] = [];
 
   constructor(options: SharedRepoWorkerOptions & { database?: string } = {}) {
-    this.database = options.database ?? `automerge-${uuid.v4()}`;
+    this.database = options.database ?? `automerge-${uuid.v7()}`;
     this.worker = new SharedRepoWorker({
       pollIntervalMs: 20,
       pollTimeoutMs: 200,
@@ -62,7 +62,8 @@ export class TestWorker {
 }
 
 // A tab of the app, connected to the shared worker. It records the worker's messages, answers its
-// polls while `answersPolls`, and leaves the other replies to the test.
+// polls while `answersPolls` (as a frozen tab does not), and leaves the other replies to the test.
+// Like the app, it holds a tab lock until it is closed, see `holdTabLock`.
 export class TestTab {
   readonly port: MessagePortWrapper<ToSharedRepoMessage, FromSharedRepoMessage>;
   readonly received: FromSharedRepoMessage[] = [];
@@ -72,6 +73,10 @@ export class TestTab {
   readonly repoShared: Repo;
   readonly #channels: MessageChannel[];
   readonly #repoPorts: [MessagePort, MessagePort, MessagePort];
+  readonly #lockName = `test-tab:${uuid.v7()}`;
+  readonly #lockHeld: Promise<void>;
+  #releaseLock?: () => void;
+  #closed = false;
 
   constructor(worker: SharedRepoWorker) {
     const channelWorker = new MessageChannel();
@@ -98,23 +103,35 @@ export class TestTab {
     });
     this.port.start();
     worker.onConnect(channelWorker.port2);
+    this.#lockHeld = new Promise((resolve) => {
+      void navigator.locks.request(this.#lockName, () => {
+        resolve();
+        if (this.#closed) return;
+
+        return new Promise<void>((release) => (this.#releaseLock = release));
+      });
+    });
   }
 
+  // Sent once the tab lock is held, as in the app.
   init(calendarId: CalendarId, documentIdLocal?: DocumentId, invitation?: Invitation) {
     const [repoEphemeralPort, repoLocalPort, repoSharedPort] = this.#repoPorts;
 
-    this.port.postMessage(
-      {
-        type: 'init',
-        calendarId,
-        documentIdLocal: documentIdLocal as DocumentId,
-        invitation,
-        repoEphemeralPort,
-        repoLocalPort,
-        repoSharedPort,
-      },
-      this.#repoPorts,
-    );
+    void this.#lockHeld.then(() => {
+      this.port.postMessage(
+        {
+          type: 'init',
+          calendarId,
+          tabLockName: this.#lockName,
+          documentIdLocal: documentIdLocal as DocumentId,
+          invitation,
+          repoEphemeralPort,
+          repoLocalPort,
+          repoSharedPort,
+        },
+        this.#repoPorts,
+      );
+    });
   }
 
   // The messages of a type received so far.
@@ -155,7 +172,11 @@ export class TestTab {
     return documentIdShared as DocumentId;
   }
 
+  // Closed as by the browser, which releases the tab lock.
   close() {
+    this.#closed = true;
+    this.#releaseLock?.();
+
     for (const channel of this.#channels) {
       channel.port1.close();
       channel.port2.close();

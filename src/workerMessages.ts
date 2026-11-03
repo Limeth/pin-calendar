@@ -5,6 +5,9 @@ import type { Invitation } from './localStorageData';
 export type ToSharedRepoMessageInit = {
   type: 'init';
   calendarId: CalendarId;
+  // The name of a Web Lock that the tab holds until it is closed, see `holdTabLock`. The worker
+  // requests it, and forgets the tab once it is granted.
+  tabLockName: string;
   documentIdLocal: DocumentId;
   invitation: Invitation | undefined;
   repoEphemeralPort: MessagePort;

@@ -91,6 +91,9 @@ replaced or deleted.
 - The shared worker runs the WebRTC network adapter in one tab per
   calendar, and moves it to another tab when that tab stops responding. Other tabs reach the
   adapter through the ephemeral document, e.g. `outgoingJoins`.
+- Each tab holds a Web Lock until it is closed (`holdTabLock`), and the worker forgets the tab when
+  its request for the lock is granted. A frozen tab keeps its lock, so the tab hosting WebRTC is
+  polled as well. Do not rely on `pagehide` or `beforeunload`, which are not always dispatched.
 - The local document is the source of truth for a calendar's peers. The invitation in local storage
   is only applied when the local document is created.
 - The calendar list in local storage is synced between tabs via `storage` events.

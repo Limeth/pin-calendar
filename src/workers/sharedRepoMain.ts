@@ -54,6 +54,9 @@ type Tab = {
   adapterShared: MessageChannelNetworkAdapter;
   timedOut: boolean;
   readySharedPosted: boolean;
+  // Resolved when the tab is closed, see `SharedRepo.removeTab`.
+  closed: Promise<void>;
+  onClosed: () => void;
 };
 
 function postReadyShared(tab: Tab) {
@@ -103,18 +106,6 @@ class Initialized {
     this.documentSharedAvailableLocallyDuringInitialization =
       options.documentSharedAvailableLocally;
   }
-
-  // TODO: Ports would have to be weak-referenced.
-  // cleanupClosedTabs() {
-  //   for (let i = this.tabs.length - 1; i >= 0; i--) {
-  //     const tab = this.tabs[i];
-  //     const port = tab.port.deref();
-  //     if (port === undefined) {
-  //       this.tabs.splice(i, 1);
-  //       console.warn("Cleaning up closed tab.", tab);
-  //     }
-  //   }
-  // }
 }
 
 /// There's a separate SharedRepo for each distinct calendar.
@@ -247,30 +238,33 @@ class SharedRepo {
   }
 
   /// Ensures that a WebRTC network adapter is running in exactly one tab at any point, until WebRTC
-  /// is shut down.
+  /// is shut down. The tab hosting it is polled, as a tab that stopped responding, e.g. as it was
+  /// frozen, keeps its tab lock, see `removeTab`.
   async keepWebRtcRunning(initialized: Initialized) {
     while (!initialized.webRtcShutDown) {
+      const webRtcTab = initialized.webRtcTab;
       const webRtcRunning =
-        initialized.webRtcTab !== undefined &&
+        webRtcTab !== undefined &&
         (await (async () => {
-          if (initialized.webRtcTab === undefined) return false;
-
-          const alivePromise = Promise.any([
-            initialized.webRtcTab.port
+          const alivePromise = Promise.race([
+            webRtcTab.port
               .onceAsync((message) => message.type === 'webrtc-pollalive-acq')
               .then(() => true),
             new Promise((r) => setTimeout(r, this.options.pollTimeoutMs)).then(() => false),
+            // Not waiting for the timeout, so that WebRTC is moved to another tab right away.
+            webRtcTab.closed.then(() => false),
           ]);
 
-          initialized.webRtcTab.port.postMessage({
+          webRtcTab.port.postMessage({
             type: 'webrtc-pollalive',
           });
 
           if (await alivePromise) return true;
+          if (!initialized.tabs.includes(webRtcTab)) return false;
 
           console.warn('WebRTC pollalive timed out.');
-          initialized.webRtcTab.port.postMessage({ type: 'webrtc-stop' });
-          initialized.webRtcTab.timedOut = true;
+          webRtcTab.port.postMessage({ type: 'webrtc-stop' });
+          webRtcTab.timedOut = true;
           return false;
         })());
 
@@ -328,16 +322,43 @@ class SharedRepo {
     this.repoLocal.networkSubsystem.addNetworkAdapter(adapterLocal);
     this.repoShared.networkSubsystem.addNetworkAdapter(adapterShared);
 
-    initialized.tabs.push({
+    let onClosed!: () => void;
+    const closed = new Promise<void>((resolve) => (onClosed = resolve));
+    const tab: Tab = {
       port,
       adapterEphemeral,
       adapterLocal,
       adapterShared,
       timedOut: false,
       readySharedPosted: false,
-    });
+      closed,
+      onClosed,
+    };
 
-    return initialized.tabs[initialized.tabs.length - 1];
+    initialized.tabs.push(tab);
+    // Granted once the tab is closed, see `holdTabLock`.
+    void navigator.locks.request(message.tabLockName, () => this.removeTab(initialized, tab));
+
+    return tab;
+  }
+
+  // Forget a closed tab: stop synchronizing the documents with it, and move WebRTC to another tab if
+  // it was hosting it, see `keepWebRtcRunning`.
+  removeTab(initialized: Initialized, tab: Tab) {
+    const index = initialized.tabs.indexOf(tab);
+
+    // Already forgotten, as the calendar was deleted.
+    if (index === -1) return;
+
+    initialized.tabs.splice(index, 1);
+    this.repoEphemeral.networkSubsystem.removeNetworkAdapter(tab.adapterEphemeral);
+    this.repoLocal.networkSubsystem.removeNetworkAdapter(tab.adapterLocal);
+    this.repoShared.networkSubsystem.removeNetworkAdapter(tab.adapterShared);
+
+    if (initialized.webRtcTab === tab) initialized.webRtcTab = undefined;
+
+    tab.onClosed();
+    console.log('A tab of the calendar was closed.');
   }
 
   // Delete the calendar's documents from storage, see `ToSharedRepoMessageDeleteCalendar`.

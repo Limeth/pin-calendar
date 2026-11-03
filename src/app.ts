@@ -34,6 +34,7 @@ import {
 } from './localStorageData';
 import type { DocumentWrapper, VersionedDocumentWrapper } from './documents/wrapper';
 import { hasNewerVersionRop, NewerVersionError, type Versioned } from './versioned';
+import { holdTabLock } from './tabLock';
 
 export type App = {
   readonly calendarId: CalendarId;
@@ -154,10 +155,13 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
   ) as Promise<FromSharedRepoMessageReadyShared>;
   sharedRepoWorker.start(); // Start processing received messages.
 
+  const tabLockName = await holdTabLock();
+
   sharedRepoWorker.postMessage(
     {
       type: 'init',
       calendarId,
+      tabLockName,
       documentIdLocal: calendarData.documentIdLocal as A.DocumentId,
       invitation: toRaw(calendarData.invitation),
       repoEphemeralPort: repoEphemeralMessageChannel.port2,
