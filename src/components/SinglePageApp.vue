@@ -5,6 +5,7 @@ import { LocalStorageDataIsReadOnly, localStorageDataStore } from '@/localStorag
 import NewerVersionAlert from './NewerVersionAlert.vue';
 import SharedApp from './SharedApp.vue';
 import CalendarName from './CalendarName.vue';
+import ModalDialog from './ModalDialog.vue';
 import { joinCalendar } from '@/invite';
 import { checkInviterPairing, joinExistingCalendar, type InviterPairing } from '@/rejoin';
 import { appStore } from '@/app';
@@ -114,7 +115,6 @@ async function joinNewCalendar(invite: HashArgsInvite): Promise<CalendarId | Err
   return result.calendarId;
 }
 
-// TODO: Combine with ModalData in SharedApp and other dialogs in settings.
 type ModalData = ModalInviteConfirmation;
 
 const modalData: Ref<ModalData | undefined> = ref(undefined);
@@ -225,7 +225,7 @@ if (currentHash.value.args?.action === 'invite') {
     :list="LocalStorageDataIsReadOnly(localStorageData)"
     :calendar="modalData?.kind === 'invite-confirmation' && modalData.existingCalendarReadOnly"
   />
-  <div class="modal" :class="{ 'modal-open': modalData !== undefined }">
+  <ModalDialog :open="modalData !== undefined" @cancel="modalData?.actionCancel()">
     <div v-if="modalData?.kind === 'invite-confirmation'" class="modal-box flex flex-col gap-2">
       <h3 class="text-lg font-bold">Join Calendar</h3>
       <!-- Only known for a calendar this device already has. For a new calendar, the invite link
@@ -356,7 +356,7 @@ if (currentHash.value.args?.action === 'invite') {
         </button>
       </div>
     </div>
-  </div>
+  </ModalDialog>
 </template>
 
 <style scoped lang="css">

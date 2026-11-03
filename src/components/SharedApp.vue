@@ -27,6 +27,7 @@ import * as auth from '@/auth';
 import { forgetRemotePeer } from '@/peers';
 import { SharedDocumentGetName, SharedDocumentSetName } from '@/documents/shared';
 import NewerVersionAlert from './NewerVersionAlert.vue';
+import ModalDialog from './ModalDialog.vue';
 import { NewerVersionError } from '@/versioned';
 
 // const app: Ref<App> = ref({
@@ -373,6 +374,8 @@ async function openAddDeviceDialog() {
 function closeAddDeviceDialog() {
   if (app.value === undefined) return undefined;
   if (modalData.value?.kind !== 'add-device') return;
+  // See the dialog's Cancel button.
+  if (inviteState.value === 'joining') return;
 
   const modalAddDevice: ModalAddDevice = modalData.value;
 
@@ -381,6 +384,12 @@ function closeAddDeviceDialog() {
   });
 
   modalData.value = undefined;
+}
+
+// Cancel the open dialog, e.g. when Escape is pressed, like its Cancel button.
+function cancelDialog() {
+  if (modalData.value?.kind === 'add-device') closeAddDeviceDialog();
+  else modalData.value = undefined;
 }
 
 function openRenameDialog() {
@@ -416,7 +425,7 @@ function saveRenameDialog() {
 
 <template>
   <input id="spa-drawer" type="checkbox" class="drawer-toggle" v-model="isDrawerOpen" />
-  <div class="modal" :class="{ 'modal-open': modalData !== undefined }">
+  <ModalDialog :open="modalData !== undefined" @cancel="cancelDialog">
     <div v-if="modalData?.kind === 'add-device'" class="modal-box flex flex-col gap-2">
       <h3 class="text-lg font-bold">Add a Device</h3>
       <p>
@@ -494,11 +503,11 @@ function saveRenameDialog() {
         </span>
       </label>
       <div class="modal-action">
-        <button type="button" class="btn" @click="modalData = undefined">Cancel</button>
+        <button type="button" class="btn" @click="cancelDialog">Cancel</button>
         <button type="submit" class="btn btn-primary">Save</button>
       </div>
     </form>
-  </div>
+  </ModalDialog>
   <div class="drawer-content">
     <!-- Fixed height, so that the page does not shift with the name's second line, and the loading
     placeholder below can subtract it. -->

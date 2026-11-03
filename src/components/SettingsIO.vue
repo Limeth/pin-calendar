@@ -33,6 +33,7 @@ import * as auth from '@/auth';
 import { keyToId } from '@/pins/util';
 import { isObject, readKeys } from '@/validation';
 import { LocalDocumentGetRemotePeers } from '@/documents/local';
+import ModalDialog from './ModalDialog.vue';
 import {
   PinCalendarClear,
   PinCalendarCombine,
@@ -106,8 +107,13 @@ const pinCatalog = computed(() => docData.value!.pinCatalog);
 
 const modalData: Ref<ModalData | undefined> = ref(undefined);
 
-function getSettingsIoModal(): HTMLDialogElement {
-  return document.getElementById('settings_io_modal') as HTMLDialogElement;
+function closeDialog() {
+  modalData.value = undefined;
+}
+
+function confirmSimpleDialog(modal: ModalSimple) {
+  closeDialog();
+  modal.actionConfirm();
 }
 
 function triggerDownload(download: Download) {
@@ -174,7 +180,6 @@ function showImportError(
           ? 'This file was exported by an older version of the app, which cannot be imported yet.'
           : `This file is not a valid ${description}.`,
   };
-  getSettingsIoModal().showModal();
 }
 
 // Describes a conflict by the names of the existing and the imported entry, e.g. "Jog → Run". The
@@ -256,8 +261,6 @@ function onClickPinsImport() {
           overwrite: false,
         },
       };
-
-      getSettingsIoModal().showModal();
     },
   });
 }
@@ -279,7 +282,6 @@ function onClickPinsClear() {
       });
     },
   };
-  getSettingsIoModal().showModal();
 }
 
 function onClickCalendarExport() {
@@ -312,8 +314,6 @@ function onClickCalendarImport() {
           calendar: loadedPinCalendar,
         },
       };
-
-      getSettingsIoModal().showModal();
     },
   });
 }
@@ -335,7 +335,6 @@ function onClickCalendarClear() {
       });
     },
   };
-  getSettingsIoModal().showModal();
 }
 
 function onClickCalendarDelete() {
@@ -367,10 +366,11 @@ function onClickCalendarDelete() {
       await Promise.all(authKeyIds.map((authKeyId) => auth.deleteAuthKey(authKeyId)));
     },
   };
-  getSettingsIoModal().showModal();
 }
 
 function onClickImportPinsConfirm(importPins: ImportPins) {
+  closeDialog();
+
   if (readOnly.value) return;
 
   PinCatalogChange(pinCatalog.value, (pinCatalog) => {
@@ -404,6 +404,8 @@ function onClickImportPinsConfirm(importPins: ImportPins) {
 }
 
 function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
+  closeDialog();
+
   if (readOnly.value) return;
 
   const calendar = pinCalendar.value;
@@ -421,23 +423,23 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
 </script>
 
 <template>
-  <dialog id="settings_io_modal" class="modal">
+  <ModalDialog :open="modalData !== undefined" cancel-on-backdrop @cancel="closeDialog">
     <div class="modal-box" v-if="modalData !== undefined && modalData.kind === 'simple'">
       <h3 class="text-lg font-bold">{{ modalData.title }}</h3>
       <p class="py-4">{{ modalData.message }}</p>
-      <form method="dialog" class="modal-action flex flex-row gap-2">
-        <button class="btn btn-neutral flex-1">Cancel</button>
-        <button class="btn btn-error flex-1" @click="modalData.actionConfirm">
+      <div class="modal-action flex flex-row gap-2">
+        <button class="btn btn-neutral flex-1" @click="closeDialog">Cancel</button>
+        <button class="btn btn-error flex-1" @click="confirmSimpleDialog(modalData)">
           {{ modalData.buttonConfirm }}
         </button>
-      </form>
+      </div>
     </div>
     <div class="modal-box" v-if="modalData !== undefined && modalData.kind === 'error'">
       <h3 class="text-lg font-bold">{{ modalData.title }}</h3>
       <p class="py-4">{{ modalData.message }}</p>
-      <form method="dialog" class="modal-action">
-        <button class="btn btn-primary flex-1">Close</button>
-      </form>
+      <div class="modal-action">
+        <button class="btn btn-primary flex-1" @click="closeDialog">Close</button>
+      </div>
     </div>
     <div class="modal-box" v-if="modalData !== undefined && modalData.kind == 'import'">
       <template v-if="modalData.import.kind === 'pins'">
@@ -510,8 +512,8 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
             </div>
           </div>
         </div>
-        <form method="dialog" class="modal-action flex flex-row gap-2">
-          <button class="btn btn-neutral flex-1">Cancel</button>
+        <div class="modal-action flex flex-row gap-2">
+          <button class="btn btn-neutral flex-1" @click="closeDialog">Cancel</button>
           <template
             v-if="
               modalData.import.conflicts.pinCategories.length > 0 ||
@@ -540,7 +542,7 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
           >
             Import
           </button>
-        </form>
+        </div>
       </template>
       <template v-if="modalData.import.kind === 'calendar'">
         <h3 class="text-lg font-bold pb-4">Calendar Import</h3>
@@ -549,21 +551,18 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
             <p>{{ Object.keys(modalData.import.calendar.days).length }} days to import.</p>
           </div>
         </div>
-        <form method="dialog" class="modal-action flex flex-row gap-2">
-          <button class="btn btn-neutral flex-1">Cancel</button>
+        <div class="modal-action flex flex-row gap-2">
+          <button class="btn btn-neutral flex-1" @click="closeDialog">Cancel</button>
           <button
             class="btn btn-primary flex-1"
             @click="onClickImportCalendarConfirm(modalData.import)"
           >
             Import
           </button>
-        </form>
+        </div>
       </template>
     </div>
-    <form method="dialog" class="modal-backdrop">
-      <button>close</button>
-    </form>
-  </dialog>
+  </ModalDialog>
   <div class="flex max-md:flex-col flex-row gap-4">
     <div class="flex flex-col gap-2 flex-1">
       <div class="text-md">Pin Catalog</div>
