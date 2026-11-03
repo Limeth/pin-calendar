@@ -485,7 +485,7 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
             </div>
             <div>
               What do you wish to perform with conflicting elements?
-              <label class="label cursor-pointer items-start justify-start gap-2">
+              <label class="label cursor-pointer items-start justify-start gap-2 whitespace-normal">
                 <input
                   type="radio"
                   name="radio-1"
@@ -495,7 +495,7 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
                 />
                 <span class="label-text">Keep existing elements with conflicting ID's</span>
               </label>
-              <label class="label cursor-pointer items-start justify-start gap-2">
+              <label class="label cursor-pointer items-start justify-start gap-2 whitespace-normal">
                 <input
                   type="radio"
                   name="radio-1"
