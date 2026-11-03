@@ -12,6 +12,13 @@ export default defineConfig({
     // A workaround for Firefox's inability to find ICE candidates on the `localhost` host.
     // https://bugzilla.mozilla.org/show_bug.cgi?id=1672145
     host: '0.0.0.0',
+    watch: {
+      // The file watcher (chokidar) drops change events of a file that closely follow another one,
+      // e.g. of edits written in quick succession by tools. If the module is requested in between,
+      // e.g. after a hot update, its first version stays cached until a restart. Waiting for writes
+      // to finish emits a single event after the last one.
+      awaitWriteFinish: { stabilityThreshold: 50, pollInterval: 10 },
+    },
   },
   root: 'src',
   base: '/pin-calendar/',
