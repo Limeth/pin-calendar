@@ -10,16 +10,17 @@ import QRCode from 'qrcode';
 import { computedAsync } from '@vueuse/core';
 import { decodeHash, encodeHash, type Hash, type HashAddPeer } from '@/hash';
 import {
+  LocalDocumentGetAlias,
   LocalDocumentGetInvalidRemotePeerIds,
   LocalDocumentGetLocalPeer,
   LocalDocumentGetRemotePeers,
+  LocalDocumentSetAlias,
   type CalendarId,
 } from '@/documents/local';
 import { changeSubtree } from 'automerge-diy-vue-hooks';
 import {
   LocalStorageDataAddCalendar,
   LocalStorageDataIsReadOnly,
-  LocalStorageDataSetCalendarAlias,
   localStorageDataStore,
 } from '@/localStorageData';
 import * as auth from '@/auth';
@@ -169,7 +170,8 @@ const appAsync = computedAsync(
 // when switching from a loaded calendar to a not-yet-loaded calendar.
 const app = computed(() => (appIsBeingLoaded.value ? undefined : appAsync.value));
 
-// The open calendar, shown in the header. While it is loading, its name is the copy in local storage.
+// The open calendar, shown in the header. While it is loading, its name and alias are the copies in
+// local storage.
 const headerCalendar = computed(() => {
   const calendarId = app.value?.calendarId ?? currentHash.value.path?.calendar.id;
 
@@ -183,7 +185,10 @@ const headerCalendar = computed(() => {
       app.value !== undefined
         ? SharedDocumentGetName(app.value.docShared.data.value)
         : calendar?.cache?.name,
-    alias: calendar?.alias,
+    alias:
+      app.value !== undefined
+        ? LocalDocumentGetAlias(app.value.docLocal.data.value)
+        : calendar?.cache?.alias,
   };
 });
 
@@ -387,7 +392,7 @@ function openRenameDialog() {
     // Raw, as `modalData` is deeply reactive, which would unwrap the app's `Ref`s.
     app: markRaw(app.value),
     name: SharedDocumentGetName(app.value.docShared.data.value) ?? '',
-    alias: localStorageData.value.calendars[app.value.calendarId]?.alias ?? '',
+    alias: LocalDocumentGetAlias(app.value.docLocal.data.value) ?? '',
   };
 }
 
@@ -400,8 +405,10 @@ function saveRenameDialog() {
     app.docShared.data.value[changeSubtree]((shared) => {
       SharedDocumentSetName(shared, name);
     });
-  if (!LocalStorageDataIsReadOnly(localStorageData.value))
-    LocalStorageDataSetCalendarAlias(localStorageData.value, app.calendarId, alias);
+  if (!app.docLocal.readOnly.value)
+    app.docLocal.data.value[changeSubtree]((local) => {
+      LocalDocumentSetAlias(local, alias);
+    });
 
   modalData.value = undefined;
 }
@@ -480,7 +487,7 @@ function saveRenameDialog() {
           v-model="modalData.alias"
           class="input w-full"
           maxlength="100"
-          :disabled="LocalStorageDataIsReadOnly(localStorageData)"
+          :disabled="modalData.app.docLocal.readOnly.value"
         />
         <span class="text-xs opacity-60">
           Only on this device, shown alongside the name. Optional.
@@ -614,7 +621,7 @@ function saveRenameDialog() {
             <CalendarName
               class="text-center"
               :name="calendar.cache?.name"
-              :alias="calendar.alias"
+              :alias="calendar.cache?.alias"
               :calendar-id="calendarId"
             />
           </button>

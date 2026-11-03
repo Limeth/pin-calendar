@@ -246,7 +246,7 @@ if (isHashValidAddPeer(currentHash.value)) {
         <span>Calendar:</span>
         <CalendarName
           :name="localStorageData.calendars[modalData.existingCalendarId]?.cache?.name"
-          :alias="localStorageData.calendars[modalData.existingCalendarId]?.alias"
+          :alias="localStorageData.calendars[modalData.existingCalendarId]?.cache?.alias"
           :calendar-id="modalData.existingCalendarId"
         />
       </div>

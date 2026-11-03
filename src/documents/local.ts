@@ -40,6 +40,8 @@ export type CalendarId = Static<typeof CalendarIdSchema>;
 
 export const LocalDocumentSchema = Type.Object({
   documentIdShared: Type.Optional(Type.String()),
+  /// The calendar's alias on this device, shown alongside its shared name, see `SharedDocument`.
+  alias: Type.Optional(Type.String()),
   /// What our peer is known as.
   localPeer: LocalPeerSchema,
   /// Peers we synchronize our shared document with.
@@ -58,6 +60,19 @@ export function LocalDocumentGetDocumentIdShared(
   self: Unchecked<LocalDocument>,
 ): string | undefined {
   return readProperty(LocalDocumentSchema, self, 'documentIdShared', 'shared document ID');
+}
+
+// The calendar's alias, or `undefined` if it has none, or an invalid one.
+export function LocalDocumentGetAlias(self: Unchecked<LocalDocument>): string | undefined {
+  return readProperty(LocalDocumentSchema, self, 'alias', 'calendar alias');
+}
+
+// Set the calendar's alias, or remove it if the given one is blank.
+export function LocalDocumentSetAlias(self: LocalDocument, alias: string) {
+  const trimmed = alias.trim();
+
+  if (trimmed.length === 0) delete self.alias;
+  else if (self.alias !== trimmed) self.alias = trimmed;
 }
 
 // This device's peer, or `undefined` if it is invalid.

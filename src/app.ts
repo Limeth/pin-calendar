@@ -6,6 +6,7 @@ import {
   type LocalDocument,
   type CalendarId,
   LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT,
+  LocalDocumentGetAlias,
   LocalDocumentGetCurrentVersion,
   LocalDocumentGetDocumentIdShared,
 } from './documents/local';
@@ -26,7 +27,7 @@ import {
 } from './documents/shared';
 import type { EphemeralDocument } from './documents/ephemeral';
 import {
-  LocalStorageDataSetCalendarName,
+  LocalStorageDataSetCalendarCache,
   localStorageDataStore,
   type LocalStorageDataCalendar,
 } from './localStorageData';
@@ -252,10 +253,15 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
     hasNewerVersionRop(dataSharedVersioned, SHARED_DOCUMENT_SCHEMA_VERSION_CURRENT),
   );
 
-  // Keep a copy of the name in local storage, to show it without loading the calendar.
+  // Keep copies of the name and the alias in local storage, to show them without loading the calendar.
   watch(
     () => SharedDocumentGetName(dataShared.value),
-    (name) => LocalStorageDataSetCalendarName(localStorageData.value, calendarId, name),
+    (name) => LocalStorageDataSetCalendarCache(localStorageData.value, calendarId, 'name', name),
+    { immediate: true },
+  );
+  watch(
+    () => LocalDocumentGetAlias(dataLocal.value),
+    (alias) => LocalStorageDataSetCalendarCache(localStorageData.value, calendarId, 'alias', alias),
     { immediate: true },
   );
 

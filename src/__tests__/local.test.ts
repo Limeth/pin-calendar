@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Ref } from 'vue';
 import {
+  LocalDocumentDefault,
+  LocalDocumentGetAlias,
   LocalDocumentGetDocumentIdShared,
   LocalDocumentGetInvalidRemotePeerIds,
   LocalDocumentGetLocalPeer,
   LocalDocumentGetRemotePeer,
   LocalDocumentGetRemotePeers,
+  LocalDocumentSetAlias,
   type LocalDocument,
   type LocalDocumentRop,
 } from '@/documents/local';
@@ -32,11 +35,13 @@ describe('the local document', () => {
     const phone = { deviceName: 'Phone', authKeyId: 'phone-key' };
     const document = localDocument({
       documentIdShared: 'shared-document',
+      alias: 'Work',
       localPeer: LOCAL_PEER,
       remotePeers: { [peerId('phone')]: phone },
     });
 
     expect(LocalDocumentGetDocumentIdShared(document.value)).toBe('shared-document');
+    expect(LocalDocumentGetAlias(document.value)).toBe('Work');
     expect(LocalDocumentGetLocalPeer(document.value)).toMatchObject(LOCAL_PEER);
     expect(LocalDocumentGetRemotePeer(document.value, peerId('phone'))).toMatchObject(phone);
     expect(Object.keys(LocalDocumentGetRemotePeers(document.value))).toEqual([peerId('phone')]);
@@ -46,6 +51,7 @@ describe('the local document', () => {
   it('ignores invalid values', () => {
     const document = localDocument({
       documentIdShared: 42,
+      alias: 42,
       localPeer: { deviceName: 'Laptop', peerJsPeerId: 'not a UUID' },
       remotePeers: {
         [peerId('phone')]: { deviceName: 'Phone', authKeyId: 'phone-key' },
@@ -54,6 +60,7 @@ describe('the local document', () => {
     });
 
     expect(LocalDocumentGetDocumentIdShared(document.value)).toBeUndefined();
+    expect(LocalDocumentGetAlias(document.value)).toBeUndefined();
     expect(LocalDocumentGetLocalPeer(document.value)).toBeUndefined();
     expect(LocalDocumentGetRemotePeer(document.value, peerId('tablet'))).toBeUndefined();
     expect(Object.keys(LocalDocumentGetRemotePeers(document.value))).toEqual([peerId('phone')]);
@@ -82,5 +89,17 @@ describe('the local document', () => {
     const peerJsPeerId: string = document.value.localPeer.peerJsPeerId;
 
     expect(peerJsPeerId).toBe(peerId('laptop'));
+  });
+});
+
+describe('the alias of a calendar', () => {
+  it('is trimmed, and removed when blank', () => {
+    const document = LocalDocumentDefault(peerId('laptop'));
+
+    LocalDocumentSetAlias(document, '  Work  ');
+    expect(document.alias).toBe('Work');
+
+    LocalDocumentSetAlias(document, '   ');
+    expect(document).not.toHaveProperty('alias');
   });
 });

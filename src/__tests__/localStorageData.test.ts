@@ -4,8 +4,7 @@ import {
   LocalStorageDataLoadOrDefault,
   LocalStorageDataParse,
   LocalStorageDataSave,
-  LocalStorageDataSetCalendarAlias,
-  LocalStorageDataSetCalendarName,
+  LocalStorageDataSetCalendarCache,
   localStorageDataStore,
   type LocalStorageData,
 } from '@/localStorageData';
@@ -64,59 +63,38 @@ describe('the calendar list in local storage', () => {
   });
 });
 
-describe('the alias of a calendar', () => {
-  it('is trimmed, and removed when blank', () => {
+describe("the copies of a calendar's data", () => {
+  it('are set, and removed with the cache when the calendar has none', () => {
     const data: LocalStorageData = { calendars: { [CALENDAR_ID]: {} } };
 
-    LocalStorageDataSetCalendarAlias(data, CALENDAR_ID, '  Work  ');
-    expect(data.calendars[CALENDAR_ID]!.alias).toBe('Work');
+    LocalStorageDataSetCalendarCache(data, CALENDAR_ID, 'name', 'Family');
+    LocalStorageDataSetCalendarCache(data, CALENDAR_ID, 'alias', 'Work');
+    expect(data.calendars[CALENDAR_ID]!.cache).toEqual({ name: 'Family', alias: 'Work' });
 
-    LocalStorageDataSetCalendarAlias(data, CALENDAR_ID, '   ');
+    LocalStorageDataSetCalendarCache(data, CALENDAR_ID, 'name', undefined);
+    expect(data.calendars[CALENDAR_ID]!.cache).toEqual({ alias: 'Work' });
+
+    LocalStorageDataSetCalendarCache(data, CALENDAR_ID, 'alias', undefined);
     expect(data.calendars[CALENDAR_ID]).toEqual({});
   });
 
-  it('does not add back a calendar that is no longer listed', () => {
+  it('do not add back a calendar that is no longer listed', () => {
     const data: LocalStorageData = { calendars: {} };
 
-    LocalStorageDataSetCalendarAlias(data, CALENDAR_ID, 'Work');
+    LocalStorageDataSetCalendarCache(data, CALENDAR_ID, 'name', 'Family');
     expect(data.calendars).toEqual({});
   });
 
-  it('is kept when the list is loaded from storage', async () => {
+  it('are kept when the list is loaded from storage', async () => {
     const data = await localStorageDataStore.value.GetData();
 
-    changeInAnotherTab(KEY, stored({ [CALENDAR_ID]: { alias: 'Work' } }));
+    changeInAnotherTab(
+      KEY,
+      stored({ [CALENDAR_ID]: { cache: { name: 'Family', alias: 'Work' } } }),
+    );
     await sleep(20);
 
-    expect(data.value.calendars[CALENDAR_ID]!.alias).toBe('Work');
-  });
-});
-
-describe("the copy of a calendar's name", () => {
-  it('is set, and removed with the cache when the calendar has no name', () => {
-    const data: LocalStorageData = { calendars: { [CALENDAR_ID]: {} } };
-
-    LocalStorageDataSetCalendarName(data, CALENDAR_ID, 'Family');
-    expect(data.calendars[CALENDAR_ID]!.cache).toEqual({ name: 'Family' });
-
-    LocalStorageDataSetCalendarName(data, CALENDAR_ID, undefined);
-    expect(data.calendars[CALENDAR_ID]).toEqual({});
-  });
-
-  it('does not add back a calendar that is no longer listed', () => {
-    const data: LocalStorageData = { calendars: {} };
-
-    LocalStorageDataSetCalendarName(data, CALENDAR_ID, 'Family');
-    expect(data.calendars).toEqual({});
-  });
-
-  it('is kept when the list is loaded from storage', async () => {
-    const data = await localStorageDataStore.value.GetData();
-
-    changeInAnotherTab(KEY, stored({ [CALENDAR_ID]: { cache: { name: 'Family' } } }));
-    await sleep(20);
-
-    expect(data.value.calendars[CALENDAR_ID]!.cache?.name).toBe('Family');
+    expect(data.value.calendars[CALENDAR_ID]!.cache).toEqual({ name: 'Family', alias: 'Work' });
   });
 });
 
@@ -134,11 +112,11 @@ describe('reading the calendar list from storage', () => {
   it('keeps properties unknown to this version', () => {
     const stored = {
       addedByNewerVersion: 1,
-      calendars: { [CALENDAR_ID]: { alias: 'Work', addedByNewerVersion: 2 } },
+      calendars: { [CALENDAR_ID]: { documentIdLocal: 'local', addedByNewerVersion: 2 } },
     };
     const data = LocalStorageDataParse(storedData(stored))!;
 
-    expect(data.calendars[CALENDAR_ID]!.alias).toBe('Work');
+    expect(data.calendars[CALENDAR_ID]!.documentIdLocal).toBe('local');
 
     LocalStorageDataSave(data);
     expect(savedData()).toEqual(stored);
@@ -146,34 +124,36 @@ describe('reading the calendar list from storage', () => {
 
   it('drops an invalid cache, keeping the calendar', () => {
     const data = LocalStorageDataParse(
-      storedData({ calendars: { [CALENDAR_ID]: { alias: 'Work', cache: { name: 42 } } } }),
+      storedData({
+        calendars: { [CALENDAR_ID]: { documentIdLocal: 'local', cache: { name: 42 } } },
+      }),
     )!;
 
-    expect(data.calendars[CALENDAR_ID]).toEqual({ alias: 'Work' });
+    expect(data.calendars[CALENDAR_ID]).toEqual({ documentIdLocal: 'local' });
   });
 
   it('sets aside calendars that cannot be read, and saves them back as they were', () => {
     // Not converted to a string.
-    const damaged = { alias: 42 };
+    const damaged = { documentIdLocal: 42 };
     const data = LocalStorageDataParse(
       storedData({
         calendars: {
           [CALENDAR_ID]: damaged,
           'not-a-calendar-id': {},
-          [OTHER_CALENDAR_ID]: { alias: 'Home' },
+          [OTHER_CALENDAR_ID]: { documentIdLocal: 'home' },
         },
       }),
     )!;
 
     expect(Object.keys(data.calendars)).toEqual([OTHER_CALENDAR_ID]);
 
-    data.calendars[OTHER_CALENDAR_ID]!.alias = 'House';
+    data.calendars[OTHER_CALENDAR_ID]!.documentIdLocal = 'house';
     LocalStorageDataSave(data);
     expect(savedData()).toEqual({
       calendars: {
         [CALENDAR_ID]: damaged,
         'not-a-calendar-id': {},
-        [OTHER_CALENDAR_ID]: { alias: 'House' },
+        [OTHER_CALENDAR_ID]: { documentIdLocal: 'house' },
       },
     });
   });
@@ -265,14 +245,17 @@ describe('calendar list data of a newer version', () => {
 
   // Whatever a newer version stores, its version need not be an object.
   const newer = JSON.stringify({
-    schemaVersion: { 1: { calendars: { [CALENDAR_ID]: { alias: 'Work' } } }, 2: 'newer' },
+    schemaVersion: {
+      1: { calendars: { [CALENDAR_ID]: { documentIdLocal: 'local' } } },
+      2: 'newer',
+    },
   });
   const onlyNewer = JSON.stringify({ schemaVersion: { 2: 'newer' } });
 
   it('is read from the current version, read-only', () => {
     const data = LocalStorageDataParse(newer)!;
 
-    expect(data.calendars).toEqual({ [CALENDAR_ID]: { alias: 'Work' } });
+    expect(data.calendars).toEqual({ [CALENDAR_ID]: { documentIdLocal: 'local' } });
     expect(LocalStorageDataIsReadOnly(data)).toBe(true);
   });
 

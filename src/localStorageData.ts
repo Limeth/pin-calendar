@@ -28,14 +28,16 @@ export type Invitation = Static<typeof InvitationSchema>;
 const LocalStorageDataCalendarCacheSchema = Type.Object({
   // A copy of the calendar's shared name, see `SharedDocument`.
   name: Type.Optional(Type.String()),
+  // A copy of the calendar's alias on this device, see `LocalDocument`.
+  alias: Type.Optional(Type.String()),
 });
+
+type LocalStorageDataCalendarCache = Static<typeof LocalStorageDataCalendarCacheSchema>;
 
 const LocalStorageDataCalendarSchema = Type.Object({
   documentIdEphemeral: Type.Optional(Type.String()),
   documentIdLocal: Type.Optional(Type.String()),
   invitation: Type.Optional(InvitationSchema),
-  // The calendar's alias on this device, shown alongside its shared name.
-  alias: Type.Optional(Type.String()),
   cache: Type.Optional(LocalStorageDataCalendarCacheSchema),
 });
 
@@ -74,37 +76,23 @@ export function LocalStorageDataAddCalendar(self: LocalStorageData): CalendarId 
   return calendarId;
 }
 
-// Set a calendar's alias, or remove it if the given one is blank. A calendar that is no longer listed,
-// e.g. because it was deleted in another tab, is not added back.
-export function LocalStorageDataSetCalendarAlias(
+// Set a copy of a calendar's data, see `LocalStorageDataCalendarCacheSchema`, or remove it if the
+// calendar has no such data. A calendar that is no longer listed, e.g. because it was deleted in
+// another tab, is not added back.
+export function LocalStorageDataSetCalendarCache<K extends keyof LocalStorageDataCalendarCache>(
   self: LocalStorageData,
   calendarId: CalendarId,
-  alias: string,
-) {
-  if (!Object.hasOwn(self.calendars, calendarId)) return;
-
-  const calendar = self.calendars[calendarId]!;
-  const trimmed = alias.trim();
-
-  if (trimmed.length === 0) delete calendar.alias;
-  else if (calendar.alias !== trimmed) calendar.alias = trimmed;
-}
-
-// Set the copy of a calendar's shared name, see `LocalStorageDataCalendarCacheSchema`. A calendar that
-// is no longer listed, e.g. because it was deleted in another tab, is not added back.
-export function LocalStorageDataSetCalendarName(
-  self: LocalStorageData,
-  calendarId: CalendarId,
-  name: string | undefined,
+  key: K,
+  value: LocalStorageDataCalendarCache[K],
 ) {
   if (!Object.hasOwn(self.calendars, calendarId)) return;
 
   const calendar = self.calendars[calendarId]!;
 
-  if (name !== undefined) {
-    if (calendar.cache?.name !== name) calendar.cache = { ...calendar.cache, name };
+  if (value !== undefined) {
+    if (calendar.cache?.[key] !== value) calendar.cache = { ...calendar.cache, [key]: value };
   } else if (calendar.cache !== undefined) {
-    delete calendar.cache.name;
+    delete calendar.cache[key];
 
     if (Object.keys(calendar.cache).length === 0) delete calendar.cache;
   }

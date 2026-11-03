@@ -98,10 +98,11 @@ replaced or deleted.
 ## Calendar names
 
 - A calendar's name is in the shared document, so it is the same on all of its devices. Its alias is
-  local to a device, in local storage.
-- Each calendar's `cache` in local storage holds data derived from its documents, such as a copy of
-  its name, so that it can be shown without loading the calendar, e.g. in the calendar list. It is
-  updated whenever the calendar is loaded (`LoadApp`), so it may be outdated.
+  local to a device, in the local document.
+- Each calendar's `cache` in local storage holds data derived from its documents, such as copies of
+  its name and alias, so that they can be shown without loading the calendar, e.g. in the calendar
+  list. Local storage is never the source of truth for a calendar's data. The cache is updated
+  whenever the calendar is loaded (`LoadApp`), so it may be outdated.
 
 ## PeerJS behaviour relied upon
 
