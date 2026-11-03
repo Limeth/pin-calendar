@@ -154,7 +154,6 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
     {
       type: 'init',
       calendarId,
-      documentIdEphemeral: calendarData.documentIdEphemeral as A.DocumentId,
       documentIdLocal: calendarData.documentIdLocal as A.DocumentId,
       invitation: toRaw(calendarData.invitation),
       repoEphemeralPort: repoEphemeralMessageChannel.port2,
@@ -171,23 +170,15 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
   /// Wait for the emphemeral and local documents to become available.
   const msgReadyLocal = await readyLocal;
 
-  calendarData.documentIdEphemeral = msgReadyLocal.documentIdEphemeral;
   calendarData.documentIdLocal = msgReadyLocal.documentIdLocal;
 
   const repoEphemeral = new A.Repo({
     network: [new MessageChannelNetworkAdapter(repoEphemeralMessageChannel.port1)],
   });
-
-  let handleEphemeral: A.DocHandle<EphemeralDocument>;
-
-  if (A.isValidDocumentId(calendarData.documentIdEphemeral)) {
-    handleEphemeral = await repoEphemeral.find<EphemeralDocument>(calendarData.documentIdEphemeral);
-  } else {
-    throw new Error(
-      `Failed to open the ephemeral document with ID: ${calendarData.documentIdEphemeral}`,
-    );
-  }
-
+  // The ephemeral document is created by the shared worker, for all of the calendar's tabs.
+  const handleEphemeral = await repoEphemeral.find<EphemeralDocument>(
+    msgReadyLocal.documentIdEphemeral,
+  );
   const dataEphemeral: Ref<Rop<EphemeralDocument>> = makeReactive(handleEphemeral);
   const repoLocal = new A.Repo({
     network: [new MessageChannelNetworkAdapter(repoLocalMessageChannel.port1)],

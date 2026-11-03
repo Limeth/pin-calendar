@@ -35,7 +35,6 @@ const LocalStorageDataCalendarCacheSchema = Type.Object({
 type LocalStorageDataCalendarCache = Static<typeof LocalStorageDataCalendarCacheSchema>;
 
 const LocalStorageDataCalendarSchema = Type.Object({
-  documentIdEphemeral: Type.Optional(Type.String()),
   documentIdLocal: Type.Optional(Type.String()),
   invitation: Type.Optional(InvitationSchema),
   cache: Type.Optional(LocalStorageDataCalendarCacheSchema),

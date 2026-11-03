@@ -5,8 +5,6 @@ import type { Invitation } from './localStorageData';
 export type ToSharedRepoMessageInit = {
   type: 'init';
   calendarId: CalendarId;
-  // TODO: The ID is always generated on the shared worker. Remove it from here and from LocalStorageData.
-  documentIdEphemeral: DocumentId | undefined;
   documentIdLocal: DocumentId;
   invitation: Invitation | undefined;
   repoEphemeralPort: MessagePort;
