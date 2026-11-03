@@ -1,75 +1,58 @@
 <script setup lang="ts" generic="T extends object, P extends Property & keyof T">
-import type { Doc } from '@automerge/automerge-repo';
-import { updateText } from '@automerge/automerge';
-import { changeSubtree, type Property, type Ro, type Rop } from 'automerge-diy-vue-hooks';
+import { changeSubtree, type Property, type Rop } from 'automerge-diy-vue-hooks';
 import { ref, type Ref } from 'vue';
 import feather from 'feather-icons';
 
-const {
-  subtree,
-  original,
-  property,
-  defaultValue,
-  parse,
-  validate,
-  change: changeInner,
-  disabled,
-} = defineProps<{
-  subtree: Rop<T>;
-  original?: Ro<T>;
-  defaultValue?: T[P];
-  property: P;
-  label?: string;
-  parse?: (value: string) => T[P]; // TODO: Make mandatory if T[P] !== string
-  validate?: (value: T[P]) => string | undefined;
-  change: 'assign' | 'updateText' | ((subtree: T, property: P, value: T[P]) => void);
-  // The value cannot be changed, e.g. as the calendar is read-only. The slot's input is disabled by
-  // its parent, e.g. via a `fieldset`.
-  disabled?: boolean;
-}>();
+const { subtree, original, property, defaultValue, parse, validate, change, disabled } =
+  defineProps<{
+    subtree: Rop<T>;
+    // Holds the value to revert to.
+    original?: { [K in P]?: T[P] };
+    defaultValue?: T[P];
+    property: P;
+    label?: string;
+    // The value of the input's text, e.g. `parseText` for a string property, see
+    // `util/validatedInput.ts`.
+    parse: (text: string) => T[P];
+    validate?: (value: T[P]) => string | undefined;
+    // Writes the value to an existing property, e.g. `assignProperty`, or `updateTextProperty` for a
+    // string property.
+    change: (subtree: T, property: P, value: NonNullable<T[P]>) => void;
+    // The value cannot be changed, e.g. as the calendar is read-only. The slot's input is disabled by
+    // its parent, e.g. via a `fieldset`.
+    disabled?: boolean;
+  }>();
 
-let change: (subtree: T, property: P, value: T[P]) => void;
-
-if (changeInner === 'assign') {
-  change = (subtree: T, property: P, value: T[P]) => {
-    (subtree[property] as unknown) = value;
-  };
-} else if (changeInner === 'updateText') {
-  change = (subtree: T, property: P, value: T[P]) => {
-    updateText(subtree as Doc<T>, [property], value as string); // TODO: unsafe
-  };
-} else {
-  change = changeInner;
-}
-
-// const emit = defineEmits<{
-//   update: [subtree: T, property: P, value: string];
-// }>();
 const warning: Ref<string | undefined> = ref(undefined);
+
+// Write the value, or the default value if there is none. Without either, e.g. when reverting an
+// optional property that has no default value, nothing is written.
+function write(value: T[P] | undefined) {
+  const resolved = value ?? defaultValue;
+
+  if (resolved === undefined || resolved === null) return;
+
+  warning.value = validate?.(resolved);
+  subtree[changeSubtree]((subtreeMut) => {
+    if (property in subtreeMut) change(subtreeMut, property, resolved);
+    else subtreeMut[property] = resolved;
+  });
+}
 
 function onChange(event: Event) {
   if (disabled) return;
 
-  const string = (event.target! as HTMLInputElement).value;
-  const value = parse !== undefined ? parse(string) : (string as T[P]); // TODO: unsafe
-  warning.value = validate?.(value);
-  subtree[changeSubtree]((subtreeMut) => {
-    if (property in subtreeMut) change(subtreeMut, property, value ?? (defaultValue as T[P]));
-    else subtreeMut[property] = value;
-  });
+  const target = event.target;
+
+  // The slot's element is an input or a text area.
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+    write(parse(target.value));
 }
 
 function onRevert() {
   if (disabled) return;
 
-  if (original !== undefined) {
-    const value = original[property] as T[P];
-    warning.value = validate?.(value);
-    subtree[changeSubtree]((subtreeMut) => {
-      if (property in subtreeMut) change(subtreeMut, property, value ?? (defaultValue as T[P]));
-      else subtreeMut[property] = value;
-    });
-  }
+  if (original !== undefined) write(original[property]);
 }
 </script>
 <template>

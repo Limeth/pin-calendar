@@ -25,6 +25,7 @@ import SettingsPinCategory, { type SettingsPinCategoryEvent } from './SettingsPi
 import * as R from 'ramda';
 import { changeSubtree, type Ro, type Rop } from 'automerge-diy-vue-hooks';
 import ValidatedInput from './ValidatedInput.vue';
+import { assignProperty, parseText, updateTextProperty } from '@/util/validatedInput';
 
 type EditingPin = {
   kind: 'pin';
@@ -351,7 +352,8 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                       if (value.length === 0) return 'The display name is empty.';
                     }
                   "
-                  change="updateText"
+                  :parse="parseText"
+                  :change="updateTextProperty"
                 >
                   <input
                     type="text"
@@ -376,7 +378,8 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                       if (value.length === 0) return 'The description is empty.';
                     }
                   "
-                  change="updateText"
+                  :parse="parseText"
+                  :change="updateTextProperty"
                 >
                   <input
                     type="text"
@@ -397,7 +400,8 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                   :default-value="''"
                   property="details"
                   label="Details"
-                  change="updateText"
+                  :parse="parseText"
+                  :change="updateTextProperty"
                 >
                   <textarea
                     type="text"
@@ -438,7 +442,8 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                       if (value.length === 0) return 'The display name is empty.';
                     }
                   "
-                  change="updateText"
+                  :parse="parseText"
+                  :change="updateTextProperty"
                 >
                   <input
                     type="text"
@@ -463,7 +468,8 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                       if (value.length === 0) return 'The description is empty.';
                     }
                   "
-                  change="updateText"
+                  :parse="parseText"
+                  :change="updateTextProperty"
                 >
                   <input
                     type="text"
@@ -484,7 +490,8 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                   :default-value="''"
                   property="details"
                   label="Details"
-                  change="updateText"
+                  :parse="parseText"
+                  :change="updateTextProperty"
                 >
                   <textarea
                     type="text"
@@ -512,7 +519,8 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                       if (stringWithoutEmojis.length > 0) return 'Non-emoji characters present.';
                     }
                   "
-                  change="assign"
+                  :parse="parseText"
+                  :change="assignProperty"
                 >
                   <input
                     type="text"
@@ -538,7 +546,7 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                       if (value <= 0) return 'Non-positive scale entered.';
                     }
                   "
-                  change="assign"
+                  :change="assignProperty"
                 >
                   <input
                     type="range"
@@ -560,7 +568,8 @@ function onSettingsPinCategoryEvent(event: SettingsPinCategoryEvent) {
                   :original="editing.original"
                   property="backgroundColor"
                   label="Background Color"
-                  change="assign"
+                  :parse="parseText"
+                  :change="assignProperty"
                 >
                   <input
                     type="color"
