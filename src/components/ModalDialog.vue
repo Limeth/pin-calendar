@@ -1,13 +1,10 @@
 <script setup lang="ts">
 import { nextTick, onMounted, useTemplateRef, watch } from 'vue';
 
-// A modal dialog, shown while `open`. Pressing Escape, or clicking outside of the dialog if
-// `cancelOnBackdrop`, emits `cancel` rather than closing it: the parent closes it by no longer
-// setting `open`, unless it cannot be cancelled at the moment.
-const { open, cancelOnBackdrop = false } = defineProps<{
-  open: boolean;
-  cancelOnBackdrop?: boolean;
-}>();
+// A modal dialog, shown while `open`. Pressing Escape emits `cancel` rather than closing it: the
+// parent closes it by no longer setting `open`, unless it cannot be cancelled at the moment.
+// Clicking outside of the dialog does nothing, as cancelling some dialogs loses data, e.g. an invite.
+const { open } = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ cancel: [] }>();
 const dialog = useTemplateRef('dialog');
 
@@ -37,6 +34,5 @@ function onClose() {
 <template>
   <dialog ref="dialog" class="modal" @cancel="onCancel" @close="onClose">
     <slot />
-    <div v-if="cancelOnBackdrop" class="modal-backdrop" @click="emit('cancel')" />
   </dialog>
 </template>

@@ -423,7 +423,7 @@ function onClickImportCalendarConfirm(importCalendar: ImportCalendar) {
 </script>
 
 <template>
-  <ModalDialog :open="modalData !== undefined" cancel-on-backdrop @cancel="closeDialog">
+  <ModalDialog :open="modalData !== undefined" @cancel="closeDialog">
     <div class="modal-box" v-if="modalData !== undefined && modalData.kind === 'simple'">
       <h3 class="text-lg font-bold">{{ modalData.title }}</h3>
       <p class="py-4">{{ modalData.message }}</p>
