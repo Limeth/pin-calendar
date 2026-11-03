@@ -45,6 +45,10 @@ function addMonths(months: number) {
 }
 
 function clickDay(day: DayListDay) {
+  // Selecting a day adds it to the document, see `PinCalendarPrepareDay`, and its pins could not be
+  // toggled anyway.
+  if (app.value!.docShared.readOnly.value) return;
+
   daySelected.value = day;
   isDrawerOpen.value = true;
 }
