@@ -90,7 +90,8 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
   })();
 
   sharedRepoWorker.on((message) => {
-    // TODO: These promises could race.
+    // Both WebRTC handlers await the same promise first, and so resume in the order of their
+    // messages. Only the start's reply may come after a later stop, see below.
     switch (message.type) {
       case 'webrtc-start': {
         (async () => {
@@ -114,6 +115,8 @@ async function LoadApp(calendarId: CalendarId): Promise<App> {
           dataReadyLocal.repoShared.networkSubsystem.addNetworkAdapter(webrtc);
           console.log('WebRTC Network Adapter registered, waiting for it to be prepared.');
           await webrtc.whenReady();
+          // Stopped while it was being prepared: the worker no longer expects a reply.
+          if (!dataReadyLocal.repoShared.networkSubsystem.adapters.includes(webrtc)) return;
           console.log('WebRTC Network Adapter prepared, signaling success.');
           sharedRepoWorker.postMessage({ type: 'webrtc-start-success' });
         })();
