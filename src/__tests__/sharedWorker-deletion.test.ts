@@ -66,6 +66,27 @@ describe('deleting a calendar', () => {
     reopened.init(CALENDAR_ID);
     expect((await reopened.message('ready-local')).documentIdLocal).not.toBe(documentIdLocal);
   });
+
+  it('ignores its tabs being closed afterwards', async () => {
+    const worker = new TestWorker();
+    workers.push(worker);
+    const tab = worker.openTab();
+
+    tab.init(CALENDAR_ID);
+    await tab.message('webrtc-start');
+    tab.port.postMessage({ type: 'delete-calendar' });
+    await tab.message('webrtc-stop');
+    const reopened = worker.openTab();
+    reopened.init(CALENDAR_ID);
+    await reopened.message('webrtc-start');
+
+    // Only forgotten by the deleted calendar's worker state, not by the one opened again.
+    tab.close();
+    await sleep(200); // Several polls.
+    expect(await worker.tabCount()).toBe(1);
+    expect(reopened.messages('webrtc-start')).toHaveLength(1);
+    expect(reopened.messages('webrtc-stop')).toEqual([]);
+  });
 });
 
 // The bug in automerge-repo that `deleteDocument` works around. Once this fails, e.g. after

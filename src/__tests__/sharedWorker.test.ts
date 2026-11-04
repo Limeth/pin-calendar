@@ -3,8 +3,8 @@ import { Repo, type DocumentId } from '@automerge/automerge-repo';
 import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
 import { LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT, type LocalDocument } from '@/documents/local';
 import type { Versioned } from '@/versioned';
-import { CALENDAR_ID, sleep, until } from './helpers';
-import { TestWorker, type TestTab } from './sharedWorker';
+import { CALENDAR_ID, OTHER_CALENDAR_ID, sleep, until } from './helpers';
+import { TestTabLock, TestWorker, type TestTab } from './sharedWorker';
 import type { SharedRepoWorkerOptions } from '@/workers/sharedRepoMain';
 
 const workers: TestWorker[] = [];
@@ -13,12 +13,6 @@ function testWorker(database?: string, options: SharedRepoWorkerOptions = {}): T
   const worker = new TestWorker({ database, ...options });
   workers.push(worker);
   return worker;
-}
-
-// The number of the calendar's tabs that the worker knows.
-async function tabCount(worker: TestWorker): Promise<number> {
-  const initialized = await worker.worker.sharedRepoByCalendarId.get(CALENDAR_ID)!.initialized!;
-  return initialized.tabs.length;
 }
 
 afterEach(async () => {
@@ -105,7 +99,7 @@ describe('closing a tab', () => {
     const tabs = await openTabs(worker, 2);
 
     tabs[1]!.close();
-    expect(await until(async () => (await tabCount(worker)) === 1)).toBe(true);
+    expect(await until(async () => (await worker.tabCount()) === 1)).toBe(true);
   });
 
   it('keeps synchronizing the documents with the other tabs', async () => {
@@ -114,7 +108,7 @@ describe('closing a tab', () => {
     const documentIdShared = await first!.documentIdShared();
 
     first!.close();
-    expect(await until(async () => (await tabCount(worker)) === 1)).toBe(true);
+    expect(await until(async () => (await worker.tabCount()) === 1)).toBe(true);
 
     const handle = await second!.repoShared.find<{ value?: number }>(documentIdShared);
     handle.change((doc) => {
@@ -124,6 +118,59 @@ describe('closing a tab', () => {
     later.init(CALENDAR_ID, (await second!.message('ready-local')).documentIdLocal);
     const laterHandle = await later.repoShared.find<{ value?: number }>(documentIdShared);
     expect(await until(() => laterHandle.doc().value === 1)).toBe(true);
+  });
+
+  it('forgets the tab in all of the calendars opened in it', async () => {
+    const worker = testWorker();
+    const lock = new TestTabLock();
+    const first = worker.openTab(lock);
+    const second = worker.openTab(lock);
+
+    first.init(CALENDAR_ID);
+    second.init(OTHER_CALENDAR_ID);
+    const { documentIdLocal } = await first.message('ready-local');
+    await second.message('ready-local');
+    const other = worker.openTab();
+    other.init(CALENDAR_ID, documentIdLocal);
+    await other.message('ready-local');
+
+    first.close();
+    second.close();
+    expect(await until(async () => (await worker.tabCount()) === 1)).toBe(true);
+    expect(await until(async () => (await worker.tabCount(OTHER_CALENDAR_ID)) === 0)).toBe(true);
+  });
+
+  it('forgets a tab closed while it was opening the calendar', async () => {
+    const worker = testWorker();
+    const tab = worker.openTab();
+
+    tab.init(CALENDAR_ID);
+    // `init` is posted once the lock is held. The lock is released before the worker requests it,
+    // and the ports are left open, so that the worker still receives `init`.
+    await tab.lock.held;
+    tab.lock.release();
+    const { documentIdLocal } = await tab.message('ready-local');
+    expect(await until(async () => (await worker.tabCount()) === 0)).toBe(true);
+
+    // Not hosting WebRTC, as it would otherwise not be started in another tab.
+    const later = worker.openTab();
+    later.init(CALENDAR_ID, documentIdLocal);
+    await later.message('webrtc-start');
+  });
+
+  it('starts WebRTC in a tab opened after the last one was closed', async () => {
+    const worker = testWorker();
+    const [tab] = await openTabs(worker, 1);
+    const { documentIdLocal } = await tab!.message('ready-local');
+
+    await tab!.message('webrtc-start');
+    tab!.close();
+    expect(await until(async () => (await worker.tabCount()) === 0)).toBe(true);
+    await sleep(100); // Several polls without tabs.
+
+    const later = worker.openTab();
+    later.init(CALENDAR_ID, documentIdLocal);
+    await later.message('webrtc-start');
   });
 });
 
@@ -162,7 +209,7 @@ describe('WebRTC', () => {
     expect(second).not.toBe(first);
     expect(first.messages('webrtc-stop')).toHaveLength(1);
     // Kept, as it may only be frozen.
-    expect(await tabCount(worker)).toBe(2);
+    expect(await worker.tabCount()).toBe(2);
   });
 
   it('is moved to another tab right away when its tab is closed', async () => {
@@ -173,6 +220,36 @@ describe('WebRTC', () => {
     first.close();
     // The closed tab is not told to stop.
     await webRtcTab(tabs.filter((tab) => tab !== first));
+  });
+
+  it('is moved back to a tab that stopped answering when the other tabs are closed', async () => {
+    const tabs = await openTabs(testWorker(), 2);
+    const first = await webRtcTab(tabs);
+
+    first.answersPolls = false;
+
+    const second = await webRtcTab(tabs, 1);
+
+    // E.g. was only frozen.
+    first.answersPolls = true;
+    second.close();
+    expect(await until(() => first.messages('webrtc-start').length === 2)).toBe(true);
+  });
+
+  it('keeps running when a tab that stopped answering is closed', async () => {
+    const worker = testWorker();
+    const tabs = await openTabs(worker, 2);
+    const first = await webRtcTab(tabs);
+
+    first.answersPolls = false;
+
+    const second = await webRtcTab(tabs, 1);
+
+    first.close();
+    expect(await until(async () => (await worker.tabCount()) === 1)).toBe(true);
+    await sleep(200); // Several polls.
+    expect(second.messages('webrtc-start')).toHaveLength(1);
+    expect(second.messages('webrtc-stop')).toEqual([]);
   });
 
   it('is started in an unresponsive tab again when all tabs are unresponsive', async () => {
