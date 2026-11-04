@@ -196,14 +196,16 @@ describe('changing the catalog', () => {
     expect(Object.keys(result.pins)).not.toContain(jog);
     expect(result.pinCategories[categoryKey(initial, 'Physical Health')]!.pins).toEqual([]);
     expect(result.pinCategories[health]!.subcategories).toBe(7);
-    expect(result.removed).toEqual([jog]);
+    // Automerge removes the pin from the other devices; it is not recorded anywhere.
+    expect(result).not.toHaveProperty('removed');
   });
 
-  it('leaves an invalid list of removed pins as it is', () => {
+  it('keeps the list of removed pins that earlier versions wrote', () => {
     const initial = catalog();
     const jog = pinKey(initial, 'Go on a jog');
+    const removed = ['01a14000-0000-7000-8000-0000000000ff'];
 
-    (initial as unknown as { removed: unknown }).removed = 'not a list';
+    (initial as unknown as { removed: unknown }).removed = removed;
 
     const document = sharedDocument(initial);
 
@@ -211,10 +213,10 @@ describe('changing the catalog', () => {
       PinCatalogRemovePin(pinCatalog, keyToId(jog, PIN_ID_SYMBOL));
     });
 
-    const result = stored(document) as PinCatalog;
+    const result = stored(document) as PinCatalog & { removed: unknown };
 
     expect(Object.keys(result.pins)).not.toContain(jog);
-    expect(result.removed).toBe('not a list');
+    expect(result.removed).toEqual(removed);
   });
 
   it('does not replace an existing pin when adding one', () => {

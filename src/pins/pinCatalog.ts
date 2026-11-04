@@ -15,7 +15,6 @@ import {
   isObject,
   readEntry,
   readKeys,
-  readProperty,
   type Unchecked,
   type UncheckedRopValue,
 } from '@/validation';
@@ -94,8 +93,6 @@ const PIN_CATALOG_SCHEMA_VERSION_CURRENT = 1;
 export const PinCatalogSchema = Type.Object({
   pins: Type.Record(IdKeySchema<PinId>(), PinDescriptorSchema),
   pinCategories: Type.Record(IdKeySchema<PinCategoryId>(), PinCategoryDescriptorSchema),
-  /// Any elements that should be removed from all peers are added to this array.
-  removed: Type.Array(Type.Union([IdKeySchema<PinId>(), IdKeySchema<PinCategoryId>()])),
 });
 
 export type PinCatalog = Static<typeof PinCatalogSchema>;
@@ -117,7 +114,6 @@ export function PinCatalogNew(): PinCatalog {
   return {
     pins: {},
     pinCategories: {},
-    removed: [],
   };
 }
 
@@ -235,13 +231,6 @@ export function PinCategoryRemoveSubcategory(
   return idSetRemove(self.subcategories, pinCategoryId);
 }
 
-// Ensure that the pin or category is deleted from peers in the future, unless the list is invalid.
-function PinCatalogAddRemoved<S extends symbol>(self: PinCatalog, id: RegistryId<S>) {
-  const removed = readProperty(PinCatalogSchema, self, 'removed', 'removed pins and categories');
-
-  if (removed !== undefined) idSetAdd(removed, id);
-}
-
 export function PinCatalogAddPin(self: PinCatalog, pin: Pin): boolean {
   if (!isObject(self.pins) || pin.id.key in self.pins) return false;
   else {
@@ -297,8 +286,6 @@ export function PinCatalogRemovePin(self: PinCatalog, id: PinId): Pin | null {
     // Delete from map
     delete self.pins[id.key];
   }
-
-  PinCatalogAddRemoved(self, id);
 
   return previousValue;
 }
@@ -382,8 +369,6 @@ export function PinCatalogRemovePinCategory(
     // Delete from map
     delete self.pinCategories[id.key];
   }
-
-  PinCatalogAddRemoved(self, id);
 
   return previousValue ?? undefined;
 }
