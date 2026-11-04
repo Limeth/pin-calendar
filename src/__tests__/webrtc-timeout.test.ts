@@ -9,6 +9,7 @@ import {
   stopStartedDevices,
   until,
   peerId,
+  WEBRTC_TIMINGS,
 } from './helpers';
 
 // In a file of its own, as it waits for the connection attempt timeout. Test files run in
@@ -17,7 +18,7 @@ import {
 afterEach(stopStartedDevices);
 
 describe('connection attempts', () => {
-  it('ignores a handshake that completes after timing out', { timeout: 30_000 }, async () => {
+  it('ignores a handshake that completes after timing out', async () => {
     const [keyA, keyB] = await pairedKeys();
     let delayed = false;
     // The first reply arrives just after the attempt times out, while the close marker that the
@@ -27,10 +28,10 @@ describe('connection attempts', () => {
 
       if (kind === 'connect-accept' && !delayed) {
         delayed = true;
-        return 15_200;
+        return WEBRTC_TIMINGS.connectionAttemptTimeoutMs + 20;
       }
 
-      return __peerData !== undefined ? 1_000 : 0;
+      return __peerData !== undefined ? 100 : 0;
     };
     const a = started(peerId('a12'), { [peerId('b12')]: remotePeer(keyA) });
     const events: string[] = [];
@@ -38,8 +39,8 @@ describe('connection attempts', () => {
     a.adapter.on('peer-disconnected', () => events.push('disconnected'));
     started(peerId('b12'), { [peerId('a12')]: remotePeer(keyB) }, { passive: true });
 
-    expect(await until(() => isConnected(a, peerId('b12')), 25_000)).toBe(true);
-    await sleep(1_000);
+    expect(await until(() => isConnected(a, peerId('b12')), 4_000)).toBe(true);
+    await sleep(500);
 
     // Connected once, by the retry.
     expect(events).toEqual(['candidate']);

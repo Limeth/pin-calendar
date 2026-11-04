@@ -15,6 +15,7 @@ import {
   until,
   type Device,
   peerId,
+  WEBRTC_TIMINGS,
 } from './helpers';
 
 afterEach(stopStartedDevices);
@@ -35,12 +36,12 @@ describe('joining a calendar this device already has', () => {
         !['requested', 'joining'].includes(
           joining.docEphemeral.value.outgoingJoins[invite.secret.thumbprint]!.status,
         ),
-      12_000,
+      WEBRTC_TIMINGS.outgoingJoinTimeoutMs + 500,
     );
     return { invite, join: joining.docEphemeral.value.outgoingJoins[invite.secret.thumbprint]! };
   }
 
-  it('re-pairs a device that forgot the inviter', { timeout: 20_000 }, async () => {
+  it('re-pairs a device that forgot the inviter', async () => {
     const [oldKey] = await pairedKeys();
     const inviter = started(peerId('inviter-a'), {
       [peerId('phone-a')]: { deviceName: 'Phone', authKeyId: oldKey },
@@ -68,7 +69,7 @@ describe('joining a calendar this device already has', () => {
     ).toBe(true);
   });
 
-  it('re-pairs with an inviter that forgot the device', { timeout: 20_000 }, async () => {
+  it('re-pairs with an inviter that forgot the device', async () => {
     const [, oldKey] = await pairedKeys();
     const inviter = started(peerId('inviter-b'));
     const phone = started(peerId('phone-b'), {
@@ -90,7 +91,7 @@ describe('joining a calendar this device already has', () => {
     ).toBe(true);
   });
 
-  it('is performed once reconnected to the signalling server', { timeout: 20_000 }, async () => {
+  it('is performed once reconnected to the signalling server', async () => {
     const inviter = started(peerId('inviter-e'));
     const phone = started(peerId('phone-e'));
     await sleep(50);
@@ -101,7 +102,7 @@ describe('joining a calendar this device already has', () => {
     phone.docEphemeral.value.outgoingJoins[changeSubtree]((joins) => {
       joins[invite.secret.thumbprint] = { invite: invite.args, status: 'requested' };
     });
-    await sleep(500);
+    await sleep(200);
     expect(phone.docEphemeral.value.outgoingJoins[invite.secret.thumbprint]?.status).toBe(
       'requested',
     );
@@ -111,7 +112,7 @@ describe('joining a calendar this device already has', () => {
     expect(
       await until(
         () => phone.docEphemeral.value.outgoingJoins[invite.secret.thumbprint]?.status === 'joined',
-        8_000,
+        2_000,
       ),
     ).toBe(true);
     expect(
@@ -121,7 +122,7 @@ describe('joining a calendar this device already has', () => {
     ).toBe(true);
   });
 
-  it('fails for a different copy of the calendar', { timeout: 20_000 }, async () => {
+  it('fails for a different copy of the calendar', async () => {
     const inviter = started(peerId('inviter-c'));
     const phone = started(peerId('phone-c'), {}, { documentIdShared: 'other-shared-document' });
     await sleep(50);
@@ -137,7 +138,7 @@ describe('joining a calendar this device already has', () => {
     expect(inviter.docEphemeral.value.invites[invite.secret.thumbprint]?.usedBy).toBeUndefined();
   });
 
-  it('fails without contacting the inviter for another calendar', { timeout: 20_000 }, async () => {
+  it('fails without contacting the inviter for another calendar', async () => {
     const inviter = started(peerId('inviter-d'));
     const phone = started(peerId('phone-d'));
     await sleep(50);

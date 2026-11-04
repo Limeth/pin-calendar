@@ -22,7 +22,7 @@ describe('a peer whose ID is still taken', () => {
     return holder;
   }
 
-  it('is replaced once the ID is released', { timeout: 20_000 }, async () => {
+  it('is replaced once the ID is released', async () => {
     const [keyA, keyB] = await pairedKeys();
     const holder = await holdId(peerId('a7'));
     const a = started(peerId('a7'), { [peerId('b7')]: remotePeer(keyA) });
@@ -32,10 +32,10 @@ describe('a peer whose ID is still taken', () => {
 
     holder.destroy();
 
-    expect(await until(() => a.peer().open, 6_000)).toBe(true);
+    expect(await until(() => a.peer().open, 2_000)).toBe(true);
     expect(a.peer()).not.toBe(first);
     expect(
-      await until(() => isConnected(a, peerId('b7')) && isConnected(b, peerId('a7')), 3_000),
+      await until(() => isConnected(a, peerId('b7')) && isConnected(b, peerId('a7')), 1_000),
     ).toBe(true);
   });
 
@@ -45,7 +45,8 @@ describe('a peer whose ID is still taken', () => {
     // The ID is released right as the peer is rejected, before it is destroyed.
     a.peer().once('error', () => holder.destroy());
 
-    expect(await until(() => a.peer().open, 1_000)).toBe(true);
+    // Sooner than the first retry.
+    expect(await until(() => a.peer().open, 300)).toBe(true);
   });
 
   it('is replaced immediately when the device is back online', async () => {
@@ -58,7 +59,8 @@ describe('a peer whose ID is still taken', () => {
     holder.destroy();
     window.dispatchEvent(new Event('online'));
 
-    expect(await until(() => a.peer().open, 500)).toBe(true);
+    // Sooner than the first retry.
+    expect(await until(() => a.peer().open, 300)).toBe(true);
   });
 
   it('is not replaced once the adapter is stopped', async () => {
@@ -69,7 +71,7 @@ describe('a peer whose ID is still taken', () => {
 
     stopping.adapter.disconnect();
     holder.destroy();
-    await sleep(3_000);
+    await sleep(1_000);
 
     expect(stopping.adapter.peer).toBeUndefined();
     // The ID is free for the next adapter.

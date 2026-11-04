@@ -48,6 +48,28 @@ export type WebRtcNetworkAdapterOptions = {
         documentId: DocumentId;
         repo: Repo;
       };
+  // Defaults to `WEBRTC_TIMINGS_DEFAULT`.
+  timings?: Partial<WebRtcTimings>;
+};
+
+// How long the adapter waits for things. Tests, which wait for them, shorten them.
+export type WebRtcTimings = {
+  // How long to wait for the inviter to accept a join requested via
+  // `EphemeralDocument::outgoingJoins`.
+  outgoingJoinTimeoutMs: number;
+  // Connections are attempted on events after which they may succeed, see `retryConnections`. A
+  // failed attempt is retried after a delay, which doubles with every failure, up to a maximum.
+  // Reconnecting to the signalling server is retried the same way.
+  connectionAttemptTimeoutMs: number;
+  retryInitialDelayMs: number;
+  retryMaxDelayMs: number;
+};
+
+export const WEBRTC_TIMINGS_DEFAULT: WebRtcTimings = {
+  outgoingJoinTimeoutMs: 10_000,
+  connectionAttemptTimeoutMs: 15_000,
+  retryInitialDelayMs: 2_000,
+  retryMaxDelayMs: 60_000,
 };
 
 // Information about a peer, exchanged once the peer is authenticated.
@@ -142,15 +164,6 @@ function closeOnFailure(
     });
 }
 
-// How long to wait for the inviter to accept a join requested via `EphemeralDocument::outgoingJoins`.
-const OUTGOING_JOIN_TIMEOUT_MS = 10_000;
-
-// Connections are attempted on events after which they may succeed, see `retryConnections`. A
-// failed attempt is retried after a delay, which doubles with every failure, up to a maximum.
-const CONNECTION_ATTEMPT_TIMEOUT_MS = 15_000;
-const RETRY_INITIAL_DELAY_MS = 2_000;
-const RETRY_MAX_DELAY_MS = 60_000;
-
 // The delay before a retry, randomized, so that peers that failed at the same time do not retry at
 // the same time again.
 function retryDelay(delayMs: number): number {
@@ -168,6 +181,7 @@ export const SYMBOL_IS_WEBRTC_NETWORK_ADAPTER = Symbol.for('WebRtcNetworkAdapter
 export class WebRtcNetworkAdapter extends NetworkAdapter {
   readonly [SYMBOL_IS_WEBRTC_NETWORK_ADAPTER] = SYMBOL_IS_WEBRTC_NETWORK_ADAPTER;
   readonly options: WebRtcNetworkAdapterOptions;
+  readonly timings: WebRtcTimings;
   ready: boolean;
   readyPromise: Promise<void>;
   readyResolver: () => void;
@@ -195,7 +209,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   // Retries of failed connections to remote peers, see `scheduleConnectionRetry`.
   connectionRetries: { [peerJsPeerId: string]: Retry } = {};
   // Retries of failed reconnections to the signalling server, see `reconnectToSignallingServer`.
-  signallingRetry: Retry = { delayMs: RETRY_INITIAL_DELAY_MS };
+  signallingRetry: Retry;
   readonly onOnline = () => this.retryConnections();
   readonly onVisibilityChange = () => {
     if (document.visibilityState === 'visible') this.retryConnections();
@@ -204,6 +218,8 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   constructor(options: WebRtcNetworkAdapterOptions) {
     super();
     this.options = options;
+    this.timings = { ...WEBRTC_TIMINGS_DEFAULT, ...options.timings };
+    this.signallingRetry = { delayMs: this.timings.retryInitialDelayMs };
     this.ready = false;
     let readyResolver;
     this.readyPromise = new Promise<void>((resolve) => {
@@ -268,7 +284,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       // Invoked when a connection to the signaling server is established.
       this.peerJsPeerId = id;
       clearTimeout(this.signallingRetry.timer);
-      this.signallingRetry = { delayMs: RETRY_INITIAL_DELAY_MS };
+      this.signallingRetry = { delayMs: this.timings.retryInitialDelayMs };
       this.connectToRemotePeers();
       // Including those requested while not connected to the signalling server.
       this.performOutgoingJoins();
@@ -411,7 +427,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
         new Promise<ErrorPacket>((resolve) => {
           timeout = setTimeout(
             () => resolve({ kind: 'error', message: 'Connecting timed out.' }),
-            CONNECTION_ATTEMPT_TIMEOUT_MS,
+            this.timings.connectionAttemptTimeoutMs,
           );
         }),
       ]);
@@ -423,7 +439,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
   // Retry connecting to a remote peer after a failed attempt, with a delay that doubles with every
   // failure, until connected (by either peer), the peer is forgotten, or this adapter is stopped.
   // The remote peer may be offline, or may have forgotten this device, but this cannot be told
-  // apart from a temporary failure, so retrying continues, at least every `RETRY_MAX_DELAY_MS`.
+  // apart from a temporary failure, so retrying continues, at least every `retryMaxDelayMs`.
   scheduleConnectionRetry(remotePeerPeerJsPeerId: string) {
     if (this.stopped) return;
     if (
@@ -433,7 +449,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
     if (this.connections[remotePeerPeerJsPeerId] !== undefined) return;
 
     const retry = (this.connectionRetries[remotePeerPeerJsPeerId] ??= {
-      delayMs: RETRY_INITIAL_DELAY_MS,
+      delayMs: this.timings.retryInitialDelayMs,
     });
 
     if (retry.timer !== undefined) return;
@@ -442,7 +458,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       delete retry.timer;
       this.connectToRemotePeer(remotePeerPeerJsPeerId);
     }, retryDelay(retry.delayMs));
-    retry.delayMs = Math.min(retry.delayMs * 2, RETRY_MAX_DELAY_MS);
+    retry.delayMs = Math.min(retry.delayMs * 2, this.timings.retryMaxDelayMs);
   }
 
   cancelConnectionRetry(remotePeerPeerJsPeerId: string) {
@@ -473,7 +489,10 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       delete this.signallingRetry.timer;
       if (!this.peer?.open) this.reconnectToSignallingServer();
     }, retryDelay(this.signallingRetry.delayMs));
-    this.signallingRetry.delayMs = Math.min(this.signallingRetry.delayMs * 2, RETRY_MAX_DELAY_MS);
+    this.signallingRetry.delayMs = Math.min(
+      this.signallingRetry.delayMs * 2,
+      this.timings.retryMaxDelayMs,
+    );
   }
 
   // Retry all connections immediately, after an event after which they may succeed, rather than
@@ -488,7 +507,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       this.connectToRemotePeers();
     } else {
       clearTimeout(this.signallingRetry.timer);
-      this.signallingRetry = { delayMs: RETRY_INITIAL_DELAY_MS };
+      this.signallingRetry = { delayMs: this.timings.retryInitialDelayMs };
       // Connects to the remote peers once reconnected, see the `open` event.
       this.reconnectToSignallingServer();
     }
@@ -543,7 +562,7 @@ export class WebRtcNetworkAdapter extends NetworkAdapter {
       return { kind: 'error', message: 'The invite link is for a different calendar.' };
 
     const result = await joinCalendarVia(this.peer!, invite, {
-      timeoutMs: OUTGOING_JOIN_TIMEOUT_MS,
+      timeoutMs: this.timings.outgoingJoinTimeoutMs,
       sharedDocumentId: LocalDocumentGetDocumentIdShared(this.options.docLocal.value),
     });
 

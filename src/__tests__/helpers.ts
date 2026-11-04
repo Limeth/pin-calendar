@@ -2,7 +2,7 @@ import type { Ref } from 'vue';
 import { Repo } from '@automerge/automerge-repo';
 import { changeSubtree, makeReactive, type Rop } from 'automerge-diy-vue-hooks';
 import * as auth from '@/auth';
-import { WebRtcNetworkAdapter } from '@/webrtc';
+import { WebRtcNetworkAdapter, type WebRtcTimings } from '@/webrtc';
 import type { LocalDocument, RemotePeer } from '@/documents/local';
 import type { EphemeralDocument } from '@/documents/ephemeral';
 import type { HashArgsInvite } from '@/hash';
@@ -67,6 +67,15 @@ export type Device = {
   peer: () => Peer;
 };
 
+// About 10 times shorter than the app's (`WEBRTC_TIMINGS_DEFAULT`), as tests wait for them. Long
+// enough for connections and handshakes over the fake network to complete well within them.
+export const WEBRTC_TIMINGS: WebRtcTimings = {
+  outgoingJoinTimeoutMs: 1_000,
+  connectionAttemptTimeoutMs: 1_500,
+  retryInitialDelayMs: 500,
+  retryMaxDelayMs: 4_000,
+};
+
 // A device of the calendar, with a started WebRTC network adapter. A passive device does not
 // connect to peers by itself, so that a test can check that the other device does.
 export function device(
@@ -81,6 +90,7 @@ export function device(
     docLocal,
     docEphemeral,
     attemptToWaitForDocumentAvailability: undefined,
+    timings: WEBRTC_TIMINGS,
   });
   adapter.on('peer-candidate', () => {});
   adapter.on('peer-disconnected', () => {});

@@ -123,6 +123,9 @@ replaced or deleted.
   tests need to cause network failures. Keep the fake's behaviour faithful to PeerJS.
 - Test files run in parallel, the tests of a file one after another, and each file has its own
   fake network. Put tests that wait long (e.g. for timeouts) in a file of their own.
+- Timeouts and delays that tests wait for are options, shortened in tests: the WebRTC adapter's
+  `timings` (`WEBRTC_TIMINGS` in `helpers.ts`) and `SharedRepoWorkerOptions`. Make new ones options
+  too, rather than constants, and express waits in tests relative to them.
 - PeerJS peer IDs are UUIDs, as the local document requires, derived from readable names via
   `peerId`.
 - The shared worker's code runs in the tests (`SharedRepoWorker`, `sharedWorker.ts`): tabs are
