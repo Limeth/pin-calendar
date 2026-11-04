@@ -58,7 +58,10 @@ describe('deleting a calendar', () => {
 
     tab.init(CALENDAR_ID);
     const { documentIdLocal } = await tab.message('ready-local');
+    // `webrtc-stop` is only sent to a tab hosting WebRTC.
+    await tab.message('webrtc-start');
     tab.port.postMessage({ type: 'delete-calendar' });
+    // The calendar is forgotten by the worker.
     await tab.message('webrtc-stop');
 
     // E.g. joined again.
