@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { Repo, type DocumentId } from '@automerge/automerge-repo';
 import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb';
+import * as uuid from 'uuid';
 import { LOCAL_DOCUMENT_SCHEMA_VERSION_CURRENT, type LocalDocument } from '@/documents/local';
 import type { Versioned } from '@/versioned';
 import { CALENDAR_ID, OTHER_CALENDAR_ID, sleep, until } from './helpers';
@@ -52,6 +53,31 @@ describe('opening a calendar', () => {
 
     expect(await until(() => worker.isStored(documentIdLocal))).toBe(true);
     expect(await until(() => worker.isStored(shared))).toBe(true);
+  });
+
+  it('is ready once the tab is connected, also when the storage is slow', async () => {
+    // How long a `MessageChannelNetworkAdapter` waits for its peer before it is ready anyway.
+    const ADAPTER_READY_TIMEOUT_MS = 100;
+    const database = `automerge-${uuid.v7()}`;
+    // The worker's adapters connect once their repo's storage ID is loaded.
+    const worker = testWorker(database, {
+      createStorageAdapter: () => {
+        const adapter = new IndexedDBStorageAdapter(database);
+        const load = adapter.load.bind(adapter);
+
+        adapter.load = async (key) => {
+          if (key[0] === 'storage-adapter-id') await sleep(2 * ADAPTER_READY_TIMEOUT_MS);
+
+          return load(key);
+        };
+
+        return adapter;
+      },
+    });
+    const [tab] = await openTabs(worker, 1);
+
+    // Found via the worker, rather than reported as unavailable by a tab's repo with no peers.
+    await tab!.documentIdShared();
   });
 
   it('opens the documents stored by an earlier worker', async () => {

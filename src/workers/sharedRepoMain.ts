@@ -488,6 +488,15 @@ export class SharedRepoWorker {
 
         const tab = await repo.addTab(message, port);
 
+        // Only once the tab's repos are connected to the worker's: a tab's repo that finds no peer
+        // reports the documents as unavailable. The worker's adapters connect only after their
+        // repo's storage ID is loaded, which a new calendar's initialization does not wait for.
+        await Promise.all(
+          [tab.adapterEphemeral, tab.adapterLocal, tab.adapterShared].map((adapter) =>
+            adapter.whenReady(),
+          ),
+        );
+
         port.postMessage({
           type: 'ready-local',
           documentIdEphemeral: initialized.docEphemeral.handle.documentId,
